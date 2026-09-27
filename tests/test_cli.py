@@ -241,3 +241,35 @@ def test_client_build_xex_cwd_player_asm_lookup(tmp_path: Path, monkeypatch):
         build_xex_from_composition(doc, output_path=tmp_path / "out.xex", mads_bin=tmp_path / "missing_mads.exe")
     assert "MADS assembler not found" in str(excinfo.value)
 
+
+def test_cli_build_xex_subprocess_execution(tmp_path: Path, monkeypatch):
+    """Verify build-xex invokes subprocess.run successfully without NameError."""
+    import subprocess
+    from unittest.mock import MagicMock
+
+    runner = CliRunner()
+    comp_file = tmp_path / "track.json"
+    doc = _create_minimal_composition()
+    comp_file.write_text(json.dumps(doc.model_dump(mode="json")), encoding="utf-8")
+
+    dummy_mads = tmp_path / "mads.exe"
+    dummy_mads.write_text("dummy binary", encoding="utf-8")
+    out_xex = tmp_path / "track.xex"
+
+    # Mock subprocess.run to simulate successful MADS compilation
+    def fake_subprocess_run(cmd, capture_output=True, text=True):
+        out_xex.write_bytes(b"\xff\xff\x00\x40\x10\x40")
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = "Compiled 100 bytes"
+        mock_proc.stderr = ""
+        return mock_proc
+
+    monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
+
+    result = runner.invoke(cli, ["build-xex", str(comp_file), "-o", str(out_xex), "--mads", str(dummy_mads)])
+    assert result.exit_code == 0
+    assert "Successfully compiled XEX" in result.output
+    assert out_xex.exists()
+
+
