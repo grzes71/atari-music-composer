@@ -206,6 +206,40 @@ atari-music analyze dungeon.json --json
 atari-music analyze dungeon.json --structure -o report.json
 ```
 
+#### D. Polecenie `ai-compose`
+
+Generuje deklaratywną kompozycję JSON w formacie `atari-music-composition` przy użyciu modeli LLM (OpenAI / DeepSeek) lub deterministycznego mocka.
+
+Zrewidowany system prompt zapewnia pełną swobodę artystyczną oraz autentyczność platformy Atari 8-bit / POKEY:
+* **Separacja odpowiedzialności:** LLM koncentruje się wyłącznie na muzyce (melodia, harmonia, rytm, instrumentacja, forma), podczas gdy silnik aplikacji odpowiada za wyliczanie dokładnego czasu PAL 50 Hz, 3-etapową walidację i kompilację.
+* **Ekonomia kanałów i rola ciszy:** Wprowadzona zasada *„Do not use all four channels merely because they are available”* oraz *„Silence is a valid compositional choice”* zapobiega przeładowaniu faktury dźwiękowej.
+* **Elastyczność formalna:** Brak sztywnych szablonów sekcji — model sam dobiera formę (loop, A/B, rondo, wariacje) do stylu i nastroju.
+
+```bash
+# Wygenerowanie utworu dungeon ambient z zapisem do JSON:
+atari-music ai-compose --style "dungeon exploration" -m dark -m mysterious --duration 20 -o dungeon.json
+
+# Streaming czystego JSON na stdout dla agentów (logi diagnostyczne kierowane na stderr):
+atari-music ai-compose --style "fast arcade action" -m energetic --duration 16 > action.json
+```
+
+#### E. Polecenie `import-json`
+
+Importuje zewnętrzny plik kompozycji `atari-music-composition` JSON, waliduje go i konwertuje na formaty produkcyjne:
+
+```bash
+atari-music import-json song.json --output-wav song.wav --output-asm song.asm
+```
+
+#### F. Polecenie `build-xex`
+
+Kompiluje plik kompozycji JSON bezpośrednio do samodzielnego pliku wykonywalnego Atari XEX:
+
+```bash
+atari-music build-xex song.json -o song.xex --mads tools/mads/mads.exe
+```
+
+
 ---
 
 ### 3. Integracja z Projektem 6502 (Asembler MADS)
