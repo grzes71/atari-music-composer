@@ -784,6 +784,7 @@ def import_json_cmd(
 @click.option("--music-address", type=str, default="0x8000", help="Relocatable music data address (hex or dec, e.g. 0x8000)")
 @click.option("--zp-base", type=str, default="0x80", help="Zero-page base address (hex or dec, e.g. 0x80)")
 @click.option("--mads", type=click.Path(path_type=Path), default=Path("tools/mads/mads.exe"), help="Path to mads.exe")
+@click.option("--player-asm", type=click.Path(exists=True, path_type=Path), default=None, help="Path to player.asm (defaults to current directory or repository root)")
 def build_xex_cmd(
     composition_json: Path,
     output: Path,
@@ -791,6 +792,7 @@ def build_xex_cmd(
     music_address: str,
     zp_base: str,
     mads: Path,
+    player_asm: Optional[Path],
 ) -> None:
     """Compile AI composition JSON directly to relocatable Atari XEX binary using MADS."""
     from atari_music.ai.client import build_xex_from_composition
@@ -816,6 +818,7 @@ def build_xex_cmd(
         music_address=m_addr,
         zp_base=z_addr,
         mads_exe=mads,
+        player_asm=player_asm,
     )
     size = xex_path.stat().st_size
     click.echo(f"Successfully compiled XEX -> {xex_path} ({size} bytes)")

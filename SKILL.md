@@ -379,8 +379,11 @@ atari-music build-xex dungeon.json \
     --player-address 0x4000 \
     --music-address 0x6000 \
     --zp-base 0x80 \
+    --player-asm player.asm \
     --mads tools/mads/mads.exe
 ```
+> Note: `player.asm` is resolved automatically by checking (1) current working directory, (2) repository root, and (3) packaged asm directory, or can be specified explicitly via `--player-asm`.
+
 
 #### 6. `analyze` (Analyze Musical & Hardware Properties of Composition JSON)
 ```bash

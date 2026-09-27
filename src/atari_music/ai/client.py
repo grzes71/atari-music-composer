@@ -305,6 +305,7 @@ def build_xex_from_composition(
     music_address: Optional[Union[str, int]] = None,
     zp_base: int = 0x80,
     mads_bin: Optional[Union[str, Path]] = None,
+    player_asm: Optional[Union[str, Path]] = None,
     **kwargs: Any,
 ) -> Path:
     """Compile an AI composition directly into an executable Atari XEX file via MADS.
@@ -321,6 +322,11 @@ def build_xex_from_composition(
         Optional separate address for song data (split-relocation).
     zp_base : int, default=0x80
         Zero page base address ($80..$F0).
+    mads_bin : Optional[Union[str, Path]]
+        Optional path to mads assembler executable.
+    player_asm : Optional[Union[str, Path]]
+        Optional explicit path to player.asm. If omitted, checks current working directory,
+        repository root, and package directory.
     Returns
     -------
     Path
@@ -330,6 +336,8 @@ def build_xex_from_composition(
         output_path = kwargs["output_xex"]
     if "mads_exe" in kwargs and mads_bin is None:
         mads_bin = kwargs["mads_exe"]
+    if "player_asm" in kwargs and player_asm is None:
+        player_asm = kwargs["player_asm"]
 
     if isinstance(player_address, int):
         player_addr_str = f"${player_address:04X}"
@@ -348,6 +356,29 @@ def build_xex_from_composition(
     out_p = Path(output_path)
     out_p.parent.mkdir(parents=True, exist_ok=True)
 
+    # Locate player.asm (explicit -> cwd -> repo root -> package directory)
+    if player_asm is not None:
+        player_asm_path = Path(player_asm).resolve()
+        if not player_asm_path.exists():
+            raise FileNotFoundError(f"player.asm not found at: {player_asm}")
+    else:
+        cwd_player = Path.cwd() / "player.asm"
+        root = Path(__file__).resolve().parent.parent.parent.parent
+        root_player = root / "player.asm"
+        pkg_player = root / "src" / "atari_music" / "asm" / "player.asm"
+
+        if cwd_player.exists():
+            player_asm_path = cwd_player
+        elif root_player.exists():
+            player_asm_path = root_player
+        elif pkg_player.exists():
+            player_asm_path = pkg_player
+        else:
+            raise FileNotFoundError(
+                "player.asm not found in current folder, repository root, or package directory. "
+                "Specify path via player_asm or place player.asm in the current directory."
+            )
+
     # Locate MADS executable
     if mads_bin:
         mads_exe = Path(mads_bin)
@@ -357,14 +388,6 @@ def build_xex_from_composition(
 
     if not mads_exe.exists():
         raise FileNotFoundError(f"MADS assembler not found at: {mads_exe}")
-
-    # Locate player.asm
-    root = Path(__file__).resolve().parent.parent.parent.parent
-    player_asm_path = root / "player.asm"
-    if not player_asm_path.exists():
-        player_asm_path = root / "src" / "atari_music" / "asm" / "player.asm"
-    if not player_asm_path.exists():
-        raise FileNotFoundError("player.asm not found in repository.")
 
     # Helper to convert ASCII string to ANTIC Mode 2 screen codes
     def _ascii_to_antic(s: str) -> list[int]:
