@@ -1,0 +1,93 @@
+name: Release
+
+# Runs when a pull request targeting master is closed. We only act when it was
+# actually merged (a closed-without-merge PR must not trigger a release).
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run test suite
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package with dev dependencies
+        run: python -m pip install -e ".[dev]"
+
+      # Tests that need private local data (dataset/, listening_test*, etc.) or
+      # the MADS/ASAP third-party tools (gitignored, not present in CI) skip
+      # themselves via tests/conftest.py's require_local_artifact() helper.
+      - name: Run pytest
+        run: python -m pytest -q
+
+  release:
+    name: Determine version bump & publish release
+    needs: test
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.event.pull_request.base.ref }}
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Inspects commits since the last tag using Conventional Commits to decide
+      # fix -> patch, feat -> minor, "BREAKING CHANGE"/"!" -> major. Bumps the
+      # version in pyproject.toml, updates CHANGELOG.md, builds the sdist/wheel
+      # (build_command in pyproject.toml), then commits, tags, pushes and
+      # creates the GitHub Release.
+      - name: Determine version bump and create release
+        id: release
+        uses: python-semantic-release/python-semantic-release@v9
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          git_committer_name: "github-actions[bot]"
+          git_committer_email: "github-actions[bot]@users.noreply.github.com"
+
+      - name: Upload distribution artifacts to the GitHub Release
+        uses: python-semantic-release/publish-action@v9
+        if: steps.release.outputs.released == 'true'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.release.outputs.tag }}
+
+      - name: Upload build artifacts to the workflow run
+        if: steps.release.outputs.released == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: atari-music-dist-${{ steps.release.outputs.version }}
+          path: dist/*
+          if-no-files-found: error

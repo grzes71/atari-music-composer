@@ -1,0 +1,97 @@
+# =============================================================================
+# Atari Music Engine — .gitignore
+# =============================================================================
+
+# --- User Specified Exclusions ---
+/music/
+/generator_comparison.md
+/listening_test/answer_key.json
+/dataset/
+/poc_output/
+/tools/
+/inventory.csv
+/inventory.json
+/HISTORY.md
+/report*.md
+/stage*.md
+/stage11_xex
+/listening*
+/generated
+src/atari_music/stage3_reporter.py
+src/atari_music/stage4_reporter.py
+/visualizations
+/examples
+/*.xex
+/experiments
+
+# --- Virtual Environments ---
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Python Bytecode & Cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# --- Distribution & Packaging ---
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Pytest & Coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# --- Temporary & Scratch Directories ---
+scratch/
+*.tmp
+*.bak
+
+# --- Assembler Intermediate Files (MADS) ---
+*.lst
+*.lab
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# --- OS Artifacts ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+
+# --- Agent Local State ---
+.antigravity/
+
+# --- Environment & Secrets ---
+.env
+.env.local
+.env.*.local

@@ -1,0 +1,1585 @@
+{
+  "aggregate": {
+    "total_pieces": 8,
+    "average_duration_seconds": 93.48,
+    "average_pattern_count": 7.38,
+    "average_sequence_length": 34.75,
+    "average_repetition_ratio": 0.7838,
+    "average_material_reuse_ratio": 0.806,
+    "average_repeated_subsequences_coverage_pct": 83.24,
+    "average_unique_transitions_count": 17.38,
+    "average_longest_repeated_subsequence_len": 5.75,
+    "average_melodic_diversity": 0.8709,
+    "average_rhythmic_diversity": 0.6432,
+    "average_harmonic_diversity": 0.8915,
+    "most_repetitive_piece": {
+      "title": "Guardian of the Crystal Peaks",
+      "material_reuse_ratio": 0.8689,
+      "repetition_ratio": 0.8333,
+      "compact_form": "2x INTRO - 2x A - B - A - C - 2x D - B - C - B - 2x D - 2x E - B' - C - 2x E - B' - C - D - B - 2x E - B' - C - 2x E - 2x D - B - C - B' - 2x E - B' - C - A - 2x D - B - C - B' - 2x E - OUTRO"
+    },
+    "most_diverse_piece": {
+      "title": "Elektryczny Sen Trurla (Trurl's Electric Dream)",
+      "material_reuse_ratio": 0.7879,
+      "melodic_diversity": 0.9005,
+      "rhythmic_diversity": 0.6811,
+      "compact_form": "INTRO - A - B - C - A - B - C - D - A - B - C - A - D - E - 2x C - B - A - D - C - A - E - D - B - C - A - D - C - B - A - C - B - OUTRO"
+    }
+  },
+  "pieces": {
+    "01_dungeon": {
+      "title": "Dungeon of Shadows",
+      "bpm": 88,
+      "duration_seconds": 89.6,
+      "pattern_count": 7,
+      "pattern_lengths": {
+        "intro": 32,
+        "themeA": 32,
+        "themeA2": 32,
+        "chorusB": 32,
+        "bridgeC": 32,
+        "ambientD": 32,
+        "outro": 32
+      },
+      "sequence_length": 28,
+      "total_steps": 896,
+      "pattern_occurrences": {
+        "intro": 1,
+        "themeA": 4,
+        "chorusB": 6,
+        "themeA2": 5,
+        "bridgeC": 6,
+        "ambientD": 4,
+        "outro": 2
+      },
+      "repetition_ratio": 0.75,
+      "unique_pattern_ratio": 0.25,
+      "unique_transitions_count": 14,
+      "unique_transitions": [
+        [
+          "ambientD",
+          "bridgeC"
+        ],
+        [
+          "ambientD",
+          "outro"
+        ],
+        [
+          "ambientD",
+          "themeA2"
+        ],
+        [
+          "bridgeC",
+          "ambientD"
+        ],
+        [
+          "bridgeC",
+          "themeA"
+        ],
+        [
+          "bridgeC",
+          "themeA2"
+        ],
+        [
+          "chorusB",
+          "bridgeC"
+        ],
+        [
+          "chorusB",
+          "themeA"
+        ],
+        [
+          "intro",
+          "themeA"
+        ],
+        [
+          "outro",
+          "outro"
+        ],
+        [
+          "themeA",
+          "chorusB"
+        ],
+        [
+          "themeA",
+          "themeA"
+        ],
+        [
+          "themeA",
+          "themeA2"
+        ],
+        [
+          "themeA2",
+          "chorusB"
+        ]
+      ],
+      "transition_entropy": 3.45,
+      "transition_fill_count": 0,
+      "longest_repeated_subsequence_len": 5,
+      "longest_repeated_subsequence": [
+        "bridgeC",
+        "ambientD",
+        "themeA2",
+        "chorusB",
+        "bridgeC"
+      ],
+      "longest_repeated_subsequence_count": 2,
+      "repeated_subsequences_coverage_pct": 78.57,
+      "distinct_musical_patterns_count": 7,
+      "near_identical_patterns_count": 1,
+      "near_identical_pairs": [
+        [
+          "intro",
+          "ambientD",
+          0.8247
+        ]
+      ],
+      "material_reuse_ratio": 0.7795,
+      "variation_count": 2,
+      "variation_ratio": 0.2857,
+      "variation_pairs": [
+        [
+          "ambientD",
+          "intro",
+          0.8247
+        ],
+        [
+          "outro",
+          "intro",
+          0.7435
+        ],
+        [
+          "outro",
+          "ambientD",
+          0.7792
+        ]
+      ],
+      "variation_similarity": 0.7825,
+      "texture_changes_count": 0,
+      "active_channels_distribution": {
+        "1_ch": 0,
+        "2_ch": 0,
+        "3_ch": 7,
+        "4_ch": 0
+      },
+      "melodic_diversity": 0.7495,
+      "rhythmic_diversity": 0.8453,
+      "harmonic_diversity": 0.8282,
+      "structural_novelty": 0.2857,
+      "sections_count": 7,
+      "form": {
+        "pattern_labels": {
+          "intro": "INTRO",
+          "themeA": "A",
+          "chorusB": "B",
+          "themeA2": "C",
+          "bridgeC": "D",
+          "ambientD": "E",
+          "outro": "OUTRO"
+        },
+        "formal_sequence": [
+          "INTRO",
+          "A",
+          "A",
+          "B",
+          "A",
+          "C",
+          "B",
+          "D",
+          "C",
+          "B",
+          "D",
+          "E",
+          "D",
+          "E",
+          "C",
+          "B",
+          "D",
+          "A",
+          "C",
+          "B",
+          "D",
+          "E",
+          "C",
+          "B",
+          "D",
+          "E",
+          "OUTRO",
+          "OUTRO"
+        ],
+        "compact_form": "INTRO - 2x A - B - A - C - B - D - C - B - D - E - D - E - C - B - D - A - C - B - D - E - C - B - D - E - 2x OUTRO",
+        "unique_sections_count": 7,
+        "archetype": "Rondo-like Episodic (A-B-A-C...)"
+      }
+    },
+    "02_chase": {
+      "title": "Neon Chase",
+      "bpm": 142,
+      "duration_seconds": 75.52,
+      "pattern_count": 8,
+      "pattern_lengths": {
+        "Intro": 16,
+        "A": 32,
+        "A2": 32,
+        "B": 32,
+        "C": 16,
+        "Break": 16,
+        "D": 32,
+        "Outro": 16
+      },
+      "sequence_length": 33,
+      "total_steps": 944,
+      "pattern_occurrences": {
+        "Intro": 1,
+        "A": 8,
+        "A2": 6,
+        "B": 9,
+        "C": 3,
+        "Break": 2,
+        "D": 3,
+        "Outro": 1
+      },
+      "repetition_ratio": 0.7576,
+      "unique_pattern_ratio": 0.2424,
+      "unique_transitions_count": 18,
+      "unique_transitions": [
+        [
+          "A",
+          "A"
+        ],
+        [
+          "A",
+          "A2"
+        ],
+        [
+          "A",
+          "B"
+        ],
+        [
+          "A",
+          "C"
+        ],
+        [
+          "A2",
+          "A"
+        ],
+        [
+          "A2",
+          "B"
+        ],
+        [
+          "B",
+          "A"
+        ],
+        [
+          "B",
+          "A2"
+        ],
+        [
+          "B",
+          "B"
+        ],
+        [
+          "B",
+          "Break"
+        ],
+        [
+          "B",
+          "C"
+        ],
+        [
+          "B",
+          "D"
+        ],
+        [
+          "Break",
+          "B"
+        ],
+        [
+          "C",
+          "Break"
+        ],
+        [
+          "C",
+          "D"
+        ],
+        [
+          "D",
+          "A"
+        ],
+        [
+          "D",
+          "Outro"
+        ],
+        [
+          "Intro",
+          "A"
+        ]
+      ],
+      "transition_entropy": 3.876,
+      "transition_fill_count": 4,
+      "longest_repeated_subsequence_len": 6,
+      "longest_repeated_subsequence": [
+        "B",
+        "C",
+        "D",
+        "A",
+        "A2",
+        "B"
+      ],
+      "longest_repeated_subsequence_count": 2,
+      "repeated_subsequences_coverage_pct": 78.79,
+      "distinct_musical_patterns_count": 8,
+      "near_identical_patterns_count": 0,
+      "near_identical_pairs": [],
+      "material_reuse_ratio": 0.7966,
+      "variation_count": 2,
+      "variation_ratio": 0.25,
+      "variation_pairs": [
+        [
+          "A2",
+          "A",
+          0.7912
+        ],
+        [
+          "D",
+          "B",
+          0.7271
+        ]
+      ],
+      "variation_similarity": 0.7591,
+      "texture_changes_count": 0,
+      "active_channels_distribution": {
+        "1_ch": 0,
+        "2_ch": 0,
+        "3_ch": 0,
+        "4_ch": 8
+      },
+      "melodic_diversity": 0.91,
+      "rhythmic_diversity": 0.2932,
+      "harmonic_diversity": 0.9437,
+      "structural_novelty": 0.5294,
+      "sections_count": 8,
+      "form": {
+        "pattern_labels": {
+          "Intro": "INTRO",
+          "A": "A",
+          "A2": "B",
+          "B": "C",
+          "C": "D",
+          "Break": "E",
+          "D": "F",
+          "Outro": "OUTRO"
+        },
+        "formal_sequence": [
+          "INTRO",
+          "A",
+          "A",
+          "B",
+          "C",
+          "C",
+          "A",
+          "D",
+          "E",
+          "C",
+          "B",
+          "A",
+          "C",
+          "D",
+          "F",
+          "A",
+          "B",
+          "C",
+          "A",
+          "B",
+          "C",
+          "D",
+          "F",
+          "A",
+          "B",
+          "C",
+          "E",
+          "C",
+          "A",
+          "B",
+          "C",
+          "F",
+          "OUTRO"
+        ],
+        "compact_form": "INTRO - 2x A - B - 2x C - A - D - E - C - B - A - C - D - F - A - B - C - A - B - C - D - F - A - B - C - E - C - A - B - C - F - OUTRO",
+        "unique_sections_count": 8,
+        "archetype": "Rondo-like Episodic (A-B-A-C...)"
+      }
+    },
+    "03_adventure": {
+      "title": "Bittersweet Journey",
+      "bpm": 105,
+      "duration_seconds": 110.4,
+      "pattern_count": 7,
+      "pattern_lengths": {
+        "intro": 16,
+        "A": 32,
+        "A2": 32,
+        "B": 32,
+        "C": 32,
+        "D": 32,
+        "outro": 32
+      },
+      "sequence_length": 35,
+      "total_steps": 1104,
+      "pattern_occurrences": {
+        "intro": 1,
+        "A": 7,
+        "A2": 6,
+        "B": 9,
+        "C": 6,
+        "D": 5,
+        "outro": 1
+      },
+      "repetition_ratio": 0.8,
+      "unique_pattern_ratio": 0.2,
+      "unique_transitions_count": 19,
+      "unique_transitions": [
+        [
+          "A",
+          "A2"
+        ],
+        [
+          "A",
+          "B"
+        ],
+        [
+          "A",
+          "C"
+        ],
+        [
+          "A",
+          "D"
+        ],
+        [
+          "A2",
+          "A"
+        ],
+        [
+          "A2",
+          "B"
+        ],
+        [
+          "A2",
+          "C"
+        ],
+        [
+          "B",
+          "A"
+        ],
+        [
+          "B",
+          "A2"
+        ],
+        [
+          "B",
+          "C"
+        ],
+        [
+          "B",
+          "D"
+        ],
+        [
+          "B",
+          "outro"
+        ],
+        [
+          "C",
+          "A"
+        ],
+        [
+          "C",
+          "B"
+        ],
+        [
+          "C",
+          "D"
+        ],
+        [
+          "D",
+          "A2"
+        ],
+        [
+          "D",
+          "B"
+        ],
+        [
+          "D",
+          "C"
+        ],
+        [
+          "intro",
+          "A"
+        ]
+      ],
+      "transition_entropy": 4.116,
+      "transition_fill_count": 1,
+      "longest_repeated_subsequence_len": 3,
+      "longest_repeated_subsequence": [
+        "B",
+        "D",
+        "A2"
+      ],
+      "longest_repeated_subsequence_count": 2,
+      "repeated_subsequences_coverage_pct": 88.57,
+      "distinct_musical_patterns_count": 7,
+      "near_identical_patterns_count": 0,
+      "near_identical_pairs": [],
+      "material_reuse_ratio": 0.8116,
+      "variation_count": 0,
+      "variation_ratio": 0.0,
+      "variation_pairs": [],
+      "variation_similarity": 0.0,
+      "texture_changes_count": 0,
+      "active_channels_distribution": {
+        "1_ch": 0,
+        "2_ch": 0,
+        "3_ch": 0,
+        "4_ch": 7
+      },
+      "melodic_diversity": 0.9092,
+      "rhythmic_diversity": 0.7779,
+      "harmonic_diversity": 0.8699,
+      "structural_novelty": 0.0556,
+      "sections_count": 7,
+      "form": {
+        "pattern_labels": {
+          "intro": "INTRO",
+          "A": "A",
+          "A2": "B",
+          "B": "C",
+          "C": "D",
+          "D": "E",
+          "outro": "OUTRO"
+        },
+        "formal_sequence": [
+          "INTRO",
+          "A",
+          "B",
+          "C",
+          "D",
+          "A",
+          "C",
+          "E",
+          "B",
+          "D",
+          "C",
+          "A",
+          "E",
+          "D",
+          "C",
+          "B",
+          "A",
+          "C",
+          "D",
+          "E",
+          "B",
+          "C",
+          "A",
+          "D",
+          "E",
+          "C",
+          "B",
+          "A",
+          "D",
+          "C",
+          "E",
+          "B",
+          "A",
+          "C",
+          "OUTRO"
+        ],
+        "compact_form": "INTRO - A - B - C - D - A - C - E - B - D - C - A - E - D - C - B - A - C - D - E - B - C - A - D - E - C - B - A - D - C - E - B - A - C - OUTRO",
+        "unique_sections_count": 7,
+        "archetype": "Rondo-like Episodic (A-B-A-C...)"
+      }
+    },
+    "04_prl_comedy": {
+      "title": "Wesoła Budka z Warzywami",
+      "bpm": 128,
+      "duration_seconds": 79.36,
+      "pattern_count": 7,
+      "pattern_lengths": {
+        "intro": 16,
+        "A": 32,
+        "A2": 32,
+        "B": 32,
+        "C": 32,
+        "D": 16,
+        "outro": 16
+      },
+      "sequence_length": 33,
+      "total_steps": 992,
+      "pattern_occurrences": {
+        "intro": 1,
+        "A": 7,
+        "A2": 8,
+        "B": 8,
+        "C": 6,
+        "D": 2,
+        "outro": 1
+      },
+      "repetition_ratio": 0.7879,
+      "unique_pattern_ratio": 0.2121,
+      "unique_transitions_count": 14,
+      "unique_transitions": [
+        [
+          "A",
+          "A2"
+        ],
+        [
+          "A",
+          "D"
+        ],
+        [
+          "A2",
+          "B"
+        ],
+        [
+          "A2",
+          "C"
+        ],
+        [
+          "A2",
+          "D"
+        ],
+        [
+          "A2",
+          "outro"
+        ],
+        [
+          "B",
+          "A"
+        ],
+        [
+          "B",
+          "A2"
+        ],
+        [
+          "B",
+          "C"
+        ],
+        [
+          "C",
+          "A"
+        ],
+        [
+          "C",
+          "B"
+        ],
+        [
+          "D",
+          "A2"
+        ],
+        [
+          "D",
+          "C"
+        ],
+        [
+          "intro",
+          "A"
+        ]
+      ],
+      "transition_entropy": 3.457,
+      "transition_fill_count": 3,
+      "longest_repeated_subsequence_len": 7,
+      "longest_repeated_subsequence": [
+        "A2",
+        "B",
+        "C",
+        "A",
+        "A2",
+        "B",
+        "C"
+      ],
+      "longest_repeated_subsequence_count": 2,
+      "repeated_subsequences_coverage_pct": 84.85,
+      "distinct_musical_patterns_count": 7,
+      "near_identical_patterns_count": 0,
+      "near_identical_pairs": [],
+      "material_reuse_ratio": 0.8226,
+      "variation_count": 1,
+      "variation_ratio": 0.1429,
+      "variation_pairs": [
+        [
+          "A2",
+          "A",
+          0.7588
+        ]
+      ],
+      "variation_similarity": 0.7588,
+      "texture_changes_count": 0,
+      "active_channels_distribution": {
+        "1_ch": 0,
+        "2_ch": 0,
+        "3_ch": 0,
+        "4_ch": 7
+      },
+      "melodic_diversity": 0.9111,
+      "rhythmic_diversity": 0.3877,
+      "harmonic_diversity": 0.9476,
+      "structural_novelty": 0.3529,
+      "sections_count": 7,
+      "form": {
+        "pattern_labels": {
+          "intro": "INTRO",
+          "A": "A",
+          "A2": "B",
+          "B": "C",
+          "C": "D",
+          "D": "E",
+          "outro": "OUTRO"
+        },
+        "formal_sequence": [
+          "INTRO",
+          "A",
+          "B",
+          "C",
+          "A",
+          "B",
+          "D",
+          "C",
+          "A",
+          "B",
+          "E",
+          "D",
+          "C",
+          "A",
+          "B",
+          "C",
+          "D",
+          "A",
+          "B",
+          "C",
+          "D",
+          "A",
+          "E",
+          "B",
+          "C",
+          "D",
+          "A",
+          "B",
+          "C",
+          "D",
+          "C",
+          "B",
+          "OUTRO"
+        ],
+        "compact_form": "INTRO - A - B - C - A - B - D - C - A - B - E - D - C - A - B - C - D - A - B - C - D - A - E - B - C - D - A - B - C - D - C - B - OUTRO",
+        "unique_sections_count": 7,
+        "archetype": "Rondo-like Episodic (A-B-A-C...)"
+      }
+    },
+    "05_boss": {
+      "title": "Steel Sentinel - Boss Encounter",
+      "bpm": 136,
+      "duration_seconds": 99.84,
+      "pattern_count": 8,
+      "pattern_lengths": {
+        "INTRO": 32,
+        "A": 32,
+        "A2": 32,
+        "B": 32,
+        "B2": 32,
+        "C": 32,
+        "D": 32,
+        "OUTRO": 32
+      },
+      "sequence_length": 39,
+      "total_steps": 1248,
+      "pattern_occurrences": {
+        "INTRO": 1,
+        "A": 3,
+        "A2": 6,
+        "B": 3,
+        "B2": 6,
+        "C": 8,
+        "D": 11,
+        "OUTRO": 1
+      },
+      "repetition_ratio": 0.7949,
+      "unique_pattern_ratio": 0.2051,
+      "unique_transitions_count": 18,
+      "unique_transitions": [
+        [
+          "A",
+          "A"
+        ],
+        [
+          "A",
+          "A2"
+        ],
+        [
+          "A2",
+          "B"
+        ],
+        [
+          "A2",
+          "C"
+        ],
+        [
+          "A2",
+          "D"
+        ],
+        [
+          "B",
+          "A"
+        ],
+        [
+          "B",
+          "B2"
+        ],
+        [
+          "B2",
+          "C"
+        ],
+        [
+          "B2",
+          "D"
+        ],
+        [
+          "C",
+          "A2"
+        ],
+        [
+          "C",
+          "B2"
+        ],
+        [
+          "C",
+          "D"
+        ],
+        [
+          "D",
+          "A2"
+        ],
+        [
+          "D",
+          "B2"
+        ],
+        [
+          "D",
+          "C"
+        ],
+        [
+          "D",
+          "D"
+        ],
+        [
+          "D",
+          "OUTRO"
+        ],
+        [
+          "INTRO",
+          "A"
+        ]
+      ],
+      "transition_entropy": 4.018,
+      "transition_fill_count": 0,
+      "longest_repeated_subsequence_len": 8,
+      "longest_repeated_subsequence": [
+        "B2",
+        "D",
+        "D",
+        "A2",
+        "C",
+        "D",
+        "B2",
+        "D"
+      ],
+      "longest_repeated_subsequence_count": 2,
+      "repeated_subsequences_coverage_pct": 92.31,
+      "distinct_musical_patterns_count": 8,
+      "near_identical_patterns_count": 0,
+      "near_identical_pairs": [],
+      "material_reuse_ratio": 0.7949,
+      "variation_count": 2,
+      "variation_ratio": 0.25,
+      "variation_pairs": [
+        [
+          "A2",
+          "A",
+          0.7766
+        ],
+        [
+          "B2",
+          "B",
+          0.7875
+        ]
+      ],
+      "variation_similarity": 0.782,
+      "texture_changes_count": 0,
+      "active_channels_distribution": {
+        "1_ch": 0,
+        "2_ch": 0,
+        "3_ch": 8,
+        "4_ch": 0
+      },
+      "melodic_diversity": 0.8764,
+      "rhythmic_diversity": 0.7325,
+      "harmonic_diversity": 0.8922,
+      "structural_novelty": 0.35,
+      "sections_count": 8,
+      "form": {
+        "pattern_labels": {
+          "INTRO": "INTRO",
+          "A": "A",
+          "A2": "B",
+          "B": "C",
+          "B2": "D",
+          "C": "E",
+          "D": "F",
+          "OUTRO": "OUTRO"
+        },
+        "formal_sequence": [
+          "INTRO",
+          "A",
+          "A",
+          "B",
+          "C",
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "E",
+          "D",
+          "F",
+          "E",
+          "B",
+          "F",
+          "E",
+          "D",
+          "F",
+          "F",
+          "B",
+          "E",
+          "F",
+          "D",
+          "F",
+          "F",
+          "B",
+          "E",
+          "F",
+          "D",
+          "F",
+          "E",
+          "F",
+          "OUTRO"
+        ],
+        "compact_form": "INTRO - 2x A - B - C - A - B - C - D - E - B - C - D - E - F - E - D - F - E - B - F - E - D - 2x F - B - E - F - D - 2x F - B - E - F - D - F - E - F - OUTRO",
+        "unique_sections_count": 8,
+        "archetype": "Framed Episodic (Intro - Themes - Outro)"
+      }
+    },
+    "06_forest": {
+      "title": "Nocturne of the Silent Pines",
+      "bpm": 92,
+      "duration_seconds": 89.6,
+      "pattern_count": 7,
+      "pattern_lengths": {
+        "INTRO": 16,
+        "A": 32,
+        "A2": 32,
+        "B": 32,
+        "C": 32,
+        "D": 32,
+        "OUTRO": 16
+      },
+      "sequence_length": 29,
+      "total_steps": 896,
+      "pattern_occurrences": {
+        "INTRO": 1,
+        "A": 6,
+        "B": 7,
+        "A2": 7,
+        "C": 4,
+        "D": 3,
+        "OUTRO": 1
+      },
+      "repetition_ratio": 0.7586,
+      "unique_pattern_ratio": 0.2414,
+      "unique_transitions_count": 14,
+      "unique_transitions": [
+        [
+          "A",
+          "A"
+        ],
+        [
+          "A",
+          "B"
+        ],
+        [
+          "A",
+          "D"
+        ],
+        [
+          "A2",
+          "A"
+        ],
+        [
+          "A2",
+          "B"
+        ],
+        [
+          "A2",
+          "C"
+        ],
+        [
+          "A2",
+          "OUTRO"
+        ],
+        [
+          "B",
+          "A"
+        ],
+        [
+          "B",
+          "A2"
+        ],
+        [
+          "C",
+          "A"
+        ],
+        [
+          "C",
+          "A2"
+        ],
+        [
+          "C",
+          "D"
+        ],
+        [
+          "D",
+          "B"
+        ],
+        [
+          "INTRO",
+          "A"
+        ]
+      ],
+      "transition_entropy": 3.485,
+      "transition_fill_count": 2,
+      "longest_repeated_subsequence_len": 6,
+      "longest_repeated_subsequence": [
+        "B",
+        "A2",
+        "C",
+        "A",
+        "B",
+        "A2"
+      ],
+      "longest_repeated_subsequence_count": 2,
+      "repeated_subsequences_coverage_pct": 82.76,
+      "distinct_musical_patterns_count": 7,
+      "near_identical_patterns_count": 0,
+      "near_identical_pairs": [],
+      "material_reuse_ratio": 0.7857,
+      "variation_count": 1,
+      "variation_ratio": 0.1429,
+      "variation_pairs": [
+        [
+          "OUTRO",
+          "INTRO",
+          0.7613
+        ]
+      ],
+      "variation_similarity": 0.7613,
+      "texture_changes_count": 0,
+      "active_channels_distribution": {
+        "1_ch": 0,
+        "2_ch": 0,
+        "3_ch": 0,
+        "4_ch": 7
+      },
+      "melodic_diversity": 0.8098,
+      "rhythmic_diversity": 0.7004,
+      "harmonic_diversity": 0.7518,
+      "structural_novelty": 0.0667,
+      "sections_count": 7,
+      "form": {
+        "pattern_labels": {
+          "INTRO": "INTRO",
+          "A": "A",
+          "B": "B",
+          "A2": "C",
+          "C": "D",
+          "D": "E",
+          "OUTRO": "OUTRO"
+        },
+        "formal_sequence": [
+          "INTRO",
+          "A",
+          "A",
+          "B",
+          "C",
+          "D",
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "B",
+          "C",
+          "D",
+          "C",
+          "B",
+          "A",
+          "E",
+          "B",
+          "C",
+          "D",
+          "A",
+          "B",
+          "C",
+          "A",
+          "E",
+          "B",
+          "C",
+          "OUTRO"
+        ],
+        "compact_form": "INTRO - 2x A - B - C - D - A - B - C - D - E - B - C - D - C - B - A - E - B - C - D - A - B - C - A - E - B - C - OUTRO",
+        "unique_sections_count": 7,
+        "archetype": "Rondo-like Episodic (A-B-A-C...)"
+      }
+    },
+    "07_hero": {
+      "title": "Guardian of the Crystal Peaks",
+      "bpm": 130,
+      "duration_seconds": 119.04,
+      "pattern_count": 8,
+      "pattern_lengths": {
+        "IN": 16,
+        "A": 32,
+        "A2": 32,
+        "B": 32,
+        "B2": 32,
+        "C": 32,
+        "D": 32,
+        "OUT": 16
+      },
+      "sequence_length": 48,
+      "total_steps": 1488,
+      "pattern_occurrences": {
+        "IN": 2,
+        "A": 4,
+        "B": 6,
+        "A2": 8,
+        "C": 9,
+        "D": 12,
+        "B2": 6,
+        "OUT": 1
+      },
+      "repetition_ratio": 0.8333,
+      "unique_pattern_ratio": 0.1667,
+      "unique_transitions_count": 24,
+      "unique_transitions": [
+        [
+          "A",
+          "A"
+        ],
+        [
+          "A",
+          "A2"
+        ],
+        [
+          "A",
+          "B"
+        ],
+        [
+          "A",
+          "C"
+        ],
+        [
+          "A2",
+          "A"
+        ],
+        [
+          "A2",
+          "B"
+        ],
+        [
+          "A2",
+          "B2"
+        ],
+        [
+          "A2",
+          "C"
+        ],
+        [
+          "A2",
+          "D"
+        ],
+        [
+          "B",
+          "A"
+        ],
+        [
+          "B",
+          "A2"
+        ],
+        [
+          "B",
+          "C"
+        ],
+        [
+          "B",
+          "D"
+        ],
+        [
+          "B2",
+          "A2"
+        ],
+        [
+          "B2",
+          "D"
+        ],
+        [
+          "C",
+          "B"
+        ],
+        [
+          "C",
+          "C"
+        ],
+        [
+          "C",
+          "D"
+        ],
+        [
+          "D",
+          "B2"
+        ],
+        [
+          "D",
+          "C"
+        ],
+        [
+          "D",
+          "D"
+        ],
+        [
+          "D",
+          "OUT"
+        ],
+        [
+          "IN",
+          "A"
+        ],
+        [
+          "IN",
+          "IN"
+        ]
+      ],
+      "transition_entropy": 4.272,
+      "transition_fill_count": 2,
+      "longest_repeated_subsequence_len": 7,
+      "longest_repeated_subsequence": [
+        "C",
+        "C",
+        "B",
+        "A2",
+        "B2",
+        "D",
+        "D"
+      ],
+      "longest_repeated_subsequence_count": 2,
+      "repeated_subsequences_coverage_pct": 81.25,
+      "distinct_musical_patterns_count": 8,
+      "near_identical_patterns_count": 1,
+      "near_identical_pairs": [
+        [
+          "B",
+          "B2",
+          0.9018
+        ]
+      ],
+      "material_reuse_ratio": 0.8689,
+      "variation_count": 2,
+      "variation_ratio": 0.25,
+      "variation_pairs": [
+        [
+          "A2",
+          "A",
+          0.7443
+        ],
+        [
+          "B2",
+          "B",
+          0.9018
+        ]
+      ],
+      "variation_similarity": 0.8231,
+      "texture_changes_count": 0,
+      "active_channels_distribution": {
+        "1_ch": 0,
+        "2_ch": 0,
+        "3_ch": 0,
+        "4_ch": 8
+      },
+      "melodic_diversity": 0.901,
+      "rhythmic_diversity": 0.7273,
+      "harmonic_diversity": 0.9306,
+      "structural_novelty": 0.375,
+      "sections_count": 8,
+      "form": {
+        "pattern_labels": {
+          "IN": "INTRO",
+          "A": "A",
+          "B": "B",
+          "A2": "C",
+          "C": "D",
+          "D": "E",
+          "B2": "B'",
+          "OUT": "OUTRO"
+        },
+        "formal_sequence": [
+          "INTRO",
+          "INTRO",
+          "A",
+          "A",
+          "B",
+          "A",
+          "C",
+          "D",
+          "D",
+          "B",
+          "C",
+          "B",
+          "D",
+          "D",
+          "E",
+          "E",
+          "B'",
+          "C",
+          "E",
+          "E",
+          "B'",
+          "C",
+          "D",
+          "B",
+          "E",
+          "E",
+          "B'",
+          "C",
+          "E",
+          "E",
+          "D",
+          "D",
+          "B",
+          "C",
+          "B'",
+          "E",
+          "E",
+          "B'",
+          "C",
+          "A",
+          "D",
+          "D",
+          "B",
+          "C",
+          "B'",
+          "E",
+          "E",
+          "OUTRO"
+        ],
+        "compact_form": "2x INTRO - 2x A - B - A - C - 2x D - B - C - B - 2x D - 2x E - B' - C - 2x E - B' - C - D - B - 2x E - B' - C - 2x E - 2x D - B - C - B' - 2x E - B' - C - A - 2x D - B - C - B' - 2x E - OUTRO",
+        "unique_sections_count": 8,
+        "archetype": "Rondo-like Episodic (A-B-A-C...)"
+      }
+    },
+    "08_scifi": {
+      "title": "Elektryczny Sen Trurla (Trurl's Electric Dream)",
+      "bpm": 116,
+      "duration_seconds": 84.48,
+      "pattern_count": 7,
+      "pattern_lengths": {
+        "INTRO": 32,
+        "A": 32,
+        "A2": 32,
+        "B": 32,
+        "C": 32,
+        "BREAK": 32,
+        "OUTRO": 32
+      },
+      "sequence_length": 33,
+      "total_steps": 1056,
+      "pattern_occurrences": {
+        "INTRO": 1,
+        "A": 8,
+        "A2": 7,
+        "B": 9,
+        "C": 5,
+        "BREAK": 2,
+        "OUTRO": 1
+      },
+      "repetition_ratio": 0.7879,
+      "unique_pattern_ratio": 0.2121,
+      "unique_transitions_count": 18,
+      "unique_transitions": [
+        [
+          "A",
+          "A2"
+        ],
+        [
+          "A",
+          "B"
+        ],
+        [
+          "A",
+          "BREAK"
+        ],
+        [
+          "A",
+          "C"
+        ],
+        [
+          "A2",
+          "A"
+        ],
+        [
+          "A2",
+          "B"
+        ],
+        [
+          "A2",
+          "OUTRO"
+        ],
+        [
+          "B",
+          "A"
+        ],
+        [
+          "B",
+          "A2"
+        ],
+        [
+          "B",
+          "B"
+        ],
+        [
+          "B",
+          "C"
+        ],
+        [
+          "BREAK",
+          "B"
+        ],
+        [
+          "BREAK",
+          "C"
+        ],
+        [
+          "C",
+          "A"
+        ],
+        [
+          "C",
+          "A2"
+        ],
+        [
+          "C",
+          "B"
+        ],
+        [
+          "C",
+          "BREAK"
+        ],
+        [
+          "INTRO",
+          "A"
+        ]
+      ],
+      "transition_entropy": 3.929,
+      "transition_fill_count": 0,
+      "longest_repeated_subsequence_len": 4,
+      "longest_repeated_subsequence": [
+        "A",
+        "A2",
+        "B",
+        "A"
+      ],
+      "longest_repeated_subsequence_count": 2,
+      "repeated_subsequences_coverage_pct": 78.79,
+      "distinct_musical_patterns_count": 7,
+      "near_identical_patterns_count": 0,
+      "near_identical_pairs": [],
+      "material_reuse_ratio": 0.7879,
+      "variation_count": 0,
+      "variation_ratio": 0.0,
+      "variation_pairs": [],
+      "variation_similarity": 0.0,
+      "texture_changes_count": 0,
+      "active_channels_distribution": {
+        "1_ch": 0,
+        "2_ch": 0,
+        "3_ch": 0,
+        "4_ch": 7
+      },
+      "melodic_diversity": 0.9005,
+      "rhythmic_diversity": 0.6811,
+      "harmonic_diversity": 0.968,
+      "structural_novelty": 0.0588,
+      "sections_count": 7,
+      "form": {
+        "pattern_labels": {
+          "INTRO": "INTRO",
+          "A": "A",
+          "A2": "B",
+          "B": "C",
+          "C": "D",
+          "BREAK": "E",
+          "OUTRO": "OUTRO"
+        },
+        "formal_sequence": [
+          "INTRO",
+          "A",
+          "B",
+          "C",
+          "A",
+          "B",
+          "C",
+          "D",
+          "A",
+          "B",
+          "C",
+          "A",
+          "D",
+          "E",
+          "C",
+          "C",
+          "B",
+          "A",
+          "D",
+          "C",
+          "A",
+          "E",
+          "D",
+          "B",
+          "C",
+          "A",
+          "D",
+          "C",
+          "B",
+          "A",
+          "C",
+          "B",
+          "OUTRO"
+        ],
+        "compact_form": "INTRO - A - B - C - A - B - C - D - A - B - C - A - D - E - 2x C - B - A - D - C - A - E - D - B - C - A - D - C - B - A - C - B - OUTRO",
+        "unique_sections_count": 7,
+        "archetype": "Rondo-like Episodic (A-B-A-C...)"
+      }
+    }
+  }
+}

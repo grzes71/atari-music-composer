@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atari-music"
+version = "0.2.0"
+description = "Atari 8-bit POKEY Music Analysis & Dataset Generation Toolkit"
+authors = [{ name = "Antigravity Architect" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0.0",
+    "numpy>=1.24.0",
+    "click>=8.0.0",
+    "matplotlib>=3.7.0",
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+atari-music = "atari_music.cli:cli"
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.0.0",
+    "python-semantic-release>=9.15.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "src"]
+testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = [
+    "live: live tests requiring real LLM API access and credentials",
+]
+
+[tool.semantic_release]
+# Conventional Commits drive the version bump: feat -> minor, fix/perf -> patch,
+# and a "BREAKING CHANGE:" footer or "!" after the type -> major.
+version_toml = ["pyproject.toml:project.version"]
+build_command = "python -m pip install build && python -m build"
+tag_format = "v{version}"
+commit_parser = "conventional"
+major_on_zero = true
+allow_zero_version = true
+
+[tool.semantic_release.branches.main]
+match = "master"
+prerelease = false
+
+[tool.semantic_release.remote]
+type = "github"
+
+[tool.semantic_release.changelog]
+changelog_file = "CHANGELOG.md"
+
+[tool.semantic_release.publish]
+upload_to_vcs_release = true
+dist_glob_patterns = ["dist/*"]

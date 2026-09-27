@@ -1,0 +1,2153 @@
+{
+  "aggregate": {
+    "total_pieces": 8,
+    "average_duration_seconds": 92.89,
+    "average_pattern_count": 10.12,
+    "average_sequence_length": 31.12,
+    "average_unique_pattern_ratio": 0.3485,
+    "average_repetition_ratio": 0.6515,
+    "average_material_reuse_ratio": 0.6875,
+    "average_longest_repeated_subsequence_len": 4.25,
+    "average_repeated_subsequences_coverage_pct": 60.95,
+    "average_variation_count": 2.62,
+    "average_variation_ratio": 0.254,
+    "average_variation_similarity": 0.7024,
+    "average_transition_fill_count": 2.12,
+    "average_texture_changes_count": 7.38,
+    "average_structural_novelty": 0.5686,
+    "average_melodic_diversity": 0.8544,
+    "average_rhythmic_diversity": 0.7637,
+    "average_harmonic_diversity": 0.9026,
+    "average_attempts_count": 1.0,
+    "average_json_size_bytes": 85416.6,
+    "average_asm_size_bytes": 41038.9,
+    "average_xex_size_bytes": 3773.4
+  },
+  "pieces": {
+    "01_dungeon": {
+      "file_id": "01_dungeon",
+      "style": "dark dungeon exploration",
+      "title": "Dungeon of Shadows",
+      "bpm": 88,
+      "actual_duration_seconds": 89.6,
+      "attempts_count": 1,
+      "json_size_bytes": 51555,
+      "asm_size_bytes": 30090,
+      "xex_size_bytes": 2991,
+      "generation_time_seconds": 89.42,
+      "structure_metrics": {
+        "title": "Dungeon of Shadows",
+        "bpm": 88,
+        "duration_seconds": 89.6,
+        "pattern_count": 8,
+        "pattern_lengths": {
+          "intro": 32,
+          "themeA": 48,
+          "themeA_var": 48,
+          "fill1": 16,
+          "themeB": 48,
+          "themeB_var": 48,
+          "breakdown": 32,
+          "outro": 64
+        },
+        "sequence_length": 22,
+        "total_steps": 896,
+        "pattern_occurrences": {
+          "intro": 1,
+          "themeA": 4,
+          "themeA_var": 3,
+          "fill1": 4,
+          "themeB": 3,
+          "breakdown": 3,
+          "themeB_var": 2,
+          "outro": 2
+        },
+        "repetition_ratio": 0.6364,
+        "unique_pattern_ratio": 0.3636,
+        "unique_transitions_count": 14,
+        "unique_transitions": [
+          [
+            "breakdown",
+            "fill1"
+          ],
+          [
+            "breakdown",
+            "themeA_var"
+          ],
+          [
+            "breakdown",
+            "themeB_var"
+          ],
+          [
+            "fill1",
+            "outro"
+          ],
+          [
+            "fill1",
+            "themeB"
+          ],
+          [
+            "intro",
+            "themeA"
+          ],
+          [
+            "outro",
+            "outro"
+          ],
+          [
+            "themeA",
+            "breakdown"
+          ],
+          [
+            "themeA",
+            "themeA_var"
+          ],
+          [
+            "themeA_var",
+            "fill1"
+          ],
+          [
+            "themeA_var",
+            "themeB_var"
+          ],
+          [
+            "themeB",
+            "themeA"
+          ],
+          [
+            "themeB_var",
+            "fill1"
+          ],
+          [
+            "themeB_var",
+            "themeA_var"
+          ]
+        ],
+        "transition_entropy": 3.618,
+        "transition_fill_count": 1,
+        "longest_repeated_subsequence_len": 5,
+        "longest_repeated_subsequence": [
+          "themeA_var",
+          "fill1",
+          "themeB",
+          "themeA",
+          "breakdown"
+        ],
+        "longest_repeated_subsequence_count": 2,
+        "repeated_subsequences_coverage_pct": 63.64,
+        "distinct_musical_patterns_count": 8,
+        "near_identical_patterns_count": 0,
+        "near_identical_pairs": [],
+        "material_reuse_ratio": 0.625,
+        "variation_count": 1,
+        "variation_ratio": 0.125,
+        "variation_pairs": [
+          [
+            "breakdown",
+            "intro",
+            0.7154
+          ]
+        ],
+        "variation_similarity": 0.7154,
+        "texture_changes_count": 0,
+        "active_channels_distribution": {
+          "1_ch": 0,
+          "2_ch": 0,
+          "3_ch": 8,
+          "4_ch": 0
+        },
+        "melodic_diversity": 0.8519,
+        "rhythmic_diversity": 0.8371,
+        "harmonic_diversity": 0.9277,
+        "structural_novelty": 0.5455,
+        "sections_count": 22,
+        "form": {
+          "pattern_labels": {
+            "intro": "INTRO",
+            "themeA": "A",
+            "themeA_var": "B",
+            "fill1": "C",
+            "themeB": "D",
+            "breakdown": "E",
+            "themeB_var": "F",
+            "outro": "OUTRO"
+          },
+          "formal_sequence": [
+            "INTRO",
+            "A",
+            "B",
+            "C",
+            "D",
+            "A",
+            "E",
+            "F",
+            "B",
+            "C",
+            "D",
+            "A",
+            "E",
+            "B",
+            "F",
+            "C",
+            "D",
+            "A",
+            "E",
+            "C",
+            "OUTRO",
+            "OUTRO"
+          ],
+          "compact_form": "INTRO - A - B - C - D - A - E - F - B - C - D - A - E - B - F - C - D - A - E - C - 2x OUTRO",
+          "unique_sections_count": 8,
+          "archetype": "Rondo-like Episodic (A-B-A-C...)"
+        }
+      },
+      "semantic_variations": [
+        {
+          "section_id": "Variation A'",
+          "variation_pattern": "themeA_var",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Theme A shifted up an octave with altered cadence and slower bass",
+          "actual_similarity": 0.4497,
+          "relationship": "distinct",
+          "interpretation": "Disjoint / distinct motif (does not retain base theme identity)"
+        },
+        {
+          "section_id": "Variation B'",
+          "variation_pattern": "themeB_var",
+          "base_pattern": "themeB",
+          "declared_role": "variation",
+          "declared_description": "Theme B with counterpoint and busier bass",
+          "actual_similarity": 0.6104,
+          "relationship": "related",
+          "interpretation": "Distant / loose variation (weak thematic connection)"
+        },
+        {
+          "section_id": "Variation A''",
+          "variation_pattern": "themeA_var",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Second variation of A with altered rhythm",
+          "actual_similarity": 0.4497,
+          "relationship": "distinct",
+          "interpretation": "Disjoint / distinct motif (does not retain base theme identity)"
+        },
+        {
+          "section_id": "Variation A'''",
+          "variation_pattern": "themeA_var",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Third variation of A",
+          "actual_similarity": 0.4497,
+          "relationship": "distinct",
+          "interpretation": "Disjoint / distinct motif (does not retain base theme identity)"
+        },
+        {
+          "section_id": "Variation B''",
+          "variation_pattern": "themeB_var",
+          "base_pattern": "themeB",
+          "declared_role": "variation",
+          "declared_description": "Second variation of B",
+          "actual_similarity": 0.6104,
+          "relationship": "related",
+          "interpretation": "Distant / loose variation (weak thematic connection)"
+        }
+      ]
+    },
+    "02_chase": {
+      "file_id": "02_chase",
+      "style": "fast action chase",
+      "title": "Neon Pursuit",
+      "bpm": 142,
+      "actual_duration_seconds": 75.52,
+      "attempts_count": 1,
+      "json_size_bytes": 157258,
+      "asm_size_bytes": 60281,
+      "xex_size_bytes": 5193,
+      "generation_time_seconds": 166.68,
+      "structure_metrics": {
+        "title": "Neon Pursuit",
+        "bpm": 142,
+        "duration_seconds": 75.52,
+        "pattern_count": 13,
+        "pattern_lengths": {
+          "intro": 16,
+          "intro_b": 16,
+          "themeA": 64,
+          "themeA_var": 64,
+          "fill1": 16,
+          "fill2": 16,
+          "fill3": 16,
+          "themeB": 64,
+          "themeB_var": 64,
+          "bridge": 16,
+          "breakdown": 32,
+          "climax": 64,
+          "outro": 32
+        },
+        "sequence_length": 23,
+        "total_steps": 944,
+        "pattern_occurrences": {
+          "intro": 1,
+          "intro_b": 1,
+          "themeA": 4,
+          "fill1": 2,
+          "themeB": 2,
+          "themeA_var": 2,
+          "fill2": 2,
+          "bridge": 1,
+          "breakdown": 2,
+          "themeB_var": 2,
+          "fill3": 2,
+          "climax": 1,
+          "outro": 1
+        },
+        "repetition_ratio": 0.4348,
+        "unique_pattern_ratio": 0.5652,
+        "unique_transitions_count": 21,
+        "unique_transitions": [
+          [
+            "breakdown",
+            "themeB_var"
+          ],
+          [
+            "bridge",
+            "breakdown"
+          ],
+          [
+            "climax",
+            "fill3"
+          ],
+          [
+            "fill1",
+            "breakdown"
+          ],
+          [
+            "fill1",
+            "themeB"
+          ],
+          [
+            "fill2",
+            "themeA"
+          ],
+          [
+            "fill2",
+            "themeB"
+          ],
+          [
+            "fill3",
+            "outro"
+          ],
+          [
+            "fill3",
+            "themeA"
+          ],
+          [
+            "intro",
+            "intro_b"
+          ],
+          [
+            "intro_b",
+            "themeA"
+          ],
+          [
+            "themeA",
+            "climax"
+          ],
+          [
+            "themeA",
+            "fill1"
+          ],
+          [
+            "themeA",
+            "themeA"
+          ],
+          [
+            "themeA",
+            "themeA_var"
+          ],
+          [
+            "themeA_var",
+            "fill1"
+          ],
+          [
+            "themeA_var",
+            "fill2"
+          ],
+          [
+            "themeB",
+            "bridge"
+          ],
+          [
+            "themeB",
+            "themeA_var"
+          ],
+          [
+            "themeB_var",
+            "fill2"
+          ],
+          [
+            "themeB_var",
+            "fill3"
+          ]
+        ],
+        "transition_entropy": 4.369,
+        "transition_fill_count": 6,
+        "longest_repeated_subsequence_len": 2,
+        "longest_repeated_subsequence": [
+          "breakdown",
+          "themeB_var"
+        ],
+        "longest_repeated_subsequence_count": 2,
+        "repeated_subsequences_coverage_pct": 17.39,
+        "distinct_musical_patterns_count": 13,
+        "near_identical_patterns_count": 0,
+        "near_identical_pairs": [],
+        "material_reuse_ratio": 0.4915,
+        "variation_count": 3,
+        "variation_ratio": 0.2308,
+        "variation_pairs": [
+          [
+            "intro_b",
+            "intro",
+            0.7285
+          ]
+        ],
+        "variation_similarity": 0.7285,
+        "texture_changes_count": 11,
+        "active_channels_distribution": {
+          "1_ch": 0,
+          "2_ch": 0,
+          "3_ch": 3,
+          "4_ch": 10
+        },
+        "melodic_diversity": 0.8936,
+        "rhythmic_diversity": 0.6685,
+        "harmonic_diversity": 0.8891,
+        "structural_novelty": 0.75,
+        "sections_count": 13,
+        "form": {
+          "pattern_labels": {
+            "intro": "INTRO",
+            "intro_b": "A",
+            "themeA": "B",
+            "fill1": "C",
+            "themeB": "D",
+            "themeA_var": "E",
+            "fill2": "F",
+            "bridge": "G",
+            "breakdown": "A",
+            "themeB_var": "B",
+            "fill3": "C",
+            "climax": "D",
+            "outro": "OUTRO"
+          },
+          "formal_sequence": [
+            "INTRO",
+            "A",
+            "B",
+            "B",
+            "C",
+            "D",
+            "E",
+            "F",
+            "D",
+            "G",
+            "A",
+            "B",
+            "C",
+            "B",
+            "E",
+            "C",
+            "A",
+            "B",
+            "F",
+            "B",
+            "D",
+            "C",
+            "OUTRO"
+          ],
+          "compact_form": "INTRO - A - 2x B - C - D - E - F - D - G - A - B - C - B - E - C - A - B - F - B - D - C - OUTRO",
+          "unique_sections_count": 9,
+          "archetype": "Framed Episodic (Intro - Themes - Outro)"
+        }
+      },
+      "semantic_variations": [
+        {
+          "section_id": "Theme B'",
+          "variation_pattern": "themeB_var",
+          "base_pattern": "themeB",
+          "declared_role": "variation",
+          "declared_description": "Theme B ornamented with passing tones, syncopated bass and altered semi-cadence on E.",
+          "actual_similarity": 0.6874,
+          "relationship": "related",
+          "interpretation": "Distant / loose variation (weak thematic connection)"
+        },
+        {
+          "section_id": "Theme A'",
+          "variation_pattern": "themeA_var",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Theme A opened with a 16th-note flourish, counter-melody doubling and a displaced, unresolved cadence.",
+          "actual_similarity": 0.5486,
+          "relationship": "distinct",
+          "interpretation": "Distant / loose variation (weak thematic connection)"
+        }
+      ]
+    },
+    "03_adventure": {
+      "file_id": "03_adventure",
+      "style": "melancholic retro adventure",
+      "title": "Bittersweet Journey",
+      "bpm": 105,
+      "actual_duration_seconds": 110.0,
+      "attempts_count": 1,
+      "json_size_bytes": 105291,
+      "asm_size_bytes": 43614,
+      "xex_size_bytes": 4027,
+      "generation_time_seconds": 94.16,
+      "structure_metrics": {
+        "title": "Bittersweet Journey",
+        "bpm": 105,
+        "duration_seconds": 110.0,
+        "pattern_count": 9,
+        "pattern_lengths": {
+          "intro": 32,
+          "themeA": 64,
+          "themeA_var": 64,
+          "fill1": 16,
+          "themeB": 64,
+          "themeB_var": 64,
+          "themeC": 64,
+          "breakdown": 32,
+          "outro": 92
+        },
+        "sequence_length": 20,
+        "total_steps": 1100,
+        "pattern_occurrences": {
+          "intro": 1,
+          "themeA": 3,
+          "themeA_var": 3,
+          "fill1": 3,
+          "themeB": 3,
+          "themeB_var": 2,
+          "themeC": 3,
+          "breakdown": 1,
+          "outro": 1
+        },
+        "repetition_ratio": 0.55,
+        "unique_pattern_ratio": 0.45,
+        "unique_transitions_count": 16,
+        "unique_transitions": [
+          [
+            "breakdown",
+            "themeB"
+          ],
+          [
+            "fill1",
+            "outro"
+          ],
+          [
+            "fill1",
+            "themeA"
+          ],
+          [
+            "fill1",
+            "themeB"
+          ],
+          [
+            "intro",
+            "themeA"
+          ],
+          [
+            "themeA",
+            "themeA_var"
+          ],
+          [
+            "themeA",
+            "themeB_var"
+          ],
+          [
+            "themeA_var",
+            "breakdown"
+          ],
+          [
+            "themeA_var",
+            "fill1"
+          ],
+          [
+            "themeA_var",
+            "themeB"
+          ],
+          [
+            "themeB",
+            "fill1"
+          ],
+          [
+            "themeB",
+            "themeA"
+          ],
+          [
+            "themeB",
+            "themeC"
+          ],
+          [
+            "themeB_var",
+            "themeC"
+          ],
+          [
+            "themeC",
+            "fill1"
+          ],
+          [
+            "themeC",
+            "themeA_var"
+          ]
+        ],
+        "transition_entropy": 3.932,
+        "transition_fill_count": 1,
+        "longest_repeated_subsequence_len": 4,
+        "longest_repeated_subsequence": [
+          "themeA",
+          "themeB_var",
+          "themeC",
+          "themeA_var"
+        ],
+        "longest_repeated_subsequence_count": 2,
+        "repeated_subsequences_coverage_pct": 40.0,
+        "distinct_musical_patterns_count": 9,
+        "near_identical_patterns_count": 0,
+        "near_identical_pairs": [],
+        "material_reuse_ratio": 0.5527,
+        "variation_count": 2,
+        "variation_ratio": 0.2222,
+        "variation_pairs": [],
+        "variation_similarity": 0.0,
+        "texture_changes_count": 2,
+        "active_channels_distribution": {
+          "1_ch": 0,
+          "2_ch": 1,
+          "3_ch": 0,
+          "4_ch": 8
+        },
+        "melodic_diversity": 0.9063,
+        "rhythmic_diversity": 0.8023,
+        "harmonic_diversity": 0.918,
+        "structural_novelty": 0.6,
+        "sections_count": 9,
+        "form": {
+          "pattern_labels": {
+            "intro": "INTRO",
+            "themeA": "A",
+            "themeA_var": "B",
+            "fill1": "C",
+            "themeB": "D",
+            "themeB_var": "E",
+            "themeC": "F",
+            "breakdown": "G",
+            "outro": "OUTRO"
+          },
+          "formal_sequence": [
+            "INTRO",
+            "A",
+            "B",
+            "C",
+            "D",
+            "A",
+            "E",
+            "F",
+            "B",
+            "D",
+            "F",
+            "C",
+            "A",
+            "E",
+            "F",
+            "B",
+            "G",
+            "D",
+            "C",
+            "OUTRO"
+          ],
+          "compact_form": "INTRO - A - B - C - D - A - E - F - B - D - F - C - A - E - F - B - G - D - C - OUTRO",
+          "unique_sections_count": 9,
+          "archetype": "Framed Episodic (Intro - Themes - Outro)"
+        }
+      },
+      "semantic_variations": [
+        {
+          "section_id": "Variation A'",
+          "variation_pattern": "themeA_var",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Theme A shifted up an octave with syncopated rhythm and altered cadence.",
+          "actual_similarity": 0.6064,
+          "relationship": "related",
+          "interpretation": "Distant / loose variation (weak thematic connection)"
+        },
+        {
+          "section_id": "Variation B'",
+          "variation_pattern": "themeB_var",
+          "base_pattern": "themeB",
+          "declared_role": "variation",
+          "declared_description": "Theme B with rhythmic syncopation and darker minor cadence.",
+          "actual_similarity": 0.5948,
+          "relationship": "distinct",
+          "interpretation": "Distant / loose variation (weak thematic connection)"
+        }
+      ]
+    },
+    "04_prl_comedy": {
+      "file_id": "04_prl_comedy",
+      "style": "funny 1970s Polish PRL comedy",
+      "title": "PRL Comedy",
+      "bpm": 128,
+      "actual_duration_seconds": 79.36,
+      "attempts_count": 1,
+      "json_size_bytes": 91861,
+      "asm_size_bytes": 45028,
+      "xex_size_bytes": 4044,
+      "generation_time_seconds": 136.53,
+      "structure_metrics": {
+        "title": "PRL Comedy",
+        "bpm": 128,
+        "duration_seconds": 79.36,
+        "pattern_count": 12,
+        "pattern_lengths": {
+          "intro": 32,
+          "themeA": 32,
+          "themeA_var": 32,
+          "themeA_var2": 32,
+          "themeB": 32,
+          "themeB_var": 32,
+          "themeB_var2": 32,
+          "breakdown": 32,
+          "bridge": 32,
+          "fill1": 16,
+          "fill2": 16,
+          "outro": 32
+        },
+        "sequence_length": 33,
+        "total_steps": 992,
+        "pattern_occurrences": {
+          "intro": 1,
+          "themeA": 6,
+          "themeA_var": 4,
+          "fill1": 2,
+          "themeB": 4,
+          "themeA_var2": 4,
+          "breakdown": 3,
+          "themeB_var": 2,
+          "bridge": 2,
+          "fill2": 2,
+          "themeB_var2": 2,
+          "outro": 1
+        },
+        "repetition_ratio": 0.6364,
+        "unique_pattern_ratio": 0.3636,
+        "unique_transitions_count": 27,
+        "unique_transitions": [
+          [
+            "breakdown",
+            "themeB_var"
+          ],
+          [
+            "breakdown",
+            "themeB_var2"
+          ],
+          [
+            "bridge",
+            "fill2"
+          ],
+          [
+            "bridge",
+            "themeA_var"
+          ],
+          [
+            "fill1",
+            "themeB"
+          ],
+          [
+            "fill2",
+            "themeA_var"
+          ],
+          [
+            "fill2",
+            "themeB"
+          ],
+          [
+            "intro",
+            "themeA"
+          ],
+          [
+            "themeA",
+            "breakdown"
+          ],
+          [
+            "themeA",
+            "bridge"
+          ],
+          [
+            "themeA",
+            "fill2"
+          ],
+          [
+            "themeA",
+            "themeA_var"
+          ],
+          [
+            "themeA",
+            "themeA_var2"
+          ],
+          [
+            "themeA_var",
+            "breakdown"
+          ],
+          [
+            "themeA_var",
+            "fill1"
+          ],
+          [
+            "themeA_var",
+            "themeB"
+          ],
+          [
+            "themeA_var",
+            "themeB_var2"
+          ],
+          [
+            "themeA_var2",
+            "breakdown"
+          ],
+          [
+            "themeA_var2",
+            "fill1"
+          ],
+          [
+            "themeA_var2",
+            "outro"
+          ],
+          [
+            "themeA_var2",
+            "themeA"
+          ],
+          [
+            "themeB",
+            "themeA"
+          ],
+          [
+            "themeB",
+            "themeA_var"
+          ],
+          [
+            "themeB_var",
+            "bridge"
+          ],
+          [
+            "themeB_var",
+            "themeA_var2"
+          ],
+          [
+            "themeB_var2",
+            "themeA"
+          ],
+          [
+            "themeB_var2",
+            "themeA_var2"
+          ]
+        ],
+        "transition_entropy": 4.664,
+        "transition_fill_count": 2,
+        "longest_repeated_subsequence_len": 3,
+        "longest_repeated_subsequence": [
+          "fill1",
+          "themeB",
+          "themeA"
+        ],
+        "longest_repeated_subsequence_count": 2,
+        "repeated_subsequences_coverage_pct": 45.45,
+        "distinct_musical_patterns_count": 12,
+        "near_identical_patterns_count": 6,
+        "near_identical_pairs": [
+          [
+            "themeA",
+            "themeA_var",
+            0.8545
+          ],
+          [
+            "themeA",
+            "themeA_var2",
+            0.8984
+          ],
+          [
+            "themeA_var",
+            "themeA_var2",
+            0.8113
+          ],
+          [
+            "themeB",
+            "themeB_var",
+            0.9092
+          ],
+          [
+            "themeB",
+            "themeB_var2",
+            0.9035
+          ],
+          [
+            "themeB_var",
+            "themeB_var2",
+            0.8533
+          ]
+        ],
+        "material_reuse_ratio": 0.7602,
+        "variation_count": 5,
+        "variation_ratio": 0.4167,
+        "variation_pairs": [
+          [
+            "themeA_var",
+            "themeA",
+            0.8545
+          ],
+          [
+            "themeA_var2",
+            "themeA",
+            0.8984
+          ],
+          [
+            "themeB",
+            "themeA",
+            0.7318
+          ],
+          [
+            "themeB_var",
+            "themeA",
+            0.7148
+          ],
+          [
+            "themeB_var2",
+            "themeA",
+            0.7217
+          ],
+          [
+            "themeA_var2",
+            "themeA_var",
+            0.8113
+          ],
+          [
+            "themeB_var",
+            "themeA_var",
+            0.7039
+          ],
+          [
+            "themeA_var2",
+            "themeB",
+            0.7217
+          ],
+          [
+            "themeB_var",
+            "themeA_var2",
+            0.7098
+          ],
+          [
+            "themeB_var2",
+            "themeA_var2",
+            0.7318
+          ],
+          [
+            "themeB_var",
+            "themeB",
+            0.9092
+          ],
+          [
+            "themeB_var2",
+            "themeB",
+            0.9035
+          ],
+          [
+            "themeB_var2",
+            "themeB_var",
+            0.8533
+          ]
+        ],
+        "variation_similarity": 0.7897,
+        "texture_changes_count": 15,
+        "active_channels_distribution": {
+          "1_ch": 0,
+          "2_ch": 0,
+          "3_ch": 4,
+          "4_ch": 8
+        },
+        "melodic_diversity": 0.8645,
+        "rhythmic_diversity": 0.7535,
+        "harmonic_diversity": 0.8792,
+        "structural_novelty": 0.7059,
+        "sections_count": 12,
+        "form": {
+          "pattern_labels": {
+            "intro": "INTRO",
+            "themeA": "A",
+            "themeA_var": "A'",
+            "fill1": "B",
+            "themeB": "C",
+            "themeA_var2": "A'",
+            "breakdown": "D",
+            "themeB_var": "C'",
+            "bridge": "E",
+            "fill2": "F",
+            "themeB_var2": "C'",
+            "outro": "OUTRO"
+          },
+          "formal_sequence": [
+            "INTRO",
+            "A",
+            "A'",
+            "B",
+            "C",
+            "A",
+            "A'",
+            "D",
+            "C'",
+            "E",
+            "F",
+            "A'",
+            "C",
+            "A",
+            "D",
+            "C'",
+            "A'",
+            "B",
+            "C",
+            "A",
+            "E",
+            "A'",
+            "D",
+            "C'",
+            "A'",
+            "A",
+            "F",
+            "C",
+            "A'",
+            "C'",
+            "A",
+            "A'",
+            "OUTRO"
+          ],
+          "compact_form": "INTRO - A - A' - B - C - A - A' - D - C' - E - F - A' - C - A - D - C' - A' - B - C - A - E - A' - D - C' - A' - A - F - C - A' - C' - A - A' - OUTRO",
+          "unique_sections_count": 10,
+          "archetype": "Rondo-like Episodic (A-B-A-C...)"
+        }
+      },
+      "semantic_variations": [
+        {
+          "section_id": "Variation A'",
+          "variation_pattern": "themeA_var",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Syncopated rhythm and altered cadence.",
+          "actual_similarity": 0.8545,
+          "relationship": "near_variation",
+          "interpretation": "True musical variation (shared melodic/harmonic core with modified cadence/rhythm)"
+        },
+        {
+          "section_id": "Variation A''",
+          "variation_pattern": "themeA_var2",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Octave-up ornamented version.",
+          "actual_similarity": 0.8984,
+          "relationship": "near_variation",
+          "interpretation": "True musical variation (shared melodic/harmonic core with modified cadence/rhythm)"
+        },
+        {
+          "section_id": "Variation B'",
+          "variation_pattern": "themeB_var",
+          "base_pattern": "themeB",
+          "declared_role": "variation",
+          "declared_description": "Syncopated variation of Theme B.",
+          "actual_similarity": 0.9092,
+          "relationship": "near_variation",
+          "interpretation": "True musical variation (shared melodic/harmonic core with modified cadence/rhythm)"
+        },
+        {
+          "section_id": "Variation B''",
+          "variation_pattern": "themeB_var2",
+          "base_pattern": "themeB",
+          "declared_role": "variation",
+          "declared_description": "Octave-up ornamented version of Theme B.",
+          "actual_similarity": 0.9035,
+          "relationship": "near_variation",
+          "interpretation": "True musical variation (shared melodic/harmonic core with modified cadence/rhythm)"
+        }
+      ]
+    },
+    "05_boss": {
+      "file_id": "05_boss",
+      "style": "tense boss encounter",
+      "title": "Boss Encounter: POKEY Menace",
+      "bpm": 136,
+      "actual_duration_seconds": 99.84,
+      "attempts_count": 1,
+      "json_size_bytes": 85198,
+      "asm_size_bytes": 49439,
+      "xex_size_bytes": 4287,
+      "generation_time_seconds": 77.39,
+      "structure_metrics": {
+        "title": "Boss Encounter: POKEY Menace",
+        "bpm": 136,
+        "duration_seconds": 99.84,
+        "pattern_count": 10,
+        "pattern_lengths": {
+          "intro": 32,
+          "themeA": 32,
+          "themeA_var": 32,
+          "fill1": 32,
+          "themeB": 32,
+          "breakdown": 32,
+          "battle_climax": 32,
+          "themeB_var": 32,
+          "fill2": 32,
+          "outro": 32
+        },
+        "sequence_length": 39,
+        "total_steps": 1248,
+        "pattern_occurrences": {
+          "intro": 1,
+          "themeA": 6,
+          "themeA_var": 6,
+          "fill1": 3,
+          "themeB": 6,
+          "battle_climax": 5,
+          "breakdown": 3,
+          "themeB_var": 5,
+          "fill2": 3,
+          "outro": 1
+        },
+        "repetition_ratio": 0.7436,
+        "unique_pattern_ratio": 0.2564,
+        "unique_transitions_count": 20,
+        "unique_transitions": [
+          [
+            "battle_climax",
+            "breakdown"
+          ],
+          [
+            "battle_climax",
+            "themeB_var"
+          ],
+          [
+            "breakdown",
+            "themeA_var"
+          ],
+          [
+            "breakdown",
+            "themeB_var"
+          ],
+          [
+            "fill1",
+            "battle_climax"
+          ],
+          [
+            "fill1",
+            "themeB"
+          ],
+          [
+            "fill2",
+            "battle_climax"
+          ],
+          [
+            "fill2",
+            "themeA_var"
+          ],
+          [
+            "intro",
+            "themeA"
+          ],
+          [
+            "themeA",
+            "battle_climax"
+          ],
+          [
+            "themeA",
+            "fill1"
+          ],
+          [
+            "themeA",
+            "fill2"
+          ],
+          [
+            "themeA",
+            "themeA_var"
+          ],
+          [
+            "themeA_var",
+            "fill1"
+          ],
+          [
+            "themeA_var",
+            "themeB"
+          ],
+          [
+            "themeB",
+            "outro"
+          ],
+          [
+            "themeB",
+            "themeA"
+          ],
+          [
+            "themeB_var",
+            "breakdown"
+          ],
+          [
+            "themeB_var",
+            "fill2"
+          ],
+          [
+            "themeB_var",
+            "themeA_var"
+          ]
+        ],
+        "transition_entropy": 4.071,
+        "transition_fill_count": 2,
+        "longest_repeated_subsequence_len": 8,
+        "longest_repeated_subsequence": [
+          "themeA_var",
+          "themeB",
+          "themeA",
+          "fill2",
+          "battle_climax",
+          "themeB_var",
+          "themeA_var",
+          "themeB"
+        ],
+        "longest_repeated_subsequence_count": 2,
+        "repeated_subsequences_coverage_pct": 82.05,
+        "distinct_musical_patterns_count": 10,
+        "near_identical_patterns_count": 1,
+        "near_identical_pairs": [
+          [
+            "fill1",
+            "fill2",
+            0.824
+          ]
+        ],
+        "material_reuse_ratio": 0.7647,
+        "variation_count": 3,
+        "variation_ratio": 0.3,
+        "variation_pairs": [
+          [
+            "fill2",
+            "fill1",
+            0.824
+          ],
+          [
+            "themeB_var",
+            "themeB",
+            0.7542
+          ]
+        ],
+        "variation_similarity": 0.7891,
+        "texture_changes_count": 0,
+        "active_channels_distribution": {
+          "1_ch": 0,
+          "2_ch": 0,
+          "3_ch": 10,
+          "4_ch": 0
+        },
+        "melodic_diversity": 0.8668,
+        "rhythmic_diversity": 0.6045,
+        "harmonic_diversity": 0.9818,
+        "structural_novelty": 0.5,
+        "sections_count": 10,
+        "form": {
+          "pattern_labels": {
+            "intro": "INTRO",
+            "themeA": "A",
+            "themeA_var": "B",
+            "fill1": "C",
+            "themeB": "D",
+            "battle_climax": "E",
+            "breakdown": "F",
+            "themeB_var": "G",
+            "fill2": "C'",
+            "outro": "OUTRO"
+          },
+          "formal_sequence": [
+            "INTRO",
+            "A",
+            "B",
+            "C",
+            "D",
+            "A",
+            "E",
+            "F",
+            "G",
+            "C'",
+            "B",
+            "D",
+            "A",
+            "C",
+            "E",
+            "G",
+            "F",
+            "B",
+            "D",
+            "A",
+            "C'",
+            "E",
+            "G",
+            "B",
+            "D",
+            "A",
+            "C",
+            "E",
+            "F",
+            "G",
+            "B",
+            "D",
+            "A",
+            "C'",
+            "E",
+            "G",
+            "B",
+            "D",
+            "OUTRO"
+          ],
+          "compact_form": "INTRO - A - B - C - D - A - E - F - G - C' - B - D - A - C - E - G - F - B - D - A - C' - E - G - B - D - A - C - E - F - G - B - D - A - C' - E - G - B - D - OUTRO",
+          "unique_sections_count": 10,
+          "archetype": "Rondo-like Episodic (A-B-A-C...)"
+        }
+      },
+      "semantic_variations": [
+        {
+          "section_id": "Variation A'",
+          "variation_pattern": "themeA_var",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Furious countermelody and syncopated bass alteration.",
+          "actual_similarity": 0.6344,
+          "relationship": "related",
+          "interpretation": "Distant / loose variation (weak thematic connection)"
+        },
+        {
+          "section_id": "Variation B'",
+          "variation_pattern": "themeB_var",
+          "base_pattern": "themeB",
+          "declared_role": "variation",
+          "declared_description": "Theme B with altered cadence and counterpoint shift.",
+          "actual_similarity": 0.7542,
+          "relationship": "related",
+          "interpretation": "True musical variation (shared melodic/harmonic core with modified cadence/rhythm)"
+        }
+      ]
+    },
+    "06_forest": {
+      "file_id": "06_forest",
+      "style": "mysterious night forest",
+      "title": "Mystic Forest Nocturne",
+      "bpm": 92,
+      "actual_duration_seconds": 91.2,
+      "attempts_count": 1,
+      "json_size_bytes": 39073,
+      "asm_size_bytes": 25103,
+      "xex_size_bytes": 2629,
+      "generation_time_seconds": 45.74,
+      "structure_metrics": {
+        "title": "Mystic Forest Nocturne",
+        "bpm": 92,
+        "duration_seconds": 91.2,
+        "pattern_count": 9,
+        "pattern_lengths": {
+          "intro": 32,
+          "themeA": 32,
+          "themeA_var": 32,
+          "transition1": 16,
+          "themeB": 32,
+          "breakdown": 32,
+          "themeB_var": 32,
+          "fill": 16,
+          "outro": 32
+        },
+        "sequence_length": 31,
+        "total_steps": 912,
+        "pattern_occurrences": {
+          "intro": 1,
+          "themeA": 9,
+          "themeA_var": 5,
+          "transition1": 2,
+          "themeB": 4,
+          "breakdown": 3,
+          "fill": 3,
+          "themeB_var": 3,
+          "outro": 1
+        },
+        "repetition_ratio": 0.7097,
+        "unique_pattern_ratio": 0.2903,
+        "unique_transitions_count": 19,
+        "unique_transitions": [
+          [
+            "breakdown",
+            "fill"
+          ],
+          [
+            "breakdown",
+            "themeB_var"
+          ],
+          [
+            "breakdown",
+            "transition1"
+          ],
+          [
+            "fill",
+            "themeB"
+          ],
+          [
+            "fill",
+            "themeB_var"
+          ],
+          [
+            "intro",
+            "themeA"
+          ],
+          [
+            "themeA",
+            "breakdown"
+          ],
+          [
+            "themeA",
+            "fill"
+          ],
+          [
+            "themeA",
+            "outro"
+          ],
+          [
+            "themeA",
+            "themeA"
+          ],
+          [
+            "themeA",
+            "themeA_var"
+          ],
+          [
+            "themeA",
+            "themeB"
+          ],
+          [
+            "themeA_var",
+            "themeA"
+          ],
+          [
+            "themeA_var",
+            "transition1"
+          ],
+          [
+            "themeB",
+            "themeA"
+          ],
+          [
+            "themeB",
+            "themeA_var"
+          ],
+          [
+            "themeB_var",
+            "themeA_var"
+          ],
+          [
+            "transition1",
+            "themeB"
+          ],
+          [
+            "transition1",
+            "themeB_var"
+          ]
+        ],
+        "transition_entropy": 4.031,
+        "transition_fill_count": 2,
+        "longest_repeated_subsequence_len": 5,
+        "longest_repeated_subsequence": [
+          "themeB_var",
+          "themeA_var",
+          "themeA",
+          "fill",
+          "themeB"
+        ],
+        "longest_repeated_subsequence_count": 2,
+        "repeated_subsequences_coverage_pct": 74.19,
+        "distinct_musical_patterns_count": 9,
+        "near_identical_patterns_count": 2,
+        "near_identical_pairs": [
+          [
+            "transition1",
+            "fill",
+            0.9645
+          ],
+          [
+            "themeB",
+            "themeB_var",
+            0.8672
+          ]
+        ],
+        "material_reuse_ratio": 0.7666,
+        "variation_count": 4,
+        "variation_ratio": 0.4444,
+        "variation_pairs": [
+          [
+            "themeA",
+            "intro",
+            0.7414
+          ],
+          [
+            "fill",
+            "transition1",
+            0.9645
+          ],
+          [
+            "themeB_var",
+            "themeB",
+            0.8672
+          ]
+        ],
+        "variation_similarity": 0.8577,
+        "texture_changes_count": 7,
+        "active_channels_distribution": {
+          "1_ch": 0,
+          "2_ch": 0,
+          "3_ch": 2,
+          "4_ch": 7
+        },
+        "melodic_diversity": 0.7679,
+        "rhythmic_diversity": 0.8077,
+        "harmonic_diversity": 0.8063,
+        "structural_novelty": 0.8125,
+        "sections_count": 9,
+        "form": {
+          "pattern_labels": {
+            "intro": "INTRO",
+            "themeA": "A",
+            "themeA_var": "B",
+            "transition1": "C",
+            "themeB": "D",
+            "breakdown": "E",
+            "fill": "C'",
+            "themeB_var": "D'",
+            "outro": "OUTRO"
+          },
+          "formal_sequence": [
+            "INTRO",
+            "A",
+            "B",
+            "C",
+            "D",
+            "A",
+            "E",
+            "C'",
+            "D'",
+            "B",
+            "A",
+            "C'",
+            "D",
+            "A",
+            "E",
+            "D'",
+            "B",
+            "A",
+            "D",
+            "A",
+            "E",
+            "C",
+            "D'",
+            "B",
+            "A",
+            "C'",
+            "D",
+            "B",
+            "A",
+            "A",
+            "OUTRO"
+          ],
+          "compact_form": "INTRO - A - B - C - D - A - E - C' - D' - B - A - C' - D - A - E - D' - B - A - D - A - E - C - D' - B - A - C' - D - B - 2x A - OUTRO",
+          "unique_sections_count": 9,
+          "archetype": "Rondo-like Episodic (A-B-A-C...)"
+        }
+      },
+      "semantic_variations": [
+        {
+          "section_id": "Variation A'",
+          "variation_pattern": "themeA_var",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Ornamented high bell variation with faster arpeggiated motion and altered cadence.",
+          "actual_similarity": 0.6502,
+          "relationship": "related",
+          "interpretation": "Distant / loose variation (weak thematic connection)"
+        },
+        {
+          "section_id": "Variation B'",
+          "variation_pattern": "themeB_var",
+          "base_pattern": "themeB",
+          "declared_role": "variation",
+          "declared_description": "Theme B shifted upward with delicate bell counterpoint and lighter percussion.",
+          "actual_similarity": 0.8672,
+          "relationship": "near_variation",
+          "interpretation": "True musical variation (shared melodic/harmonic core with modified cadence/rhythm)"
+        }
+      ]
+    },
+    "07_hero": {
+      "file_id": "07_hero",
+      "style": "heroic 8-bit adventure",
+      "title": "March of the Pixel Champion",
+      "bpm": 130,
+      "actual_duration_seconds": 112.64,
+      "attempts_count": 1,
+      "json_size_bytes": 72223,
+      "asm_size_bytes": 36062,
+      "xex_size_bytes": 3384,
+      "generation_time_seconds": 102.97,
+      "structure_metrics": {
+        "title": "March of the Pixel Champion",
+        "bpm": 130,
+        "duration_seconds": 112.64,
+        "pattern_count": 11,
+        "pattern_lengths": {
+          "intro": 32,
+          "themeA": 32,
+          "themeA_var": 32,
+          "fill1": 16,
+          "themeB": 32,
+          "themeB_var": 32,
+          "fill2": 16,
+          "bridge": 32,
+          "breakdown": 32,
+          "climax": 32,
+          "outro": 32
+        },
+        "sequence_length": 47,
+        "total_steps": 1408,
+        "pattern_occurrences": {
+          "intro": 2,
+          "themeA": 8,
+          "themeA_var": 6,
+          "fill1": 3,
+          "themeB": 4,
+          "themeB_var": 5,
+          "fill2": 3,
+          "bridge": 6,
+          "breakdown": 3,
+          "climax": 6,
+          "outro": 1
+        },
+        "repetition_ratio": 0.766,
+        "unique_pattern_ratio": 0.234,
+        "unique_transitions_count": 30,
+        "unique_transitions": [
+          [
+            "breakdown",
+            "breakdown"
+          ],
+          [
+            "breakdown",
+            "bridge"
+          ],
+          [
+            "bridge",
+            "bridge"
+          ],
+          [
+            "bridge",
+            "climax"
+          ],
+          [
+            "bridge",
+            "themeB"
+          ],
+          [
+            "bridge",
+            "themeB_var"
+          ],
+          [
+            "climax",
+            "bridge"
+          ],
+          [
+            "climax",
+            "climax"
+          ],
+          [
+            "climax",
+            "outro"
+          ],
+          [
+            "climax",
+            "themeA"
+          ],
+          [
+            "fill1",
+            "bridge"
+          ],
+          [
+            "fill1",
+            "themeB"
+          ],
+          [
+            "fill2",
+            "climax"
+          ],
+          [
+            "fill2",
+            "themeA"
+          ],
+          [
+            "intro",
+            "intro"
+          ],
+          [
+            "intro",
+            "themeA"
+          ],
+          [
+            "themeA",
+            "themeA"
+          ],
+          [
+            "themeA",
+            "themeA_var"
+          ],
+          [
+            "themeA",
+            "themeB"
+          ],
+          [
+            "themeA",
+            "themeB_var"
+          ],
+          [
+            "themeA_var",
+            "climax"
+          ],
+          [
+            "themeA_var",
+            "fill1"
+          ],
+          [
+            "themeA_var",
+            "fill2"
+          ],
+          [
+            "themeA_var",
+            "themeB_var"
+          ],
+          [
+            "themeB",
+            "themeA"
+          ],
+          [
+            "themeB",
+            "themeB"
+          ],
+          [
+            "themeB",
+            "themeB_var"
+          ],
+          [
+            "themeB_var",
+            "breakdown"
+          ],
+          [
+            "themeB_var",
+            "fill2"
+          ],
+          [
+            "themeB_var",
+            "themeA_var"
+          ]
+        ],
+        "transition_entropy": 4.7,
+        "transition_fill_count": 2,
+        "longest_repeated_subsequence_len": 4,
+        "longest_repeated_subsequence": [
+          "themeA",
+          "themeA_var",
+          "fill1",
+          "bridge"
+        ],
+        "longest_repeated_subsequence_count": 2,
+        "repeated_subsequences_coverage_pct": 76.6,
+        "distinct_musical_patterns_count": 11,
+        "near_identical_patterns_count": 0,
+        "near_identical_pairs": [],
+        "material_reuse_ratio": 0.7727,
+        "variation_count": 2,
+        "variation_ratio": 0.1818,
+        "variation_pairs": [
+          [
+            "themeB_var",
+            "themeB",
+            0.792
+          ]
+        ],
+        "variation_similarity": 0.792,
+        "texture_changes_count": 16,
+        "active_channels_distribution": {
+          "1_ch": 0,
+          "2_ch": 0,
+          "3_ch": 3,
+          "4_ch": 8
+        },
+        "melodic_diversity": 0.8836,
+        "rhythmic_diversity": 0.8689,
+        "harmonic_diversity": 0.8532,
+        "structural_novelty": 0.4583,
+        "sections_count": 11,
+        "form": {
+          "pattern_labels": {
+            "intro": "INTRO",
+            "themeA": "A",
+            "themeA_var": "B",
+            "fill1": "C",
+            "themeB": "D",
+            "themeB_var": "E",
+            "fill2": "F",
+            "bridge": "G",
+            "breakdown": "A",
+            "climax": "B",
+            "outro": "OUTRO"
+          },
+          "formal_sequence": [
+            "INTRO",
+            "INTRO",
+            "A",
+            "A",
+            "B",
+            "C",
+            "D",
+            "D",
+            "E",
+            "F",
+            "A",
+            "B",
+            "C",
+            "G",
+            "G",
+            "E",
+            "A",
+            "A",
+            "G",
+            "B",
+            "B",
+            "A",
+            "D",
+            "E",
+            "B",
+            "F",
+            "A",
+            "B",
+            "B",
+            "G",
+            "D",
+            "A",
+            "B",
+            "C",
+            "G",
+            "B",
+            "A",
+            "E",
+            "A",
+            "G",
+            "B",
+            "A",
+            "B",
+            "E",
+            "F",
+            "B",
+            "OUTRO"
+          ],
+          "compact_form": "2x INTRO - 2x A - B - C - 2x D - E - F - A - B - C - 2x G - E - 2x A - G - 2x B - A - D - E - B - F - A - 2x B - G - D - A - B - C - G - B - A - E - A - G - B - A - B - E - F - B - OUTRO",
+          "unique_sections_count": 9,
+          "archetype": "Rondo-like Episodic (A-B-A-C...)"
+        }
+      },
+      "semantic_variations": [
+        {
+          "section_id": "Variation A'",
+          "variation_pattern": "themeA_var",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Theme A lifted an octave with a running eighth-note walking bass, counter-voice and altered cadence.",
+          "actual_similarity": 0.548,
+          "relationship": "distinct",
+          "interpretation": "Distant / loose variation (weak thematic connection)"
+        },
+        {
+          "section_id": "Variation B'",
+          "variation_pattern": "themeB_var",
+          "base_pattern": "themeB",
+          "declared_role": "variation",
+          "declared_description": "Theme B ornamented with a syncopated pickup figure and a new alto counter-line.",
+          "actual_similarity": 0.792,
+          "relationship": "related",
+          "interpretation": "True musical variation (shared melodic/harmonic core with modified cadence/rhythm)"
+        }
+      ]
+    },
+    "08_scifi": {
+      "file_id": "08_scifi",
+      "style": "absurd / satirical Polish sci-fi",
+      "title": "Absurd Polish Sci-Fi Robot Ballet",
+      "bpm": 116,
+      "actual_duration_seconds": 84.96,
+      "attempts_count": 1,
+      "json_size_bytes": 80874,
+      "asm_size_bytes": 38694,
+      "xex_size_bytes": 3632,
+      "generation_time_seconds": 84.67,
+      "structure_metrics": {
+        "title": "Absurd Polish Sci-Fi Robot Ballet",
+        "bpm": 116,
+        "duration_seconds": 84.96,
+        "pattern_count": 9,
+        "pattern_lengths": {
+          "intro": 38,
+          "themeA": 32,
+          "themeA_var": 32,
+          "glitch_fill": 16,
+          "themeB": 32,
+          "themeB_var": 32,
+          "breakdown": 32,
+          "return": 32,
+          "outro": 32
+        },
+        "sequence_length": 34,
+        "total_steps": 1062,
+        "pattern_occurrences": {
+          "intro": 1,
+          "themeA": 9,
+          "themeA_var": 5,
+          "glitch_fill": 2,
+          "themeB": 5,
+          "breakdown": 4,
+          "themeB_var": 4,
+          "return": 3,
+          "outro": 1
+        },
+        "repetition_ratio": 0.7353,
+        "unique_pattern_ratio": 0.2647,
+        "unique_transitions_count": 21,
+        "unique_transitions": [
+          [
+            "breakdown",
+            "outro"
+          ],
+          [
+            "breakdown",
+            "themeB"
+          ],
+          [
+            "breakdown",
+            "themeB_var"
+          ],
+          [
+            "glitch_fill",
+            "themeB"
+          ],
+          [
+            "intro",
+            "themeA"
+          ],
+          [
+            "return",
+            "themeA"
+          ],
+          [
+            "return",
+            "themeA_var"
+          ],
+          [
+            "themeA",
+            "breakdown"
+          ],
+          [
+            "themeA",
+            "glitch_fill"
+          ],
+          [
+            "themeA",
+            "themeA_var"
+          ],
+          [
+            "themeA",
+            "themeB"
+          ],
+          [
+            "themeA",
+            "themeB_var"
+          ],
+          [
+            "themeA_var",
+            "breakdown"
+          ],
+          [
+            "themeA_var",
+            "themeA"
+          ],
+          [
+            "themeA_var",
+            "themeB_var"
+          ],
+          [
+            "themeB",
+            "return"
+          ],
+          [
+            "themeB",
+            "themeA"
+          ],
+          [
+            "themeB",
+            "themeA_var"
+          ],
+          [
+            "themeB_var",
+            "return"
+          ],
+          [
+            "themeB_var",
+            "themeA"
+          ],
+          [
+            "themeB_var",
+            "themeA_var"
+          ]
+        ],
+        "transition_entropy": 4.271,
+        "transition_fill_count": 1,
+        "longest_repeated_subsequence_len": 3,
+        "longest_repeated_subsequence": [
+          "themeA",
+          "glitch_fill",
+          "themeB"
+        ],
+        "longest_repeated_subsequence_count": 2,
+        "repeated_subsequences_coverage_pct": 88.24,
+        "distinct_musical_patterns_count": 9,
+        "near_identical_patterns_count": 1,
+        "near_identical_pairs": [
+          [
+            "themeA",
+            "return",
+            0.9465
+          ]
+        ],
+        "material_reuse_ratio": 0.7667,
+        "variation_count": 1,
+        "variation_ratio": 0.1111,
+        "variation_pairs": [
+          [
+            "return",
+            "themeA",
+            0.9465
+          ]
+        ],
+        "variation_similarity": 0.9465,
+        "texture_changes_count": 8,
+        "active_channels_distribution": {
+          "1_ch": 0,
+          "2_ch": 0,
+          "3_ch": 1,
+          "4_ch": 8
+        },
+        "melodic_diversity": 0.8002,
+        "rhythmic_diversity": 0.7668,
+        "harmonic_diversity": 0.9652,
+        "structural_novelty": 0.1765,
+        "sections_count": 9,
+        "form": {
+          "pattern_labels": {
+            "intro": "INTRO",
+            "themeA": "A",
+            "themeA_var": "B",
+            "glitch_fill": "C",
+            "themeB": "D",
+            "breakdown": "E",
+            "themeB_var": "F",
+            "return": "A'",
+            "outro": "OUTRO"
+          },
+          "formal_sequence": [
+            "INTRO",
+            "A",
+            "B",
+            "A",
+            "C",
+            "D",
+            "A",
+            "E",
+            "F",
+            "A",
+            "C",
+            "D",
+            "B",
+            "E",
+            "D",
+            "A'",
+            "A",
+            "F",
+            "B",
+            "A",
+            "D",
+            "A'",
+            "B",
+            "F",
+            "A",
+            "E",
+            "D",
+            "B",
+            "A",
+            "F",
+            "A'",
+            "A",
+            "E",
+            "OUTRO"
+          ],
+          "compact_form": "INTRO - A - B - A - C - D - A - E - F - A - C - D - B - E - D - A' - A - F - B - A - D - A' - B - F - A - E - D - B - A - F - A' - A - E - OUTRO",
+          "unique_sections_count": 9,
+          "archetype": "Rondo-like Episodic (A-B-A-C...)"
+        }
+      },
+      "semantic_variations": [
+        {
+          "section_id": "Variation A'",
+          "variation_pattern": "themeA_var",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Theme A with syncopated rhythm and octave shift.",
+          "actual_similarity": 0.4744,
+          "relationship": "distinct",
+          "interpretation": "Disjoint / distinct motif (does not retain base theme identity)"
+        },
+        {
+          "section_id": "Alien Variation B'",
+          "variation_pattern": "themeB_var",
+          "base_pattern": "themeB",
+          "declared_role": "variation",
+          "declared_description": "Theme B with swapped counterpoint and chromatic bass.",
+          "actual_similarity": 0.4807,
+          "relationship": "distinct",
+          "interpretation": "Disjoint / distinct motif (does not retain base theme identity)"
+        },
+        {
+          "section_id": "Return",
+          "variation_pattern": "return",
+          "base_pattern": "themeA",
+          "declared_role": "variation",
+          "declared_description": "Full reprise of Robot Theme A with altered cadence.",
+          "actual_similarity": 0.9465,
+          "relationship": "near_variation",
+          "interpretation": "True musical variation (shared melodic/harmonic core with modified cadence/rhythm)"
+        }
+      ]
+    }
+  }
+}
