@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.2.1 (2026-09-27)
+
+### Bug Fixes
+
+- **client**: Import missing subprocess module for build-xex
+  ([`e50710c`](https://github.com/grzes71/atari-music-composer/commit/e50710c2f4963575403788f510e5feda7c5b7f25))
+
+
 ## v0.2.0 (2026-09-27)
 
 ### Features
