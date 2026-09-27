@@ -8,8 +8,12 @@ from __future__ import annotations
 
 import gzip
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
 
 from atari_music.analyzer import run_repetition_and_memory_analysis
 from atari_music.constants import POKEY_REGS

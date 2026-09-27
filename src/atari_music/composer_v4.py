@@ -26,10 +26,14 @@ Key Innovations over v3:
 
 from __future__ import annotations
 
+import logging
 import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
 
 import numpy as np
 from pydantic import BaseModel, Field

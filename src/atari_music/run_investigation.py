@@ -14,10 +14,13 @@ Executes:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
 from atari_music.memorization_analysis import DatasetCorpus, analyze_all_four_groups
+
+logger = logging.getLogger(__name__)
 
 
 def run_full_investigation(
@@ -28,23 +31,23 @@ def run_full_investigation(
     stats_out_json: Path = Path("generated/memorization_stats.json"),
 ) -> Dict[str, Any]:
     """Run full empirical memorization and novelty investigation."""
-    print("Step 1: Building dataset corpus from raw POKEY dumps...")
+    logger.info("Step 1: Building dataset corpus from raw POKEY dumps...")
     corpus = DatasetCorpus()
     corpus.load_from_dataset(dataset_raw_dir, max_songs=150)
 
-    print("Step 2: Evaluating 4-group memorization and novelty distributions...")
+    logger.info("Step 2: Evaluating 4-group memorization and novelty distributions...")
     stats = analyze_all_four_groups(corpus, generated_dir=generated_dir)
 
     with open(stats_out_json, "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2)
 
-    print("Step 3: Generating generator_comparison.md...")
+    logger.info("Step 3: Generating generator_comparison.md...")
     generate_generator_comparison_report(output_comparison_md)
 
-    print("Step 4: Generating stage5_5_report.md...")
+    logger.info("Step 4: Generating stage5_5_report.md...")
     generate_stage5_5_report(stats, output_stage5_5_md)
 
-    print("Investigation complete! Both reports generated.")
+    logger.info("Investigation complete! Both reports generated.")
     return stats
 
 

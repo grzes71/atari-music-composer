@@ -25,8 +25,12 @@ Strict Constraints:
 
 from __future__ import annotations
 
+import logging
 import random
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
 
 from atari_music.archetypes import ArchetypeLibrary, mine_archetypes_from_dataset
 from atari_music.constants import (

@@ -8,6 +8,7 @@ REAL Atari Music (330 subsongs) vs PROCEDURAL Generated Music (100 songs).
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -16,6 +17,8 @@ import numpy as np
 from atari_music.generator import generate_song
 from atari_music.ir import IRSong, calculate_ir_binary_size, compile_ir_to_pokey_frames
 from atari_music.pokey_synth import render_pokey_to_wav
+
+logger = logging.getLogger(__name__)
 
 
 def run_batch_experiment(
@@ -27,7 +30,7 @@ def run_batch_experiment(
     out_dir.mkdir(parents=True, exist_ok=True)
     generated_stats: List[Dict[str, Any]] = []
 
-    print(f"Starting batch generation of {count} songs in {out_dir}...")
+    logger.info("Starting batch generation of %d songs in %s...", count, out_dir)
 
     keys = ["C", "D", "E", "F", "G", "A", "B"]
     modes = ["minor", "major", "dorian", "pentatonic"]
@@ -74,7 +77,7 @@ def run_batch_experiment(
         generated_stats.append(metrics)
 
         if (seed + 1) % 20 == 0 or seed == count - 1:
-            print(f"  Processed {seed + 1}/{count} songs...")
+            logger.info("  Processed %d/%d songs...", seed + 1, count)
 
     # Load REAL dataset records for comparison
     real_records = _load_real_dataset(dataset_jsonl_path)
@@ -95,7 +98,7 @@ def run_batch_experiment(
         # Don't serialize massive arrays
         json.dump(summary_result, f, indent=2)
 
-    print(f"Batch generation and comparative analysis complete! Saved to {summary_path}")
+    logger.info("Batch generation and comparative analysis complete! Saved to %s", summary_path)
     return summary_result
 
 

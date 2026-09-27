@@ -91,12 +91,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     config = Config.from_args(args=argv, validate=False)
 
     # Konfiguracja systemu logowania zgodnie z wybranym poziomem
-    log_level = getattr(logging, config.log_level.upper(), logging.INFO)
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    from atari_music.logging_config import setup_logging
+    setup_logging(config.log_level)
 
     # b) Przekazanie obiektu konfiguracji do logiki aplikacji
     return run_app(config)

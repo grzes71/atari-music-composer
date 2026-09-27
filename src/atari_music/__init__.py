@@ -40,4 +40,10 @@ __all__ = [
     "generate_music_from_json",
     "request_ai_composition",
     "build_xex_from_composition",
+    # Logging
+    "setup_logging",
+    "get_logger",
 ]
+
+from atari_music.logging_config import get_logger, setup_logging
+

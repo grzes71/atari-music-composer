@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -10,12 +11,33 @@ import click
 
 from atari_music.dataset import build_full_dataset
 from atari_music.extractor import extract_raw_dump
+from atari_music.logging_config import setup_logging
+
+
+def _set_log_level(ctx: click.Context, param: click.Parameter, value: Optional[str]) -> Optional[str]:
+    """Callback to eagerly configure logging level."""
+    if value is not None:
+        setup_logging(value)
+    elif not logging.getLogger().handlers:
+        setup_logging()
+    return value
 
 
 @click.group()
-def cli() -> None:
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
+    default=None,
+    envvar="LOG_LEVEL",
+    is_eager=True,
+    expose_value=True,
+    callback=_set_log_level,
+    help="Global logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).",
+)
+def cli(log_level: Optional[str] = None) -> None:
     """Atari 8-bit Music Analysis & POKEY Dataset Generator."""
     pass
+
 
 
 @cli.command("extract")
@@ -730,7 +752,23 @@ def build_xex_cmd(
 @click.option("--provider", type=click.Choice(["mock", "openai"], case_sensitive=False), default="mock", help="AI provider")
 @click.option("--model", type=str, default=None, help="AI model name override")
 @click.option("--max-retries", type=int, default=3, help="Maximum validation repair retry attempts (default: 3)")
-@click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Output JSON path")
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
+    default=None,
+    is_eager=True,
+    expose_value=False,
+    callback=_set_log_level,
+    help="Logging level override (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=None,
+    required=False,
+    help="Output JSON path (omitted or '-' prints machine-readable JSON to stdout)",
+)
 def ai_compose_cmd(
     style: str,
     mood: tuple[str, ...],
@@ -742,7 +780,7 @@ def ai_compose_cmd(
     provider: str,
     model: Optional[str],
     max_retries: int,
-    output: Path,
+    output: Optional[Path],
 ) -> None:
     """Generate a valid AI composition JSON using an AI provider."""
     from atari_music.ai.providers.base import CompositionRequest
@@ -757,14 +795,25 @@ def ai_compose_cmd(
         use_16bit_bass=use_16bit_bass,
         structure=structure,
     )
-    click.echo(f"Requesting composition from provider '{provider}'...")
-    click.echo(f"  Style: {style}, BPM: {bpm}, Channels: {channels}, 16-bit bass: {use_16bit_bass}, max retries: {max_retries}")
+    is_stdout = output is None or str(output) == "-"
+
+    # Informational logs go to stderr so stdout is not polluted
+    click.echo(f"Requesting composition from provider '{provider}'...", err=True)
+    click.echo(
+        f"  Style: {style}, BPM: {bpm}, Channels: {channels}, 16-bit bass: {use_16bit_bass}, max retries: {max_retries}",
+        err=True,
+    )
     comp = request_ai_composition(req, provider_name=provider, model=model, max_retries=max_retries)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with open(output, "w", encoding="utf-8") as f:
-        json.dump(comp.model_dump(mode="json"), f, indent=2)
-    click.echo(f"Successfully generated and validated composition -> {output}")
-    click.echo(f"  Title: {comp.metadata.title}")
+    json_str = json.dumps(comp.model_dump(mode="json"), indent=2)
+
+    if is_stdout:
+        click.echo(json_str)
+    else:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with open(output, "w", encoding="utf-8") as f:
+            f.write(json_str)
+        click.echo(f"Successfully generated and validated composition -> {output}", err=True)
+        click.echo(f"  Title: {comp.metadata.title}", err=True)
 
 
 if __name__ == "__main__":

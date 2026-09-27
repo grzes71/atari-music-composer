@@ -12,6 +12,7 @@ structural metrics, and comparative evaluation against `generated/` and the data
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -21,6 +22,9 @@ from atari_music.composer_v2 import ComposerV2Config, compose_song_v2
 from atari_music.ir import compile_ir_to_pokey_frames
 from atari_music.memorization_analysis import DatasetCorpus, evaluate_song_novelty
 from atari_music.pokey_synth import render_pokey_to_wav
+
+logger = logging.getLogger(__name__)
+
 
 
 def run_composer_v2_experiments(
@@ -47,7 +51,7 @@ def run_composer_v2_experiments(
         target_dir = base_out_dir / subdir_name
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"Generating 20 tracks for novelty = {nov:.2f} in {target_dir}...")
+        logger.info("Generating 20 tracks for novelty = %.2f in %s...", nov, target_dir)
         level_tracks: List[Dict[str, Any]] = []
 
         for i in range(1, counts_per_level + 1):
@@ -108,7 +112,7 @@ def run_composer_v2_experiments(
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(experiment_results, f, indent=2)
 
-    print(f"All Composer v2 experiments completed! Saved to {summary_path}")
+    logger.info("All Composer v2 experiments completed! Saved to %s", summary_path)
     return experiment_results
 
 
