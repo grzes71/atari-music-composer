@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.1.1 (2026-09-27)
+
+### Bug Fixes
+
+- **cli**: Streamline public commands and implement composition analyze command
+  ([`4d0aa5f`](https://github.com/grzes71/atari-music-composer/commit/4d0aa5f43bd9d124d5874110dfd7d02d4835d29f))
+
+
 ## v0.1.0 (2026-09-27)
 
 ### Bug Fixes
