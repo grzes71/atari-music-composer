@@ -26,7 +26,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - name: Install package with dev dependencies
         run: python -m pip install -e ".[dev]"
@@ -65,7 +65,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       # Inspects commits since the last tag using Conventional Commits to decide
       # fix -> patch, feat -> minor, "BREAKING CHANGE"/"!" -> major. Bumps the
