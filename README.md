@@ -190,6 +190,22 @@ Konwertuje wcześniej zapisany plik POKEY IR JSON na kod źródłowy asemblera M
 atari-music export-mads title.json -o title_data.asm
 ```
 
+#### C. Polecenie `analyze`
+
+Analizuje właściwości muzyczne (rytm, melodia, harmonia), wykorzystanie sprzętu POKEY, czas trwania PAL 50 Hz, deterministyczny fingerprint SHA-256 oraz opcjonalnie makrostrukturę utworu:
+
+```bash
+# Czytelny raport diagnostyczny w terminalu:
+atari-music analyze dungeon.json
+
+# Rozszerzona analiza makrostruktury i dedukcji formy:
+atari-music analyze dungeon.json --structure
+
+# Wyjście w formacie JSON (na stdout lub zapisane do pliku) dla narzędzi i agentów:
+atari-music analyze dungeon.json --json
+atari-music analyze dungeon.json --structure -o report.json
+```
+
 ---
 
 ### 3. Integracja z Projektem 6502 (Asembler MADS)
@@ -360,7 +376,7 @@ Odtwarzacz zużywa ułamek budżetu pojedynczej ramki, dzięki czemu doskonale n
 
 ---
 
-## 🤖 AI Music Composition, Structure & Arrangement Layer (Etapy 12–17)
+## 🤖 AI Music Composition, Structure & Arrangement Layer
 
 Projekt zawiera w pełni zintegrowaną, autonomiczną warstwę **AI Music Composition & Arrangement**.
 Model AI pełni wyłącznie rolę **kompozytora i aranżera** (tworząc deklaratywny dokument JSON `atari-music-composition` v1), a nie generatora kodu 6502 ani bezpośrednich rejestrów POKEY. Całość walidacji, interpretacji, analizy, kompilacji i eksportu wykonuje deterministyczny pipeline `atari-music`:
@@ -425,28 +441,26 @@ Funkcja `composition_fingerprint(doc) -> str` generuje 64-znakowy skrót SHA-256
 * **Deterministyczna:** identyczne utwory dają identyczny hash.
 * **Czuła:** zmiana choćby jednej nuty, dynamiki, instrumentu czy czasu trwania natychmiast zmienia fingerprint.
 
-### 6. Pełnometrażowe Utwory 60–120 s & Weryfikacja Ground-Truth (Etap 15.1)
+### 6. Pełnometrażowe Utwory 60–120 s & Weryfikacja Czasu Trwania
 * **Ścisły pomiar czasu:** Funkcja `calculate_composition_duration()` wylicza rzeczywisty czas odtwarzania utworu w oparciu o sumę długości patternów w sekwencji oraz dzielniki ramek VBLANK PAL (50 Hz).
 * **Weryfikacja Invariantu:** Funkcja `verify_duration_invariant()` gwarantuje, że wygenerowany utwór spełnia warunek $60.0 \le t \le 120.0\text{ s}$. Jeśli czas odbiega od założeń, pętla naprawcza automatycznie odsyła feedback korygujący sekwencję.
 * **Wbudowany timer i wskaźniki VU:** Wszystkie pliki XEX generowane z kompozycji AI posiadają interaktywny interfejs w trybie ANTIC Mode 2 (Graphics 0) wyświetlający czas odtwarzania w czasie rzeczywistym (`MM:SS / TOTAL`), stan odtwarzacza oraz 4-kanałowy poziomy visualizer głośności.
 
-### 7. Analiza Jakości Struktury i Powtarzalności (Etap 16)
+### 7. Analiza Jakości Struktury i Powtarzalności
 Moduł [src/atari_music/ai/structure_analysis.py](src/atari_music/ai/structure_analysis.py) dostarcza obiektywnych, matematycznych metryk makrostruktury kompozycji:
 * **Wskaźnik powtórzeń (`repetition_ratio`):** $1.0 - (\text{unikalne patterny} / \text{długość sekwencji})$.
 * **Wskaźnik ponownego użycia materiału (`material_reuse_ratio`):** Proporcja kroków sekwencji wykorzystująca już wcześniej zaprezentowany materiał nutowy.
 * **Detekcja bloków podciągów n-gramowych:** Wykrywanie najdłuższego powtórzonego podciągu (`longest_repeated_subsequence_len`) oraz odsetka sekwencji pokrytego powtórzeniami (`repeated_subsequences_coverage_pct`).
 * **Automatyczna dedukcja formy:** Klasyfikacja formy kompozycji (np. *Rondo-like Episodic*, *Framed Episodic*, *Multi-Thematic Chain*) i czytelny zapis formalny (np. `INTRO - 2x A - B - A' - OUTRO`).
 * **Różnorodność dziedzinowa:** Obliczanie entropii Shannona dla wysokości nut (rozpiętość melodyczna), długości nut (rytmika) oraz klas interwałów współbrzmień pionowych (harmonia).
-* Kompletny raport z analizy utworów bazowych znajduje się w [stage16_structure_report.md](stage16_structure_report.md).
 
-### 8. Zaawansowana Aranżacja, Wariacje Tematyczne i Przejścia (Etap 17)
-Etap 17 wprowadził mechanizmy przekształcające kompozycje z mechanicznych pętli w rozwijające się aranżacje muzyczne:
-* **Świadome planowanie formy (`AIFormPlanDef`, `AISectionPlanItem`):** Kompatybilne wstecz modele pozwalające modelowi zaplanować motyw A, kontrast B, wariacje i przejścia przed wygenerowaniem nut.
+### 8. Zaawansowana Aranżacja, Wariacje Tematyczne i Przejścia
+Mechanizmy aranżacyjne przekształcające kompozycje z mechanicznych pętli w rozwijające się utwory:
+* **Świadome planowanie formy (`AIFormPlanDef`, `AISectionPlanItem`):** Modele pozwalające zaplanować motyw A, kontrast B, wariacje i przejścia przed wygenerowaniem nut.
 * **Wariacje tematyczne ($A'$, $B'$):** Definiowanie wariacji zachowujących rdzeń melodyczno-harmoniczny, lecz modyfikujących rytmikę, kadencję końcową, oktawę lub ornamentację.
 * **Krótkie fille i przejścia (8–16 kroków):** Dynamiczne łączniki perkusyjne i melodyczne między sekcjami.
 * **Dynamika faktury i breakdowny:** Sekcje o zredukowanej fakturze (np. solo bas i perkusja) budujące napięcie przed repryzą tematu głównego.
-* **Nowość w drugiej połowie utworu (`structural_novelty`):** Wzrost odsetka rozwijających się motywów w drugiej połowie utworu z 0% do **56.86%**.
-* Pełny raport i automatyczne porównanie Stage 15.1 vs Stage 17 znajduje się w [stage17_arrangement_report.md](stage17_arrangement_report.md).
+* **Nowość w drugiej połowie utworu (`structural_novelty`):** Rozwój motywów w drugiej połowie kompozycji.
 
 ### 9. Przykłady Użycia CLI dla AI Composition
 
@@ -471,6 +485,9 @@ atari-music build-xex dungeon.json \
     --output dungeon.xex \
     --player-address 0x4000 \
     --zp-base 0x80
+
+# 4. Szczegółowa analiza właściwości muzycznych i sprzętowych kompozycji:
+atari-music analyze dungeon.json --structure
 ```
 
 ### 10. Python API
