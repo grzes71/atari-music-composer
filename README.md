@@ -484,7 +484,8 @@ atari-music import-json dungeon.json \
 atari-music build-xex dungeon.json \
     --output dungeon.xex \
     --player-address 0x4000 \
-    --zp-base 0x80
+    --zp-base 0x80 \
+    --player-asm player.asm
 
 # 4. Szczegółowa analiza właściwości muzycznych i sprzętowych kompozycji:
 atari-music analyze dungeon.json --structure

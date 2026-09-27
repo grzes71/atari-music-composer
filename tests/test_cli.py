@@ -200,3 +200,44 @@ def test_cli_analyze_nonexistent_file():
     runner = CliRunner()
     result = runner.invoke(cli, ["analyze", "nonexistent_file_12345.json"])
     assert result.exit_code != 0
+
+
+def test_cli_build_xex_help_shows_player_asm():
+    """Verify build-xex --help displays the --player-asm option."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["build-xex", "--help"])
+    assert result.exit_code == 0
+    assert "--player-asm" in result.output
+    assert "Path to player.asm" in result.output
+    assert "defaults to current directory" in result.output
+
+
+def test_client_build_xex_explicit_player_asm_not_found(tmp_path: Path):
+    """Verify build_xex_from_composition raises FileNotFoundError when player_asm does not exist."""
+    import pytest
+    from atari_music.ai.client import build_xex_from_composition
+
+    doc = _create_minimal_composition()
+    with pytest.raises(FileNotFoundError, match="player.asm not found at"):
+        build_xex_from_composition(doc, output_path=tmp_path / "out.xex", player_asm=tmp_path / "missing_player.asm")
+
+
+def test_client_build_xex_cwd_player_asm_lookup(tmp_path: Path, monkeypatch):
+    """Verify build_xex_from_composition prioritizes player.asm in current working directory."""
+    import pytest
+    from atari_music.ai.client import build_xex_from_composition
+
+    # Create dummy player.asm in a temporary directory
+    custom_player = tmp_path / "player.asm"
+    custom_player.write_text("; Custom player in cwd\n", encoding="utf-8")
+
+    # Change current working directory to tmp_path
+    monkeypatch.chdir(tmp_path)
+
+    doc = _create_minimal_composition()
+    # Expect failure at mads executable or mads build, but player.asm is resolved from cwd
+    with pytest.raises(FileNotFoundError) as excinfo:
+        # Pass nonexistent mads to stop execution after player.asm lookup
+        build_xex_from_composition(doc, output_path=tmp_path / "out.xex", mads_bin=tmp_path / "missing_mads.exe")
+    assert "MADS assembler not found" in str(excinfo.value)
+
