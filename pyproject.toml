@@ -48,7 +48,7 @@ major_on_zero = true
 allow_zero_version = true
 
 [tool.semantic_release.branches.main]
-match = "master"
+match = "main"
 prerelease = false
 
 [tool.semantic_release.remote]

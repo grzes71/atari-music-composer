@@ -1,12 +1,12 @@
 name: Release
 
-# Runs when a pull request targeting master is closed. We only act when it was
+# Runs when a pull request targeting main is closed. We only act when it was
 # actually merged (a closed-without-merge PR must not trigger a release).
 on:
   pull_request:
     types: [closed]
     branches:
-      - master
+      - main
 
 permissions:
   contents: read
@@ -59,6 +59,9 @@ jobs:
           ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0
 
+      - name: Attach local branch
+        run: git checkout ${{ github.event.pull_request.base.ref }}
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -82,7 +85,6 @@ jobs:
         if: steps.release.outputs.released == 'true'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ steps.release.outputs.tag }}
 
       - name: Upload build artifacts to the workflow run
         if: steps.release.outputs.released == 'true'
