@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.2.0 (2026-09-27)
+
+### Features
+
+- **cli**: Add player.asm path option and working directory lookup
+  ([`4a42d2f`](https://github.com/grzes71/atari-music-composer/commit/4a42d2fb5fa4222b81ed2c0a0541a5d4d0c02fb8))
+
+
 ## v0.1.1 (2026-09-27)
 
 ### Bug Fixes
