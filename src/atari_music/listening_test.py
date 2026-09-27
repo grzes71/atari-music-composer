@@ -19,6 +19,7 @@ from __future__ import annotations
 import csv
 import gzip
 import json
+import logging
 import random
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -33,6 +34,9 @@ from atari_music.ir import (
     calculate_ir_binary_size,
     compile_ir_to_pokey_frames,
 )
+
+logger = logging.getLogger(__name__)
+
 from atari_music.pokey_synth import render_pokey_to_wav
 
 
@@ -125,10 +129,10 @@ def prepare_listening_test(
     output_dir.mkdir(parents=True, exist_ok=True)
     all_samples: List[Dict[str, Any]] = []
 
-    print(f"Preparing Blinded Listening Test (30 samples, 20.00s each) in {output_dir}...")
+    logger.info("Preparing Blinded Listening Test (30 samples, 20.00s each) in %s...", output_dir)
 
     # 1. GROUP A: 10 REAL Original Atari Tracks
-    print("  Extracting and rendering Group A (REAL)...")
+    logger.info("  Extracting and rendering Group A (REAL)...")
     for idx, item in enumerate(REAL_TRACK_SELECTIONS):
         dump_path = dataset_raw_dir / item["dump_file"]
         frames = _load_frames_from_dump(dump_path, target_frames=frames_target)
@@ -143,7 +147,7 @@ def prepare_listening_test(
         all_samples.append(stats)
 
     # 2. GROUP B: 10 GENERATED Tracks (Stage 4 Procedural Generator)
-    print("  Synthesizing and rendering Group B (GENERATED)...")
+    logger.info("  Synthesizing and rendering Group B (GENERATED)...")
     gen_seeds = [7, 14, 21, 35, 42, 56, 63, 77, 84, 98]
     for s in gen_seeds:
         song = generate_song(seed=s)
@@ -166,7 +170,7 @@ def prepare_listening_test(
         all_samples.append(stats)
 
     # 3. GROUP C: 10 CONTROL Tracks (Naive Generator without Archetypes)
-    print("  Synthesizing and rendering Group C (CONTROL)...")
+    logger.info("  Synthesizing and rendering Group C (CONTROL)...")
     ctrl_seeds = [101, 102, 103, 104, 105, 106, 107, 108, 109, 110]
     for s in ctrl_seeds:
         song = generate_control_song(seed=s)
@@ -194,7 +198,7 @@ def prepare_listening_test(
     answer_key: Dict[str, Any] = {}
     rating_rows: List[Dict[str, Any]] = []
 
-    print("  Writing randomized WAV audio files...")
+    logger.info("  Writing randomized WAV audio files...")
     for idx, item in enumerate(all_samples, start=1):
         sample_id = f"sample_{idx:03d}"
         wav_filename = f"{sample_id}.wav"
@@ -267,7 +271,7 @@ def prepare_listening_test(
     with open(stats_path, "w", encoding="utf-8") as f:
         json.dump(group_stats, f, indent=2)
 
-    print(f"Blinded listening test successfully created! {len(all_samples)} samples in {output_dir}")
+    logger.info("Blinded listening test successfully created! %d samples in %s", len(all_samples), output_dir)
     return {
         "output_dir": str(output_dir),
         "total_samples": len(all_samples),

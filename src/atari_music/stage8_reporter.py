@@ -12,9 +12,13 @@ Generates stage8_composer_v4_report.md with comprehensive comparative metrics:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
 import numpy as np
+
+logger = logging.getLogger(__name__)
+
 
 from atari_music.ir import (
     IRSong,
@@ -245,7 +249,7 @@ def generate_stage8_report(
 
     out_p = Path(output_report_path)
     out_p.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Stage 8 report generated successfully -> {out_p}")
+    logger.info("Stage 8 report generated successfully -> %s", out_p)
 
 
 if __name__ == "__main__":

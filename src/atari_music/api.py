@@ -18,10 +18,14 @@ Enforces strict parameter validation, seed determinism, and seamless export data
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import random
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
+
 
 from atari_music.composer_v4 import (
     ComposerV4QualityReport,

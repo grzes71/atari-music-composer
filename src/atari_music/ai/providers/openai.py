@@ -1,10 +1,8 @@
-"""OpenAI Composition Provider for AI-driven Atari music composition."""
-
-from __future__ import annotations
-
 import json
+import logging
 import os
 from typing import Any, Dict, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from atari_music.ai.prompts import build_system_prompt, build_user_prompt
 from atari_music.ai.providers.base import AICompositionProvider, CompositionRequest
@@ -15,6 +13,23 @@ from atari_music.ai.schema import (
     AIProviderMissingKeyError,
     AIProviderStructuredOutputError,
 )
+from atari_music.logging_config import mask_secret, register_secret, sanitize_for_logging
+
+logger = logging.getLogger(__name__)
+
+
+def _sanitize_endpoint(url: Optional[str]) -> str:
+    """Return sanitized endpoint URL without embedded user credentials or query secrets."""
+    if not url:
+        return "https://api.openai.com/v1"
+    try:
+        parts = urlsplit(url)
+        netloc = parts.netloc
+        if "@" in netloc:
+            netloc = netloc.split("@")[-1]
+        return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+    except Exception:
+        return url
 
 
 class OpenAICompositionProvider(AICompositionProvider):
@@ -42,6 +57,8 @@ class OpenAICompositionProvider(AICompositionProvider):
             or os.environ.get("OPENAI_MODEL")
             or "deepseek-flash"
         )
+        if self.api_key:
+            register_secret(self.api_key)
 
     @property
     def provider_name(self) -> str:
@@ -49,7 +66,8 @@ class OpenAICompositionProvider(AICompositionProvider):
 
     def __repr__(self) -> str:
         masked = f"...{self.api_key[-4:]}" if self.api_key and len(self.api_key) >= 4 else "None"
-        return f"OpenAICompositionProvider(model={self.model!r}, base_url={self.base_url!r}, api_key={masked!r})"
+        clean_base = _sanitize_endpoint(self.base_url)
+        return f"OpenAICompositionProvider(model={self.model!r}, base_url={clean_base!r}, api_key={masked!r})"
 
     def generate_composition(
         self,
@@ -100,12 +118,43 @@ class OpenAICompositionProvider(AICompositionProvider):
                 {"role": "user", "content": user_prompt},
             ]
 
+        # Diagnostic request logging (DEBUG)
+        endpoint = _sanitize_endpoint(self.base_url)
+        roles = [m.get("role", "unknown") for m in messages]
+        request_params = {
+            "endpoint": endpoint,
+            "model": self.model,
+            "messages_count": len(messages),
+            "roles": roles,
+            "has_feedback": bool(feedback),
+        }
+        logger.debug(
+            "LLM API Request -> Endpoint: %s | Model: %s | Messages: %d | Roles: %s",
+            endpoint,
+            self.model,
+            len(messages),
+            roles,
+        )
+        logger.debug("LLM API Request Parameters: %s", request_params)
+
+        # Full sanitized payload
+        safe_payload = sanitize_for_logging({
+            "model": self.model,
+            "messages": messages,
+            "endpoint": endpoint,
+        })
+        logger.debug("LLM API Request Payload:\n%s", json.dumps(safe_payload, indent=2))
+
         parsed_ok = False
         first_err: Optional[Exception] = None
         try:
             # Primary path: Native Structured Outputs via beta.chat.completions.parse
             if hasattr(client, "beta") and hasattr(client.beta, "chat") and hasattr(client.beta.chat, "completions"):
                 try:
+                    logger.debug(
+                        "Attempting Structured Output parsing via beta.chat.completions.parse (schema=%s)...",
+                        AICompositionDoc.__name__,
+                    )
                     completion = client.beta.chat.completions.parse(
                         model=self.model,
                         messages=messages,
@@ -113,6 +162,14 @@ class OpenAICompositionProvider(AICompositionProvider):
                     )
                     response_id = getattr(completion, "id", None)
                     choice = completion.choices[0]
+                    raw_content = choice.message.content or ""
+                    response_size = len(raw_content) if raw_content else len(str(getattr(choice.message, "parsed", "")))
+                    logger.debug(
+                        "LLM API Response received [id=%s]: size ~%d chars",
+                        response_id,
+                        response_size,
+                    )
+
                     if getattr(choice.message, "refusal", None):
                         raise AIProviderAPIError(f"Model refused request: {choice.message.refusal}")
 
@@ -123,6 +180,11 @@ class OpenAICompositionProvider(AICompositionProvider):
                         elif isinstance(parsed_doc, dict):
                             doc_dict = parsed_doc
                         parsed_ok = True
+                        logger.debug(
+                            "Structured Output parsed successfully via beta.parse: %d patterns, %d sequence steps",
+                            len(doc_dict.get("patterns", [])) if doc_dict else 0,
+                            len(doc_dict.get("sequence", [])) if doc_dict else 0,
+                        )
                     elif choice.message.content:
                         doc_dict = self._parse_json_content(choice.message.content)
                         parsed_ok = True
@@ -131,10 +193,12 @@ class OpenAICompositionProvider(AICompositionProvider):
                 except Exception as err:
                     first_err = err
                     parsed_ok = False
+                    logger.debug("Primary Structured Output parse failed: %s; falling back to json_object", err)
 
             if not parsed_ok:
                 try:
                     # Secondary path: Standard JSON object completion
+                    logger.debug("Requesting JSON object completion via chat.completions.create fallback...")
                     response = client.chat.completions.create(
                         model=self.model,
                         messages=messages,
@@ -144,7 +208,17 @@ class OpenAICompositionProvider(AICompositionProvider):
                     response_id = getattr(response, "id", None)
                     choice = response.choices[0]
                     raw_content = choice.message.content or "{}"
+                    logger.debug(
+                        "LLM API Fallback Response received [id=%s]: size=%d chars",
+                        response_id,
+                        len(raw_content),
+                    )
                     doc_dict = self._parse_json_content(raw_content)
+                    logger.debug(
+                        "Fallback JSON parsed successfully: %d patterns, %d sequence steps",
+                        len(doc_dict.get("patterns", [])) if doc_dict else 0,
+                        len(doc_dict.get("sequence", [])) if doc_dict else 0,
+                    )
                 except Exception as fallback_err:
                     if first_err is not None:
                         raise first_err from fallback_err
@@ -174,6 +248,7 @@ class OpenAICompositionProvider(AICompositionProvider):
 
     def _parse_json_content(self, raw_content: str) -> Dict[str, Any]:
         """Defensive markdown-fence stripping and JSON parsing fallback."""
+        logger.debug("Parsing JSON content string (raw length: %d chars)...", len(raw_content))
         cleaned = raw_content.strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
@@ -189,6 +264,8 @@ class OpenAICompositionProvider(AICompositionProvider):
                 raise AIProviderStructuredOutputError(f"Expected JSON object, got {type(parsed).__name__}")
             return parsed
         except json.JSONDecodeError as err:
+            logger.debug("Failed to decode JSON: %s (snippet: %s)", err, raw_content[:200])
             raise AIProviderStructuredOutputError(
                 f"Failed to parse JSON response from OpenAI: {err}\nResponse snippet:\n{raw_content[:400]}"
             ) from err
+

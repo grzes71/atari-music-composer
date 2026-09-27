@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
-import subprocess
 from typing import Any, Dict, Optional, Union
+
+logger = logging.getLogger(__name__)
+
 
 from atari_music.ai.composition import (
     compile_composition_to_pokey_ir,
@@ -176,11 +179,26 @@ def generate_composition_with_retry(
     previous_composition: Optional[Dict[str, Any]] = None
 
     for attempt_idx in range(1, max_attempts + 1):
+        logger.debug(
+            "Composition Repair Loop: starting attempt %d/%d (max_retries=%d)",
+            attempt_idx,
+            max_attempts,
+            max_retries,
+        )
+
         # 1. Ask provider for composition (with feedback/context if retrying)
         raw_dict = provider.generate_composition(
             request,
             feedback=feedback,
             previous_composition=previous_composition,
+        )
+        p_name = getattr(provider, "provider_name", type(provider).__name__)
+        raw_keys = list(raw_dict.keys()) if isinstance(raw_dict, dict) else []
+        logger.debug(
+            "Received raw composition payload from provider '%s' (attempt %d, top-level keys: %s)",
+            p_name,
+            attempt_idx,
+            raw_keys,
         )
 
         # 2. Run full 3-Tier validation report
@@ -194,11 +212,31 @@ def generate_composition_with_retry(
 
         # 3. Check validity
         if report.valid:
+            logger.debug(
+                "Composition validation PASSED on attempt %d (0 issues). Proceeding with validated composition.",
+                attempt_idx,
+            )
             return validate_composition(raw_dict)
+
+        # Log detailed validation failure
+        issues_summary = [f"[{i.category.upper()}] {i.code}: {i.message}" for i in report.issues]
+        logger.debug(
+            "Composition validation FAILED on attempt %d with %d issue(s): %s",
+            attempt_idx,
+            len(report.issues),
+            "; ".join(issues_summary),
+        )
 
         # 4. Prepare structured feedback for next attempt
         feedback = report.format_feedback()
         previous_composition = raw_dict
+
+        if attempt_idx < max_attempts:
+            logger.debug(
+                "Composition Repair Loop: scheduling retry attempt %d with formatted feedback (length: %d chars)",
+                attempt_idx + 1,
+                len(feedback or ""),
+            )
 
     # All attempts exhausted
     last_report = history[-1].report if history else None
@@ -207,6 +245,12 @@ def generate_composition_with_retry(
     msg = (
         f"AI composition generation failed after {len(history)} attempts "
         f"({retries_used} retries exhausted). Last validation issues: [{issue_codes}]"
+    )
+    logger.debug(
+        "Composition Repair Loop exhausted all %d attempts (%d retries). Last issues: [%s]",
+        len(history),
+        retries_used,
+        issue_codes,
     )
     raise AICompositionGenerationError(
         message=msg,

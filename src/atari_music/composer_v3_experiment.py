@@ -16,6 +16,7 @@ Produces experiments/composer_v3/summary.json for reporting.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -23,6 +24,9 @@ from atari_music.composer_v3 import compose_song_v3
 from atari_music.ir import compile_ir_to_pokey_frames
 from atari_music.pokey_synth import render_pokey_to_wav
 from atari_music.profiles import PROFILES
+
+logger = logging.getLogger(__name__)
+
 
 
 def run_composer_v3_experiment(
@@ -80,7 +84,14 @@ def run_composer_v3_experiment(
                 "novelty": res.quality_report.novelty,
             }
             results_by_profile[p_name].append(track_meta)
-            print(f"Generated [{p_name.upper()}] {track_id}: {res.quality_report.tempo} BPM, {res.quality_report.duration:.1f}s, {res.quality_report.memory_size}B")
+            logger.info(
+                "Generated [%s] %s: %s BPM, %.1fs, %sB",
+                p_name.upper(),
+                track_id,
+                res.quality_report.tempo,
+                res.quality_report.duration,
+                res.quality_report.memory_size,
+            )
 
     # Save summary.json
     summary_path = output_dir / "summary.json"

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -32,6 +33,8 @@ from atari_music.events import parse_dump_tokens
 from atari_music.features import calculate_channel_frequency, frequency_to_musical_pitch
 from atari_music.generator import generate_song
 from atari_music.ir import IRSong, compile_ir_to_pokey_frames
+
+logger = logging.getLogger(__name__)
 
 
 class DatasetCorpus:
@@ -46,7 +49,7 @@ class DatasetCorpus:
     def load_from_dataset(self, dataset_dir: Path = Path("dataset/raw"), max_songs: int = 330) -> None:
         """Extract note, interval, and rhythm sequences from raw POKEY dumps."""
         dump_files = sorted(list(dataset_dir.glob("*.dump.gz")))[:max_songs]
-        print(f"Indexing {len(dump_files)} raw dumps from {dataset_dir}...")
+        logger.info("Indexing %d raw dumps from %s...", len(dump_files), dataset_dir)
 
         for df in dump_files:
             pitches, durs = _extract_discrete_notes_from_dump(df)
@@ -62,7 +65,7 @@ class DatasetCorpus:
                 self.all_interval_sequences.append(intervals)
                 self.all_rhythm_sequences.append(durs)
 
-        print(f"Successfully indexed {len(self.songs)} source songs into corpus.")
+        logger.info("Successfully indexed %d source songs into corpus.", len(self.songs))
 
 
 def _extract_discrete_notes_from_dump(dump_path: Path, max_frames: int = 1500) -> Tuple[List[int], List[int]]:
@@ -250,7 +253,7 @@ def analyze_all_four_groups(
     generated_dir: Path = Path("generated"),
 ) -> Dict[str, Any]:
     """Compute full statistical comparison of novelty and memorization across the 4 groups."""
-    print("Evaluating Group B (GENERATED - 100 songs)...")
+    logger.info("Evaluating Group B (GENERATED - 100 songs)...")
     group_b_results = []
     gen_json_files = sorted(list(generated_dir.glob("song_*.json")))[:100]
     for jf in gen_json_files:
@@ -258,7 +261,7 @@ def analyze_all_four_groups(
         res = evaluate_song_novelty(song, corpus)
         group_b_results.append(res)
 
-    print("Evaluating Group C (LISTENING TEST Group B - 10 songs)...")
+    logger.info("Evaluating Group C (LISTENING TEST Group B - 10 songs)...")
     group_c_results = []
     gen_seeds = [7, 14, 21, 35, 42, 56, 63, 77, 84, 98]
     for s in gen_seeds:
@@ -266,7 +269,7 @@ def analyze_all_four_groups(
         res = evaluate_song_novelty(song, corpus)
         group_c_results.append(res)
 
-    print("Evaluating Group D (CONTROL - 10 naive songs)...")
+    logger.info("Evaluating Group D (CONTROL - 10 naive songs)...")
     group_d_results = []
     ctrl_seeds = [101, 102, 103, 104, 105, 106, 107, 108, 109, 110]
     for s in ctrl_seeds:
@@ -274,7 +277,7 @@ def analyze_all_four_groups(
         res = evaluate_song_novelty(song, corpus)
         group_d_results.append(res)
 
-    print("Evaluating Group A (REAL baseline internal cross-matching - sample of 20 songs)...")
+    logger.info("Evaluating Group A (REAL baseline internal cross-matching - sample of 20 songs)...")
     group_a_results = []
     # Cross match sample of real songs against the rest of the real corpus
     for idx, song_data in enumerate(corpus.songs[:20]):

@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Dict
+import logging
+from typing import Any, Dict, List, Optional
 
 from atari_music.ai.providers.base import AICompositionProvider, CompositionRequest
+
+logger = logging.getLogger(__name__)
+
 
 
 class MockAICompositionProvider(AICompositionProvider):
@@ -43,6 +47,12 @@ class MockAICompositionProvider(AICompositionProvider):
         self.call_count += 1
         self.received_feedbacks.append(feedback)
         self.received_previous_compositions.append(previous_composition)
+        logger.debug(
+            "MockAICompositionProvider: generate_composition call #%d (scenario=%s, feedback=%s)",
+            self.call_count,
+            self.scenario,
+            bool(feedback),
+        )
 
         if self.sequence is not None and len(self.sequence) > 0:
             import copy
