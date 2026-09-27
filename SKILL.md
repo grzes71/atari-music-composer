@@ -25,8 +25,8 @@
 | **Mock AI Composition** | Production | `atari-music ai-compose --provider mock` | No | None | Deterministic `AICompositionDoc` JSON |
 | **3-Tier Music Validator** | Production | `atari-music import-json` / `validate_composition()` | No | None | `ValidationReport` & validated doc |
 | **Composition Repair Loop** | Production | `generate_composition_with_retry()` | If using AI | None | Self-corrected `AICompositionDoc` |
-| **Musical Property Analysis** | Production | `analyze_composition()` | No | None | Rhythm/Melody/Harmony metrics + SHA-256 |
-| **Macro-Structure & Form Analysis** | Production | `analyze_composition_structure()` | No | None | `DetailedStructureMetrics` (repetition, form) |
+| **Musical Property Analysis** | Production | `atari-music analyze` / `analyze_composition()` | No | None | Rhythm/Melody/Harmony metrics + SHA-256 |
+| **Macro-Structure & Form Analysis** | Production | `atari-music analyze --structure` / `analyze_composition_structure()` | No | None | `DetailedStructureMetrics` (repetition, form) |
 | **Dataset Extraction from SAP** | Historical/Tool | `atari-music extract` | No | `tools/asap/asapscan.exe` (local only) | `dataset.jsonl`, `.dump.gz` files |
 | **Ground-Truth Duration Check** | Production | `calculate_composition_duration()` | No | None | Precise playback seconds @ 50 Hz PAL |
 
@@ -381,6 +381,20 @@ atari-music build-xex dungeon.json \
     --zp-base 0x80 \
     --mads tools/mads/mads.exe
 ```
+
+#### 6. `analyze` (Analyze Musical & Hardware Properties of Composition JSON)
+```bash
+# Human-readable terminal report (rhythm, melody, harmony, POKEY hardware, SHA-256 fingerprint):
+atari-music analyze dungeon.json
+
+# Include macro-structural form analysis (deduced form, repetition, diversity):
+atari-music analyze dungeon.json --structure
+
+# Machine-readable JSON output for automated agent pipelines:
+atari-music analyze dungeon.json --json
+atari-music analyze dungeon.json --structure -o analysis.json
+```
+
 
 ---
 

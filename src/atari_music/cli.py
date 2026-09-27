@@ -35,12 +35,12 @@ def _set_log_level(ctx: click.Context, param: click.Parameter, value: Optional[s
     help="Global logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).",
 )
 def cli(log_level: Optional[str] = None) -> None:
-    """Atari 8-bit Music Analysis & POKEY Dataset Generator."""
+    """Atari 8-bit POKEY Music Composer & Toolchain: procedural and AI-assisted music composition, validation, software synthesis, and relocatable MOS 6502 assembly compilation."""
     pass
 
 
 
-@cli.command("extract")
+@cli.command("extract", hidden=True)
 @click.option(
     "--inventory",
     "-i",
@@ -92,13 +92,93 @@ def extract_cmd(
 
 
 @cli.command("analyze")
+@click.argument("composition_json", type=click.Path(exists=True, path_type=Path))
+@click.option("--structure", "-s", is_flag=True, default=False, help="Include detailed macro-structural and form analysis.")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Output machine-readable JSON to stdout.")
+@click.option("--output-json", "-o", type=click.Path(path_type=Path), default=None, help="Save JSON analysis report to file.")
+def analyze_cmd(
+    composition_json: Path,
+    structure: bool,
+    as_json: bool,
+    output_json: Optional[Path],
+) -> None:
+    """Analyze musical properties, hardware constraints, and structure of a composition JSON."""
+    from atari_music.ai.analysis import analyze_composition
+    from atari_music.ai.client import load_composition_json
+    from atari_music.ai.structure_analysis import analyze_composition_structure
+
+    comp_doc = load_composition_json(composition_json)
+    rep = analyze_composition(comp_doc)
+    struct_rep = analyze_composition_structure(comp_doc) if structure else None
+
+    if as_json or output_json:
+        data = rep.model_dump(mode="json")
+        if struct_rep:
+            data["macro_structure"] = struct_rep.model_dump(mode="json")
+        json_str = json.dumps(data, indent=2)
+        if output_json:
+            output_json.parent.mkdir(parents=True, exist_ok=True)
+            output_json.write_text(json_str, encoding="utf-8")
+        if as_json:
+            click.echo(json_str)
+        elif output_json:
+            click.echo(f"Analysis saved to {output_json}")
+
+    if not as_json:
+        click.echo(f"=== Composition Analysis: {comp_doc.metadata.title} ===")
+        click.echo(f"  Fingerprint (SHA-256): {rep.fingerprint}")
+        click.echo(f"  Key/Mode:             {comp_doc.metadata.key} {comp_doc.metadata.mode}")
+        click.echo(f"  Tempo:                {comp_doc.metadata.bpm} BPM")
+        click.echo(f"  Duration (PAL 50Hz):  {rep.structure.duration_seconds:.2f}s ({rep.structure.sequence_length} steps across {rep.structure.sequence_pattern_count} patterns)")
+        click.echo(f"  Repetition Ratio:     {rep.structure.repetition_ratio:.1%}")
+
+        click.echo("\n[Rhythm & Notes]")
+        click.echo(f"  Total Notes:          {rep.rhythm.total_notes}")
+        click.echo(f"  Note Density:         {rep.rhythm.note_density:.2f} notes/sec")
+        click.echo(f"  Rest Ratio:           {rep.rhythm.rest_ratio:.1%}")
+        click.echo(f"  Average Note Length:  {rep.rhythm.avg_note_length:.2f} steps")
+
+        click.echo("\n[Melody & Harmony]")
+        click.echo(f"  Pitch Range:          {rep.melody.pitch_range_semitones} semitones (MIDI {rep.melody.min_pitch}..{rep.melody.max_pitch})")
+        click.echo(f"  Melodic Direction:    {rep.melody.melodic_direction}")
+        click.echo(f"  Stepwise vs Leap:     {rep.melody.stepwise_vs_leap_ratio:.2f}")
+        click.echo(f"  Consonance Ratio:     {rep.harmony.consonance_ratio:.1%} ({rep.harmony.consonant_intervals_count} consonant / {rep.harmony.dissonant_intervals_count} dissonant)")
+        click.echo(f"  Sounding Chords:      {rep.harmony.sounding_chords_count} steps with vertical chords")
+
+        click.echo("\n[POKEY Hardware Utilization]")
+        click.echo(f"  Channels Configured:  {comp_doc.hardware.channels}")
+        bass_status = f"Yes ({rep.pokey.bass_16bit_channel_usage})" if rep.pokey.uses_16bit_bass else "No"
+        click.echo(f"  16-bit Bass Mode:     {bass_status}")
+        if rep.pokey.audf_frequency_range:
+            click.echo(f"  AUDF Register Range:  {rep.pokey.audf_frequency_range.get('min_audf')} .. {rep.pokey.audf_frequency_range.get('max_audf')}")
+        if rep.pokey.warnings:
+            click.echo(f"  Warnings ({len(rep.pokey.warnings)}):")
+            for w in rep.pokey.warnings:
+                click.echo(f"    ! {w}")
+        else:
+            click.echo("  Hardware Warnings:    None (within safe player bounds)")
+
+        if struct_rep:
+            click.echo("\n[Macro-Structure & Form]")
+            click.echo(f"  Deduced Form:         {struct_rep.form.compact_form}")
+            click.echo(f"  Form Archetype:       {struct_rep.form.archetype}")
+            click.echo(f"  Material Reuse Ratio: {struct_rep.material_reuse_ratio:.1%}")
+            click.echo(f"  Thematic Variations:  {struct_rep.variation_count} patterns ({struct_rep.variation_ratio:.1%})")
+            click.echo(f"  Structural Novelty:   {struct_rep.structural_novelty:.1%}")
+            click.echo(f"  Shannon Diversities:  Melody={struct_rep.melodic_diversity:.2f}, Rhythm={struct_rep.rhythmic_diversity:.2f}, Harmony={struct_rep.harmonic_diversity:.2f}")
+
+        if output_json and not as_json:
+            click.echo(f"\nSaved JSON report -> {output_json}")
+
+
+@cli.command("reanalyze-raw", hidden=True)
 @click.option(
     "--dataset-dir",
     type=click.Path(exists=True, path_type=Path),
     default=Path("dataset"),
     help="Path to dataset directory",
 )
-def analyze_cmd(dataset_dir: Path) -> None:
+def reanalyze_raw_cmd(dataset_dir: Path) -> None:
     """Re-analyze features and update dataset.jsonl directly from existing RAW dumps."""
     from atari_music.dataset import reanalyze_dataset_from_raw
 
@@ -107,7 +187,7 @@ def analyze_cmd(dataset_dir: Path) -> None:
     click.echo(f"Successfully re-analyzed {updated} subsongs.")
 
 
-@cli.command("report")
+@cli.command("report", hidden=True)
 @click.option(
     "--dataset-jsonl",
     type=click.Path(exists=True, path_type=Path),
@@ -129,7 +209,7 @@ def report_cmd(dataset_jsonl: Path, output_report: Path) -> None:
     click.echo(f"Saved report to {output_report}")
 
 
-@cli.command("stage3")
+@cli.command("stage3", hidden=True)
 @click.option(
     "--dataset-jsonl",
     type=click.Path(exists=True, path_type=Path),
@@ -157,7 +237,7 @@ def stage3_cmd(dataset_jsonl: Path, visualizations_dir: Path, output_report: Pat
     click.echo("Stage 3 pipeline complete!")
 
 
-@cli.command("mine-archetypes")
+@cli.command("mine-archetypes", hidden=True)
 @click.option(
     "--dataset-jsonl",
     type=click.Path(exists=True, path_type=Path),
@@ -180,7 +260,7 @@ def mine_archetypes_cmd(dataset_jsonl: Path, output_path: Path) -> None:
     click.echo(f"Archetype library saved to {output_path}")
 
 
-@cli.command("generate-song")
+@cli.command("generate-song", hidden=True)
 @click.option("--seed", type=int, default=42, help="RNG seed for procedural generation")
 @click.option("--key", type=str, default="C", help="Musical key (C, D, E, F, G, A, B)")
 @click.option("--mode", type=str, default="minor", help="Scale mode (minor, major, dorian, pentatonic)")
@@ -218,7 +298,7 @@ def generate_song_cmd(
     click.echo(f"Rendered WAV: {output_wav} ({frames.shape[0]/50.0:.2f} seconds)")
 
 
-@cli.command("run-experiment")
+@cli.command("run-experiment", hidden=True)
 @click.option("--count", "-n", type=int, default=100, help="Number of songs to generate")
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("generated"))
 @click.option("--dataset-jsonl", type=click.Path(exists=True, path_type=Path), default=Path("dataset/dataset.jsonl"))
@@ -229,7 +309,7 @@ def run_experiment_cmd(count: int, output_dir: Path, dataset_jsonl: Path) -> Non
     run_batch_experiment(count=count, out_dir=output_dir, dataset_jsonl_path=dataset_jsonl)
 
 
-@cli.command("stage4-report")
+@cli.command("stage4-report", hidden=True)
 @click.option("--summary-json", type=click.Path(exists=True, path_type=Path), default=Path("generated/analysis_summary.json"))
 @click.option("--archetypes-json", type=click.Path(exists=True, path_type=Path), default=Path("dataset/archetypes.json"))
 @click.option("--output-report", type=click.Path(path_type=Path), default=Path("stage4_report.md"))
@@ -242,7 +322,7 @@ def stage4_report_cmd(summary_json: Path, archetypes_json: Path, output_report: 
     click.echo("Stage 4 report generated successfully!")
 
 
-@cli.command("prepare-listening-test")
+@cli.command("prepare-listening-test", hidden=True)
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("listening_test"))
 @click.option("--raw-dir", type=click.Path(exists=True, path_type=Path), default=Path("dataset/raw"))
 @click.option("--dataset-jsonl", type=click.Path(exists=True, path_type=Path), default=Path("dataset/dataset.jsonl"))
@@ -253,7 +333,7 @@ def prepare_listening_test_cmd(output_dir: Path, raw_dir: Path, dataset_jsonl: P
     prepare_listening_test(output_dir=output_dir, dataset_raw_dir=raw_dir, dataset_jsonl=dataset_jsonl)
 
 
-@cli.command("stage5-report")
+@cli.command("stage5-report", hidden=True)
 @click.option("--test-dir", type=click.Path(exists=True, path_type=Path), default=Path("listening_test"))
 @click.option("--output-report", type=click.Path(path_type=Path), default=Path("stage5_report.md"))
 def stage5_report_cmd(test_dir: Path, output_report: Path) -> None:
@@ -265,7 +345,7 @@ def stage5_report_cmd(test_dir: Path, output_report: Path) -> None:
     click.echo("Stage 5 report generated successfully!")
 
 
-@cli.command("investigate-memorization")
+@cli.command("investigate-memorization", hidden=True)
 @click.option("--raw-dir", type=click.Path(exists=True, path_type=Path), default=Path("dataset/raw"))
 @click.option("--generated-dir", type=click.Path(exists=True, path_type=Path), default=Path("generated"))
 @click.option("--output-comp", type=click.Path(path_type=Path), default=Path("generator_comparison.md"))
@@ -284,7 +364,7 @@ def investigate_cmd(raw_dir: Path, generated_dir: Path, output_comp: Path, outpu
     click.echo("Investigation finished successfully!")
 
 
-@cli.command("compose-v2")
+@cli.command("compose-v2", hidden=True)
 @click.option("--seed", type=int, default=42, help="RNG seed")
 @click.option("--novelty", type=float, default=0.65, help="Novelty parameter (0.0 .. 1.0)")
 @click.option("--key", type=str, default="C", help="Musical key")
@@ -328,7 +408,7 @@ def compose_v2_cmd(
     click.echo(f"Saved: {output_json} & {output_wav}")
 
 
-@cli.command("run-composer-v2-experiment")
+@cli.command("run-composer-v2-experiment", hidden=True)
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("experiments/composer_v2"))
 @click.option("--raw-dir", type=click.Path(exists=True, path_type=Path), default=Path("dataset/raw"))
 def run_v2_experiment_cmd(output_dir: Path, raw_dir: Path) -> None:
@@ -338,7 +418,7 @@ def run_v2_experiment_cmd(output_dir: Path, raw_dir: Path) -> None:
     run_composer_v2_experiments(base_out_dir=output_dir, dataset_raw_dir=raw_dir)
 
 
-@cli.command("stage6-report")
+@cli.command("stage6-report", hidden=True)
 @click.option("--summary-json", type=click.Path(exists=True, path_type=Path), default=Path("experiments/composer_v2/summary.json"))
 @click.option("--output-report", type=click.Path(path_type=Path), default=Path("stage6_composer_v2_report.md"))
 def stage6_report_cmd(summary_json: Path, output_report: Path) -> None:
@@ -350,7 +430,7 @@ def stage6_report_cmd(summary_json: Path, output_report: Path) -> None:
     click.echo("Stage 6 report generated successfully!")
 
 
-@cli.command("prepare-listening-test-v2")
+@cli.command("prepare-listening-test-v2", hidden=True)
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("listening_test_v2"))
 @click.option("--seed", type=int, default=2026, help="Randomization seed for anonymization")
 def prepare_listening_test_v2_cmd(output_dir: Path, seed: int) -> None:
@@ -365,7 +445,7 @@ def prepare_listening_test_v2_cmd(output_dir: Path, seed: int) -> None:
     click.echo(f"Validation status: {val['status']}")
 
 
-@cli.command("validate-listening-test-v2")
+@cli.command("validate-listening-test-v2", hidden=True)
 @click.option("--test-dir", type=click.Path(exists=True, path_type=Path), default=Path("listening_test_v2"))
 def validate_listening_test_v2_cmd(test_dir: Path) -> None:
     """Run rigorous sanity checks on listening_test_v2 artifacts."""
@@ -378,7 +458,7 @@ def validate_listening_test_v2_cmd(test_dir: Path) -> None:
     click.echo(f"Peak bounds: {val['peak_range']}, RMS bounds: {val['rms_range']}")
 
 
-@cli.command("stage6-5-report")
+@cli.command("stage6-5-report", hidden=True)
 @click.option("--test-dir", type=click.Path(exists=True, path_type=Path), default=Path("listening_test_v2"))
 @click.option("--output-report", type=click.Path(path_type=Path), default=Path("stage6_5_listening_report.md"))
 def stage6_5_report_cmd(test_dir: Path, output_report: Path) -> None:
@@ -390,7 +470,7 @@ def stage6_5_report_cmd(test_dir: Path, output_report: Path) -> None:
     click.echo("Stage 6.5 report generated successfully!")
 
 
-@cli.command("audit-diversity")
+@cli.command("audit-diversity", hidden=True)
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("listening_test_v2_selected"))
 @click.option("--report-path", type=click.Path(path_type=Path), default=Path("stage6_6_diversity_report.md"))
 def audit_diversity_cmd(output_dir: Path, report_path: Path) -> None:
@@ -428,7 +508,7 @@ def audit_diversity_cmd(output_dir: Path, report_path: Path) -> None:
     click.echo("Stage 6.6 Diversity Report generated successfully!")
 
 
-@cli.command("compose-v3")
+@cli.command("compose-v3", hidden=True)
 @click.option("--profile", "-p", type=str, default="title", help="Music profile: title, exploration, action, funny, dungeon, ending")
 @click.option("--seed", "-s", type=int, default=42, help="Deterministic RNG seed")
 @click.option("--tempo", type=int, default=None, help="Optional tempo BPM override")
@@ -475,7 +555,7 @@ def compose_v3_cmd(
         click.echo(f"Rendered WAV -> {output_wav}")
 
 
-@cli.command("run-composer-v3-experiment")
+@cli.command("run-composer-v3-experiment", hidden=True)
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("experiments/composer_v3"))
 def run_composer_v3_experiment_cmd(output_dir: Path) -> None:
     """Run 18-track experiment across all 6 profiles (3 tracks per profile)."""
@@ -486,7 +566,7 @@ def run_composer_v3_experiment_cmd(output_dir: Path) -> None:
     click.echo("Composer v3 experiment completed successfully!")
 
 
-@cli.command("stage7-report")
+@cli.command("stage7-report", hidden=True)
 @click.option("--summary-json", type=click.Path(exists=True, path_type=Path), default=Path("experiments/composer_v3/summary.json"))
 @click.option("--output-report", type=click.Path(path_type=Path), default=Path("stage7_composer_v3_report.md"))
 def stage7_report_cmd(summary_json: Path, output_report: Path) -> None:
@@ -498,7 +578,7 @@ def stage7_report_cmd(summary_json: Path, output_report: Path) -> None:
     click.echo("Stage 7 report generated successfully!")
 
 
-@cli.command("prepare-listening-test-v3")
+@cli.command("prepare-listening-test-v3", hidden=True)
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("listening_test_v3"))
 @click.option("--seed", type=int, default=42)
 def prepare_listening_test_v3_cmd(output_dir: Path, seed: int) -> None:
@@ -510,7 +590,7 @@ def prepare_listening_test_v3_cmd(output_dir: Path, seed: int) -> None:
     click.echo(f"Generated {res['total_samples']} randomized samples and templates successfully!")
 
 
-@cli.command("stage7-1-report")
+@cli.command("stage7-1-report", hidden=True)
 @click.option("--test-dir", type=click.Path(path_type=Path), default=Path("listening_test_v3"))
 @click.option("--output-report", type=click.Path(path_type=Path), default=Path("stage7_1_listening_report.md"))
 def stage7_1_report_cmd(test_dir: Path, output_report: Path) -> None:
@@ -588,7 +668,7 @@ def export_mads_cmd(input_json: Path, output_asm: Path) -> None:
     click.echo(f"Successfully exported '{song.title}' -> {output_asm}")
 
 
-@cli.command("compose-v4")
+@cli.command("compose-v4", hidden=True)
 @click.option("--profile", "-p", type=str, default="title", help="Music profile: title, exploration, action, funny, dungeon, ending")
 @click.option("--seed", "-s", type=int, default=42, help="Deterministic RNG seed")
 @click.option("--tempo", type=int, default=None, help="Optional tempo BPM override")
@@ -636,7 +716,7 @@ def compose_v4_cmd(
         click.echo(f"Rendered WAV -> {output_wav}")
 
 
-@cli.command("run-composer-v4-experiment")
+@cli.command("run-composer-v4-experiment", hidden=True)
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("experiments/composer_v4"))
 def run_composer_v4_experiment_cmd(output_dir: Path) -> None:
     """Run 18-track experiment across all 6 profiles for Composer v4."""
@@ -647,7 +727,7 @@ def run_composer_v4_experiment_cmd(output_dir: Path) -> None:
     click.echo("Composer v4 experiment completed successfully!")
 
 
-@cli.command("stage8-report")
+@cli.command("stage8-report", hidden=True)
 @click.option("--v3-summary", type=click.Path(exists=True, path_type=Path), default=Path("experiments/composer_v3/summary.json"))
 @click.option("--v4-summary", type=click.Path(exists=True, path_type=Path), default=Path("experiments/composer_v4/summary.json"))
 @click.option("--output-report", type=click.Path(path_type=Path), default=Path("stage8_composer_v4_report.md"))
