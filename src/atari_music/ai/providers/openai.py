@@ -1,7 +1,8 @@
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+import time
+from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
 from atari_music.ai.prompts import build_system_prompt, build_user_prompt
@@ -32,14 +33,57 @@ def _sanitize_endpoint(url: Optional[str]) -> str:
         return url
 
 
+def _is_transient_http_error(err: Exception) -> Tuple[bool, int, str]:
+    """Determine if an exception represents a transient HTTP error (e.g. 503 or 429).
+
+    Returns
+    -------
+    tuple[bool, int, str]
+        (is_transient, status_code, description)
+    """
+    status = getattr(err, "status_code", None)
+    if status is None:
+        resp = getattr(err, "response", None)
+        if resp is not None:
+            status = getattr(resp, "status_code", None)
+
+    if status == 429:
+        return True, 429, "Rate Limit Exceeded (HTTP 429)"
+    if status == 503:
+        return True, 503, "Service Unavailable / Server Congested (HTTP 503)"
+    if status in (502, 504, 520, 521, 522, 524):
+        return True, status, f"Gateway / Server Error (HTTP {status})"
+
+    cls_name = type(err).__name__
+    if cls_name == "RateLimitError":
+        return True, 429, "Rate Limit Exceeded (RateLimitError)"
+    if cls_name in ("InternalServerError", "APITimeoutError", "APIConnectionError"):
+        msg = str(err).lower()
+        if "429" in msg or "rate limit" in msg:
+            return True, 429, "Rate Limit Exceeded (HTTP 429)"
+        return True, status or 503, f"Transient Server Error ({cls_name})"
+
+    err_lower = str(err).lower()
+    if "503" in err_lower or "service unavailable" in err_lower or "server overloaded" in err_lower:
+        return True, 503, "Service Unavailable (HTTP 503)"
+    if "429" in err_lower or "rate limit" in err_lower or "too many requests" in err_lower:
+        return True, 429, "Rate Limit Exceeded (HTTP 429)"
+
+    return False, 0, ""
+
+
 class OpenAICompositionProvider(AICompositionProvider):
-    """Generates Atari music composition JSON via OpenAI-compatible Chat Completions API."""
+    """Generates Atari music composition JSON via OpenAI-compatible Chat Completions API with exponential backoff on 503/429."""
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
         base_url: Optional[str] = None,
+        max_transient_retries: int = 4,
+        initial_backoff: float = 5.0,
+        backoff_factor: float = 2.0,
+        max_backoff: float = 30.0,
     ) -> None:
         self.api_key = (
             api_key
@@ -60,6 +104,13 @@ class OpenAICompositionProvider(AICompositionProvider):
             or os.environ.get("OPENAI_MODEL")
             or "deepseek-flash"
         )
+        self.max_transient_retries = max(
+            1, int(os.environ.get("AI_MAX_TRANSIENT_RETRIES", max_transient_retries))
+        )
+        self.initial_backoff = float(os.environ.get("AI_INITIAL_BACKOFF", initial_backoff))
+        self.backoff_factor = float(os.environ.get("AI_BACKOFF_FACTOR", backoff_factor))
+        self.max_backoff = float(os.environ.get("AI_MAX_BACKOFF", max_backoff))
+
         if self.api_key:
             register_secret(self.api_key)
 
@@ -71,6 +122,12 @@ class OpenAICompositionProvider(AICompositionProvider):
         masked = f"...{self.api_key[-4:]}" if self.api_key and len(self.api_key) >= 4 else "None"
         clean_base = _sanitize_endpoint(self.base_url)
         return f"OpenAICompositionProvider(model={self.model!r}, base_url={clean_base!r}, api_key={masked!r})"
+
+    def _sanitize_error_message(self, err_text: str) -> str:
+        """Mask API key in error messages."""
+        if self.api_key and self.api_key in err_text:
+            return err_text.replace(self.api_key, "******")
+        return err_text
 
     def generate_composition(
         self,
@@ -148,92 +205,122 @@ class OpenAICompositionProvider(AICompositionProvider):
         })
         logger.debug("LLM API Request Payload:\n%s", json.dumps(safe_payload, indent=2))
 
-        parsed_ok = False
-        first_err: Optional[Exception] = None
-        try:
-            # Primary path: Native Structured Outputs via beta.chat.completions.parse
-            if hasattr(client, "beta") and hasattr(client.beta, "chat") and hasattr(client.beta.chat, "completions"):
-                try:
-                    logger.debug(
-                        "Attempting Structured Output parsing via beta.chat.completions.parse (schema=%s)...",
-                        AICompositionDoc.__name__,
-                    )
-                    completion = client.beta.chat.completions.parse(
-                        model=self.model,
-                        messages=messages,
-                        response_format=AICompositionDoc,
-                    )
-                    response_id = getattr(completion, "id", None)
-                    choice = completion.choices[0]
-                    raw_content = choice.message.content or ""
-                    response_size = len(raw_content) if raw_content else len(str(getattr(choice.message, "parsed", "")))
-                    logger.debug(
-                        "LLM API Response received [id=%s]: size ~%d chars",
-                        response_id,
-                        response_size,
-                    )
-
-                    if getattr(choice.message, "refusal", None):
-                        raise AIProviderAPIError(f"Model refused request: {choice.message.refusal}")
-
-                    if getattr(choice.message, "parsed", None) is not None:
-                        parsed_doc = choice.message.parsed
-                        if isinstance(parsed_doc, AICompositionDoc):
-                            doc_dict = parsed_doc.model_dump(mode="json")
-                        elif isinstance(parsed_doc, dict):
-                            doc_dict = parsed_doc
-                        parsed_ok = True
+        # Transient error retry loop with exponential backoff (for 503 / 429)
+        for transient_attempt in range(1, self.max_transient_retries + 1):
+            parsed_ok = False
+            first_err: Optional[Exception] = None
+            try:
+                # Primary path: Native Structured Outputs via beta.chat.completions.parse
+                if hasattr(client, "beta") and hasattr(client.beta, "chat") and hasattr(client.beta.chat, "completions"):
+                    try:
                         logger.debug(
-                            "Structured Output parsed successfully via beta.parse: %d patterns, %d sequence steps",
+                            "Attempting Structured Output parsing via beta.chat.completions.parse (schema=%s)...",
+                            AICompositionDoc.__name__,
+                        )
+                        completion = client.beta.chat.completions.parse(
+                            model=self.model,
+                            messages=messages,
+                            response_format=AICompositionDoc,
+                        )
+                        response_id = getattr(completion, "id", None)
+                        choice = completion.choices[0]
+                        raw_content = choice.message.content or ""
+                        response_size = len(raw_content) if raw_content else len(str(getattr(choice.message, "parsed", "")))
+                        logger.debug(
+                            "LLM API Response received [id=%s]: size ~%d chars",
+                            response_id,
+                            response_size,
+                        )
+
+                        if getattr(choice.message, "refusal", None):
+                            raise AIProviderAPIError(f"Model refused request: {choice.message.refusal}")
+
+                        if getattr(choice.message, "parsed", None) is not None:
+                            parsed_doc = choice.message.parsed
+                            if isinstance(parsed_doc, AICompositionDoc):
+                                doc_dict = parsed_doc.model_dump(mode="json")
+                            elif isinstance(parsed_doc, dict):
+                                doc_dict = parsed_doc
+                            parsed_ok = True
+                            logger.debug(
+                                "Structured Output parsed successfully via beta.parse: %d patterns, %d sequence steps",
+                                len(doc_dict.get("patterns", [])) if doc_dict else 0,
+                                len(doc_dict.get("sequence", [])) if doc_dict else 0,
+                            )
+                        elif choice.message.content:
+                            doc_dict = self._parse_json_content(choice.message.content)
+                            parsed_ok = True
+                    except (AIProviderAPIError, AIProviderStructuredOutputError):
+                        raise
+                    except Exception as err:
+                        is_trans, _, _ = _is_transient_http_error(err)
+                        if is_trans:
+                            # Re-raise transient errors immediately to trigger backoff rather than immediate secondary failure
+                            raise err
+                        first_err = err
+                        parsed_ok = False
+                        logger.debug("Primary Structured Output parse failed: %s; falling back to json_object", err)
+
+                if not parsed_ok:
+                    try:
+                        # Secondary path: Standard JSON object completion
+                        logger.debug("Requesting JSON object completion via chat.completions.create fallback...")
+                        response = client.chat.completions.create(
+                            model=self.model,
+                            messages=messages,
+                            response_format={"type": "json_object"},
+                            temperature=0.7,
+                        )
+                        response_id = getattr(response, "id", None)
+                        choice = response.choices[0]
+                        raw_content = choice.message.content or "{}"
+                        logger.debug(
+                            "LLM API Fallback Response received [id=%s]: size=%d chars",
+                            response_id,
+                            len(raw_content),
+                        )
+                        doc_dict = self._parse_json_content(raw_content)
+                        logger.debug(
+                            "Fallback JSON parsed successfully: %d patterns, %d sequence steps",
                             len(doc_dict.get("patterns", [])) if doc_dict else 0,
                             len(doc_dict.get("sequence", [])) if doc_dict else 0,
                         )
-                    elif choice.message.content:
-                        doc_dict = self._parse_json_content(choice.message.content)
-                        parsed_ok = True
-                except (AIProviderAPIError, AIProviderStructuredOutputError):
-                    raise
-                except Exception as err:
-                    first_err = err
-                    parsed_ok = False
-                    logger.debug("Primary Structured Output parse failed: %s; falling back to json_object", err)
+                    except Exception as fallback_err:
+                        is_trans, _, _ = _is_transient_http_error(fallback_err)
+                        if is_trans:
+                            raise fallback_err
+                        if first_err is not None:
+                            raise first_err from fallback_err
+                        raise fallback_err
 
-            if not parsed_ok:
-                try:
-                    # Secondary path: Standard JSON object completion
-                    logger.debug("Requesting JSON object completion via chat.completions.create fallback...")
-                    response = client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        response_format={"type": "json_object"},
-                        temperature=0.7,
-                    )
-                    response_id = getattr(response, "id", None)
-                    choice = response.choices[0]
-                    raw_content = choice.message.content or "{}"
-                    logger.debug(
-                        "LLM API Fallback Response received [id=%s]: size=%d chars",
-                        response_id,
-                        len(raw_content),
-                    )
-                    doc_dict = self._parse_json_content(raw_content)
-                    logger.debug(
-                        "Fallback JSON parsed successfully: %d patterns, %d sequence steps",
-                        len(doc_dict.get("patterns", [])) if doc_dict else 0,
-                        len(doc_dict.get("sequence", [])) if doc_dict else 0,
-                    )
-                except Exception as fallback_err:
-                    if first_err is not None:
-                        raise first_err from fallback_err
-                    raise fallback_err
+                # Succeeded: break out of the transient retry loop
+                break
 
-        except (AIProviderAPIError, AIProviderStructuredOutputError):
-            raise
-        except Exception as err:
-            err_msg = str(err)
-            if self.api_key and self.api_key in err_msg:
-                err_msg = err_msg.replace(self.api_key, "******")
-            raise AIProviderAPIError(f"API request failed: {err_msg}") from err
+            except (AIProviderStructuredOutputError,):
+                raise
+            except Exception as err:
+                is_trans, code, desc = _is_transient_http_error(err)
+                if is_trans and transient_attempt < self.max_transient_retries:
+                    delay = min(
+                        self.max_backoff,
+                        self.initial_backoff * (self.backoff_factor ** (transient_attempt - 1)),
+                    )
+                    clean_msg = self._sanitize_error_message(str(err))
+                    logger.warning(
+                        "LLM API transient error [%s / code %s]: %s. "
+                        "Waiting %.1fs (exponential backoff) before retry (attempt %d/%d)...",
+                        desc,
+                        code,
+                        clean_msg,
+                        delay,
+                        transient_attempt,
+                        self.max_transient_retries,
+                    )
+                    time.sleep(delay)
+                    continue
+
+                err_msg = self._sanitize_error_message(str(err))
+                raise AIProviderAPIError(f"API request failed: {err_msg}") from err
 
         if not isinstance(doc_dict, dict):
             raise AIProviderStructuredOutputError("Provider failed to produce a valid composition dictionary.")
@@ -271,4 +358,3 @@ class OpenAICompositionProvider(AICompositionProvider):
             raise AIProviderStructuredOutputError(
                 f"Failed to parse JSON response from OpenAI: {err}\nResponse snippet:\n{raw_content[:400]}"
             ) from err
-
