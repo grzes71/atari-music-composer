@@ -28,13 +28,25 @@ def _get_live_credentials():
     try:
         from config import Config
         cfg = Config.from_args(args=[], validate=False)
-        key = cfg.deepseek_api_key
-        url = cfg.deepseek_base_url
-        model = cfg.deepseek_model
+        key = cfg.ai_api_key
+        url = cfg.ai_base_url
+        model = cfg.ai_model
     except Exception:
-        key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
-        url = os.environ.get("DEEPSEEK_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
-        model = os.environ.get("DEEPSEEK_MODEL") or os.environ.get("OPENAI_MODEL")
+        key = (
+            os.environ.get("AI_API_KEY")
+            or os.environ.get("DEEPSEEK_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+        )
+        url = (
+            os.environ.get("AI_BASE_URL")
+            or os.environ.get("DEEPSEEK_BASE_URL")
+            or os.environ.get("OPENAI_BASE_URL")
+        )
+        model = (
+            os.environ.get("AI_MODEL")
+            or os.environ.get("DEEPSEEK_MODEL")
+            or os.environ.get("OPENAI_MODEL")
+        )
 
     if not key or key.strip() == "your_api_key_here":
         return None, None, None

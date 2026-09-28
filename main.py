@@ -1,9 +1,9 @@
-"""Application entry point demonstrating configuration loading and DeepSeek client initialization.
+"""Application entry point demonstrating configuration loading and AI client initialization.
 
 Hierarchy of configuration sources:
-  1) CLI argument (e.g. --model, --api-key, --base-url, --log-level)
-  2) System environment variable (DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, LOG_LEVEL)
-  3) .env file
+  1) CLI argument (e.g. --provider, --model, --api-key, --base-url, --log-level, --env-file)
+  2) System environment variable (AI_PROVIDER, AI_API_KEY, AI_BASE_URL, AI_MODEL, LOG_LEVEL)
+  3) .env file (or custom --env-file)
   4) In-code defaults
 """
 
@@ -25,7 +25,7 @@ logger = logging.getLogger("atari_music.main")
 
 
 class DeepSeekClientDemo:
-    """Client demonstrating usage of DeepSeek API with dynamically configured credentials."""
+    """Client demonstrating usage of AI API with dynamically configured credentials."""
 
     def __init__(self, api_key: str, base_url: str, model: str) -> None:
         self.api_key = api_key
@@ -40,7 +40,7 @@ class DeepSeekClientDemo:
 
     def print_client_summary(self) -> None:
         masked = f"{self.api_key[:4]}...{self.api_key[-4:]}" if len(self.api_key) > 8 else "******"
-        logger.info("DeepSeek Client zainicjalizowany:")
+        logger.info("AI Client zainicjalizowany:")
         logger.info("  * Base URL : %s", self.base_url)
         logger.info("  * Model    : %s", self.model)
         logger.info("  * API Key  : %s", masked)
@@ -49,16 +49,17 @@ class DeepSeekClientDemo:
 def run_app(config: Config) -> int:
     """Core application logic receiving the resolved configuration object."""
     logger.info("Uruchamianie aplikacji z konfiguracja:")
-    logger.info("  * DeepSeek Base URL : %s (zrodlo: %s)", config.deepseek_base_url, config.sources.get("DEEPSEEK_BASE_URL"))
-    logger.info("  * DeepSeek Model    : %s (zrodlo: %s)", config.deepseek_model, config.sources.get("DEEPSEEK_MODEL"))
-    logger.info("  * Log Level         : %s (zrodlo: %s)", config.log_level, config.sources.get("LOG_LEVEL"))
-    logger.info("  * DeepSeek API Key  : %s (zrodlo: %s)", config.masked_api_key(), config.sources.get("DEEPSEEK_API_KEY"))
+    logger.info("  * AI Provider : %s (zrodlo: %s)", config.ai_provider, config.sources.get("AI_PROVIDER"))
+    logger.info("  * AI Base URL : %s (zrodlo: %s)", config.ai_base_url, config.sources.get("AI_BASE_URL"))
+    logger.info("  * AI Model    : %s (zrodlo: %s)", config.ai_model, config.sources.get("AI_MODEL"))
+    logger.info("  * Log Level   : %s (zrodlo: %s)", config.log_level, config.sources.get("LOG_LEVEL"))
+    logger.info("  * AI API Key  : %s (zrodlo: %s)", config.masked_api_key(), config.sources.get("AI_API_KEY"))
 
-    # c) Utworzenie i uzycie klienta DeepSeek z parametrami z obiektu Config
+    # c) Utworzenie i uzycie klienta AI z parametrami z obiektu Config
     client = DeepSeekClientDemo(
-        api_key=config.deepseek_api_key,
-        base_url=config.deepseek_base_url,
-        model=config.deepseek_model,
+        api_key=config.ai_api_key,
+        base_url=config.ai_base_url,
+        model=config.ai_model,
     )
     client.print_client_summary()
 

@@ -320,11 +320,12 @@ Accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (case-insensitive).
 - **Secret Redaction:** API keys (`sk-...`) and Authorization headers are automatically redacted in all log messages.
 
 ```bash
-# Global option before subcommand:
+# Global options before subcommand:
 atari-music --log-level DEBUG compose --profile action -o test.wav
+atari-music --env-file custom.env ai-compose --style "dungeon" -o dungeon.json
 
-# Or as an option on ai-compose:
-atari-music ai-compose --log-level DEBUG --style "dungeon" -o dungeon.json
+# Or as options directly on ai-compose:
+atari-music ai-compose --env-file custom.env --provider openai --log-level DEBUG --style "dungeon" -o dungeon.json
 ```
 
 ### Core Commands
@@ -456,9 +457,11 @@ atari-music compose --profile action --seed 1234 --key G --tempo 145 --output-wa
 ### Workflow B: Generate and Validate Music with AI (LLM)
 ```bash
 # Configure environment (.env or environment variable):
-export DEEPSEEK_API_KEY="sk-your-key-here"
+export AI_API_KEY="sk-your-key-here"
+# (Legacy variables DEEPSEEK_API_KEY and OPENAI_API_KEY are also supported)
+# Optional: export AI_PROVIDER=deepseek AI_BASE_URL=https://api.deepseek.com AI_MODEL=deepseek-flash
 
-# Generate composition JSON using deepseek-flash with auto-repair:
+# Generate composition JSON using AI provider with auto-repair:
 atari-music ai-compose \
     --provider openai \
     --model deepseek-flash \
