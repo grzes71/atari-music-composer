@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.5.2 (2026-09-28)
+
+### Bug Fixes
+
+- **synth**: Implement accurate audf-clocked lfsr noise synthesis
+  ([`e0b0924`](https://github.com/grzes71/atari-music-composer/commit/e0b09247295d5c567f01919a9eed0d9c0fc4902f))
+
+
 ## v0.5.1 (2026-09-28)
 
 ### Bug Fixes
