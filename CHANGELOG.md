@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.3.1 (2026-09-28)
+
+### Bug Fixes
+
+- **ai**: Add exponential backoff for transient 503 and 429 errors
+  ([`accead5`](https://github.com/grzes71/atari-music-composer/commit/accead56f3e221a07ff23e43c1f1d190729febf3))
+
+
 ## v0.3.0 (2026-09-28)
 
 ### Features
