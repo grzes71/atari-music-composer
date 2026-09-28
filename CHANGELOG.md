@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.5.4 (2026-09-28)
+
+### Bug Fixes
+
+- **pokey**: Address audit findings F-1 to F-7 across synthesis and export
+  ([`22fe9fa`](https://github.com/grzes71/atari-music-composer/commit/22fe9fa7063fecd8fa207ab28f820f3655220d34))
+
+
 ## v0.5.3 (2026-09-28)
 
 ### Bug Fixes
