@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atari-music"
-version = "0.2.1"
+version = "0.3.0"
 description = "Atari 8-bit POKEY Music Analysis & Dataset Generation Toolkit"
 authors = [{ name = "Antigravity Architect" }]
 readme = "README.md"

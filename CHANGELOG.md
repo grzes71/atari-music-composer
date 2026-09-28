@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.3.0 (2026-09-28)
+
+### Features
+
+- **cli**: Refactor AI configuration, add --env-file and provider overrides
+  ([`f132fee`](https://github.com/grzes71/atari-music-composer/commit/f132fee49c6005fb73604b7e91f915df5b9bc0c5))
+
+### Refactoring
+
+- **prompts**: Revise ai composer system prompt for musical freedom and channel economics
+  ([`4e3a277`](https://github.com/grzes71/atari-music-composer/commit/4e3a2777d31346470e846cbbebdd041f3434d435))
+
+
 ## v0.2.1 (2026-09-27)
 
 ### Bug Fixes
