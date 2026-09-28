@@ -42,6 +42,7 @@ markers = [
 # Conventional Commits drive the version bump: feat -> minor, fix/perf -> patch,
 # and a "BREAKING CHANGE:" footer or "!" after the type -> major.
 version_toml = ["pyproject.toml:project.version"]
+version_variables = ["src/atari_music/__init__.py:__version__"]
 build_command = "python -m pip install build && python -m build"
 tag_format = "v{version}"
 commit_parser = "conventional"
