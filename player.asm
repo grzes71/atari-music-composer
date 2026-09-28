@@ -117,6 +117,11 @@ load_inst_loop:
     sta ch_cur_vol + 2
     sta ch_cur_vol + 3
 
+    sta ch_mute_mask + 0
+    sta ch_mute_mask + 1
+    sta ch_mute_mask + 2
+    sta ch_mute_mask + 3
+
     ; Load first pattern
     jsr load_pattern_ptrs
 
@@ -509,6 +514,8 @@ advance_channel_loop:
     ; Channel 1 (Bass)
     lda ch_audf + 0
     sta AUDF1_REG
+    lda ch_mute_mask + 0
+    bne @mute_ch1
     lda ch_cur_vol + 0
     beq @mute_ch1
     ora ch_dist + 0
@@ -518,6 +525,8 @@ advance_channel_loop:
     ; Channel 2 (Counter / Harmony)
     lda ch_audf + 1
     sta AUDF2_REG
+    lda ch_mute_mask + 1
+    bne @mute_ch2
     lda ch_cur_vol + 1
     beq @mute_ch2
     ora ch_dist + 1
@@ -536,6 +545,9 @@ advance_channel_loop:
     ; Ch 2 = AUDF high divider, AUDC active volume
     lda ch_audf + 1
     sta AUDF2_REG
+    lda ch_mute_mask + 0
+    ora ch_mute_mask + 1
+    bne @mute_ch2_16
     lda ch_cur_vol + 1
     beq @mute_ch2_16
     ora ch_dist + 1
@@ -546,6 +558,8 @@ advance_channel_loop:
     ; Channel 3 (Lead Melody)
     lda ch_audf + 2
     sta AUDF3_REG
+    lda ch_mute_mask + 2
+    bne @mute_ch3
     lda ch_cur_vol + 2
     beq @mute_ch3
     ora ch_dist + 2
@@ -555,6 +569,8 @@ advance_channel_loop:
     ; Channel 4 (Rhythm / Percussion / Ornament)
     lda ch_audf + 3
     sta AUDF4_REG
+    lda ch_mute_mask + 3
+    bne @mute_ch4
     lda ch_cur_vol + 3
     beq @mute_ch4
     ora ch_dist + 3
@@ -610,3 +626,4 @@ ch_att          .byte 0, 1, 1, 0
 ch_dec          .byte 4, 3, 4, 3
 ch_sus          .byte 10, 9, 12, 8
 ch_rel          .byte 2, 2, 3, 2
+ch_mute_mask    .byte 0, 0, 0, 0

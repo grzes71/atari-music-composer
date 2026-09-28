@@ -1,5 +1,6 @@
 """Unit and Regression Tests for Ground-Truth Duration Calculation and Invariants (Etap 15.1)."""
 
+from pathlib import Path
 import pytest
 
 from atari_music.ai.analysis import (
@@ -379,4 +380,39 @@ def test_xex_harness_graphical_timer_display(tmp_path):
     assert "ui_timer_frames:" in asm_text
     assert "lbl_time:" in asm_text
     assert "lbl_step:" in asm_text
+
+
+def test_xex_harness_channel_mute_and_colors(tmp_path: Path):
+    """Verify XEX harness includes channel muting via keys 1-4 and dark green background/border ($C4)."""
+    from conftest import require_local_artifact
+    from atari_music.ai.client import build_xex_from_composition
+    require_local_artifact(Path("tools/mads/mads.exe"))
+
+    doc = _make_composition(
+        patterns_def=[("P1", 16)],
+        sequence=["P1"],
+        bpm=120,
+    )
+    doc.metadata.title = "Mute Test"
+
+    xex_out = tmp_path / "mute_test.xex"
+    build_xex_from_composition(doc, output_path=xex_out)
+    assert xex_out.exists()
+    assert xex_out.stat().st_size > 0
+
+    asm_out = tmp_path / "mute_test.asm"
+    asm_text = asm_out.read_text(encoding="utf-8")
+
+    # Dark green background and border ($C4)
+    assert "lda #$C4" in asm_text
+    assert "sta $02C6" in asm_text  # COLOR2 text background
+    assert "sta $02C8" in asm_text  # COLOR4 border
+    assert "sta $D018" in asm_text  # COLPF2 immediate
+    assert "sta $D01A" in asm_text  # COLBK immediate
+
+    # Channel muting via keys 1-4
+    assert "key_table:" in asm_text
+    assert "cmp key_table,x" in asm_text
+    assert ".byte $1E, $1D, $19, $18" in asm_text  # Keys '1', '2', '3', '4'
+    assert "ch_mute_mask" in asm_text
 
