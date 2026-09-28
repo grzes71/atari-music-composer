@@ -9,6 +9,7 @@ from typing import Optional
 
 import click
 
+from atari_music import __version__
 from atari_music.dataset import build_full_dataset
 from atari_music.extractor import extract_raw_dump
 from atari_music.logging_config import setup_logging
@@ -24,6 +25,12 @@ def _set_log_level(ctx: click.Context, param: click.Parameter, value: Optional[s
 
 
 @click.group()
+@click.version_option(
+    __version__,
+    "-v",
+    "--version",
+    prog_name="atari-music",
+)
 @click.option(
     "--env-file",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
