@@ -4,7 +4,7 @@
 [![Platform: Atari 8-bit](https://img.shields.io/badge/platform-Atari%20800%20XL%20%2F%2065%20XE-red.svg)](https://en.wikipedia.org/wiki/Atari_8-bit_family)
 [![Assembler: MADS](https://img.shields.io/badge/assembler-MADS%201.9.6-green.svg)](http://mads.atari8.info/)
 [![CPU: MOS 6502](https://img.shields.io/badge/cpu-MOS%206502-orange.svg)](https://en.wikipedia.org/wiki/MOS_Technology_6502)
-[![Tests: 135 Passed](https://img.shields.io/badge/tests-135%20passed-brightgreen.svg)](tests/)
+[![Tests: 189 Passed](https://img.shields.io/badge/tests-189%20passed-brightgreen.svg)](tests/)
 
 Kompletny, profesjonalny system generowania, aranżacji, syntezy i odtwarzania muzyki dla komputerów **Atari 8-bit (Atari 800 XL / 65 XE)** wyposażonych w układ dźwiękowy **POKEY**.
 
@@ -636,7 +636,7 @@ atari-music/
 Projekt posiada pełne pokrycie testami jednostkowymi, integracyjnymi oraz weryfikacją kompilacji asemblera:
 
 ```bash
-# 1. Uruchomienie pełnego zestawu testów offline (135 testów, ~2.9 s, 0 regresji)
+# 1. Uruchomienie pełnego zestawu testów offline (189 testów, ~4.5 s, 0 regresji)
 pytest -q
 
 # 2. Uruchomienie opcjonalnych testów live z produkcyjnym LLM (DeepSeek / OpenAI)

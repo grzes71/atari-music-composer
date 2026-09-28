@@ -34,7 +34,7 @@ Format Specification:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from atari_music.api import MusicGenerationResult
 from atari_music.constants import (
@@ -53,7 +53,53 @@ from atari_music.ir import (
     frequency_to_audf_16bit,
     frequency_to_audf_8bit,
     midi_pitch_to_frequency,
+    note_name_to_midi,
 )
+
+
+def _note_to_midi(note: IRNote) -> Optional[int]:
+    """Extract integer MIDI pitch from an IRNote, resolving pitch string if needed."""
+    if note.midi_pitch is not None:
+        return note.midi_pitch
+    if note.pitch and str(note.pitch).upper() not in ("---", "REST", "OFF", "SIL", ""):
+        return note_name_to_midi(str(note.pitch))
+    return None
+
+
+def _find_channel_instrument(song: IRSong, ch: int, inst_map: Dict[int, IRInstrument]) -> IRInstrument:
+    """Determine the active instrument for a channel based on note assignments or role."""
+    # 1. First non-rest note with valid instrument_id on this channel
+    for pat in song.patterns:
+        for note in pat.tracks.get(ch, []):
+            if not note.is_rest and note.instrument_id is not None and note.instrument_id in inst_map:
+                return inst_map[note.instrument_id]
+
+    # 2. Any note (including rests) with valid instrument_id
+    for pat in song.patterns:
+        for note in pat.tracks.get(ch, []):
+            if note.instrument_id is not None and note.instrument_id in inst_map:
+                return inst_map[note.instrument_id]
+
+    # 3. If any note on this channel has percussion role, look for percussion instrument
+    for pat in song.patterns:
+        for note in pat.tracks.get(ch, []):
+            if note.channel_role == "percussion":
+                for inst in inst_map.values():
+                    if inst.role == "percussion" or inst.distortion == DISTORTION_WHITE_NOISE:
+                        return inst
+                return IRInstrument(
+                    id=ch - 1,
+                    name=f"Ch{ch}_Perc",
+                    distortion=DISTORTION_WHITE_NOISE,
+                    role="percussion",
+                )
+
+    # 4. Fallback: match by channel index ch - 1 if available in song.instruments
+    if (ch - 1) in inst_map:
+        return inst_map[ch - 1]
+    if inst_map:
+        return next(iter(inst_map.values()))
+    return IRInstrument(id=ch - 1, name=f"Ch{ch}", distortion=DISTORTION_PURE_TONE)
 
 
 def export_mads_asm(
@@ -100,12 +146,16 @@ def export_mads_asm(
 
     # 2. Instruments Table (Channels 1..4)
     inst_map = {inst.id: inst for inst in song.instruments}
+    ch_instruments: Dict[int, IRInstrument] = {}
+    for ch in range(1, 5):
+        ch_instruments[ch] = _find_channel_instrument(song, ch, inst_map)
+
     lines.append(f"{song_label}_instruments:")
     for ch in range(1, 5):
         if song.uses_16bit_bass and ch == 2:
             # Channel 2 is hardware slave to Channel 1 for 16-bit bass:
-            # Uses pure tone distortion and shares the bass envelope
-            bass_inst = inst_map.get(1)
+            # Uses pure tone distortion and shares the bass envelope from Channel 1
+            bass_inst = ch_instruments.get(1) or inst_map.get(1)
             dist = DISTORTION_PURE_TONE
             env = bass_inst.envelope if bass_inst else IRInstrument(id=1, name="Bass").envelope
             lines.append(
@@ -114,13 +164,7 @@ def export_mads_asm(
             )
             continue
 
-        # Default instrument IDs per channel
-        def_inst_id = 1 if ch == 1 else (2 if ch == 2 else (0 if ch == 3 else 3))
-        # Find if pattern tracks override
-        inst = inst_map.get(def_inst_id)
-        if not inst:
-            inst = IRInstrument(id=def_inst_id, name=f"Ch{ch}", distortion=DISTORTION_PURE_TONE)
-
+        inst = ch_instruments[ch]
         env = inst.envelope
         dist = inst.distortion
         lines.append(
@@ -161,11 +205,11 @@ def export_mads_asm(
                     continue
                 for note in bass_notes:
                     dur = max(1, note.duration)
-                    if note.is_rest or (note.midi_pitch is None and not note.pitch):
+                    midi_val = _note_to_midi(note)
+                    if note.is_rest or midi_val is None:
                         lines.append(f"    .byte $00, {dur:>2}, $00  ; rest ({dur} rows)")
                     else:
-                        base_midi = note.midi_pitch or 36
-                        freq = midi_pitch_to_frequency(base_midi)
+                        freq = midi_pitch_to_frequency(midi_val)
                         div_low, div_hi = frequency_to_audf_16bit(freq)
                         audf = min(254, div_hi)
                         vol = min(15, max(0, note.volume))
@@ -184,24 +228,26 @@ def export_mads_asm(
 
             for note in track_notes:
                 dur = max(1, note.duration)
-                if note.is_rest or (note.midi_pitch is None and note.channel_role != "percussion"):
+                midi_val = _note_to_midi(note)
+                if note.is_rest:
                     audf = 0
                     vol = 0
-                elif song.uses_16bit_bass and ch == 1:
-                    # 16-bit bass channel 1: low byte divider, muted volume
-                    base_midi = note.midi_pitch or 36
-                    freq = midi_pitch_to_frequency(base_midi)
-                    div_low, div_hi = frequency_to_audf_16bit(freq)
-                    audf = min(254, div_low)
-                    vol = 0
+                elif midi_val is not None:
+                    freq = midi_pitch_to_frequency(midi_val)
+                    if song.uses_16bit_bass and ch == 1:
+                        # 16-bit bass channel 1: low byte divider, muted volume
+                        div_low, div_hi = frequency_to_audf_16bit(freq)
+                        audf = min(254, div_low)
+                        vol = 0
+                    else:
+                        audf = min(254, max(0, frequency_to_audf_8bit(freq)))
+                        vol = min(15, max(0, note.volume))
                 elif note.channel_role == "percussion":
                     vol = min(15, max(0, note.volume))
                     audf = 12 if vol >= 14 else (24 if vol >= 11 else 8)
                 else:
-                    base_midi = note.midi_pitch or 60
-                    freq = midi_pitch_to_frequency(base_midi)
-                    audf = min(254, max(0, frequency_to_audf_8bit(freq)))
-                    vol = min(15, max(0, note.volume))
+                    audf = 0
+                    vol = 0
 
                 comment = f"; {note.pitch or 'rest'} ({dur} rows)" if not note.is_rest else f"; rest ({dur} rows)"
                 lines.append(f"    .byte ${audf:02x}, {dur:>2}, ${vol:02x}  {comment}")

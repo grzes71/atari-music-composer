@@ -265,6 +265,7 @@ def compile_composition_to_pokey_ir(
         ai_has_zero = any(str(k).strip() == "0" for k in ai_pat.channels.keys()) if ai_pat else False
         for ch_idx, track in sp.tracks.items():
             ir_notes: List[IRNote] = []
+            found_event_inst = False
             for n in track.notes:
                 # Find matching instrument ID
                 inst_id = 0
@@ -273,14 +274,17 @@ def compile_composition_to_pokey_ir(
                     for orig_k, ev_list in ai_pat.channels.items():
                         if normalize_channel_idx(orig_k, has_zero=ai_has_zero) == ch_idx and ev_list:
                             first_inst_str = ev_list[0].instrument
-                            inst_id = inst_id_to_int.get(first_inst_str, 0)
-                            break
+                            if first_inst_str in inst_id_to_int:
+                                inst_id = inst_id_to_int[first_inst_str]
+                                found_event_inst = True
+                                break
                 else:
                     inst_id = 1 if ch_idx == 1 else (2 if ch_idx == 2 else (0 if ch_idx == 3 else 3))
 
-                # Handle percussion role
-                if track.role == ChannelRole.PERCUSSION:
-                    inst_id = 3
+                # Handle percussion role if no explicit event instrument was matched
+                if not found_event_inst and track.role == ChannelRole.PERCUSSION:
+                    perc_id = next((inst.id for inst in ir_instruments if inst.role == "percussion" or inst.distortion == DISTORTION_WHITE_NOISE), 3)
+                    inst_id = perc_id
 
                 ir_notes.append(
                     IRNote(
