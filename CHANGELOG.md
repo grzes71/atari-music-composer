@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.4.0 (2026-09-28)
+
+### Features
+
+- **ai**: Parse server retry delay on 429 and add -v cli flag
+  ([`09de6cc`](https://github.com/grzes71/atari-music-composer/commit/09de6cc61bcc8b531cca32f6a94c500e32e3ea7c))
+
+
 ## v0.3.1 (2026-09-28)
 
 ### Bug Fixes
