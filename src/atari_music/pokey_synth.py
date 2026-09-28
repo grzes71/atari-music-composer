@@ -24,6 +24,7 @@ import numpy as np
 
 from atari_music.constants import (
     AUDCTL_15KHZ,
+    AUDCTL_9BIT_POLY,
     AUDCTL_CH1_179MHZ,
     AUDCTL_JOIN_1_2_16BIT,
     DISTORTION_4BIT_POLY,
@@ -44,6 +45,33 @@ POLY5_SEQ = np.array([
     1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0,
     0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0
 ], dtype=np.float32)
+
+
+def _generate_lfsr17_sequence() -> np.ndarray:
+    """Generate 17-bit POKEY LFSR maximal-length bitstream (131071 states, poly: 1 + x^12 + x^17)."""
+    state = 0x1FFFF
+    bits = np.empty(131071, dtype=np.float32)
+    for i in range(131071):
+        new_bit = ((state >> 16) ^ (state >> 11)) & 1
+        bits[i] = 1.0 if new_bit else -1.0
+        state = ((state << 1) | new_bit) & 0x1FFFF
+    return bits
+
+
+def _generate_lfsr9_sequence() -> np.ndarray:
+    """Generate 9-bit POKEY LFSR maximal-length bitstream (511 states, poly: 1 + x^4 + x^9)."""
+    state = 0x1FF
+    bits = np.empty(511, dtype=np.float32)
+    for i in range(511):
+        new_bit = ((state >> 8) ^ (state >> 3)) & 1
+        bits[i] = 1.0 if new_bit else -1.0
+        state = ((state << 1) | new_bit) & 0x1FF
+    return bits
+
+
+# Precomputed 17-bit and 9-bit LFSR tables for deterministic hardware noise emulation
+POLY17_SEQ = _generate_lfsr17_sequence()
+POLY9_SEQ = _generate_lfsr9_sequence()
 
 # POKEY Non-Linear Resistor Ladder DAC (16 volume levels 0..15)
 POKEY_DAC = np.array([
@@ -85,10 +113,7 @@ def render_pokey_samples(
 
     # Phase tracking per channel to maintain phase continuity across frames
     ch_phases = np.zeros(4, dtype=np.float64)
-
-    # Pre-generate noise buffer for reproducible pseudo-random 17-bit noise
-    rng = np.random.RandomState(42)
-    noise_pool = rng.choice([-1.0, 1.0], size=total_samples).astype(np.float32)
+    ch_lfsr_steps = np.zeros(4, dtype=np.float64)
 
     for f_idx in range(num_frames):
         f_row = frames[f_idx]
@@ -148,12 +173,25 @@ def render_pokey_samples(
                 poly_idx = (phase_seq * (31.0 / (2.0 * math.pi))).astype(np.int64) % 31
                 wave_samples = POLY5_SEQ[poly_idx] * 2.0 - 1.0
             elif dist in (DISTORTION_WHITE_NOISE, 0x80):
-                # White noise ($E0 / $80)
-                wave_samples = noise_pool[s_start:s_end]
+                # White noise ($E0 / $80) clocked at AUDF divider rate
+                use_9bit = bool(audctl & AUDCTL_9BIT_POLY)
+                poly_seq = POLY9_SEQ if use_9bit else POLY17_SEQ
+                poly_len = 511 if use_9bit else 131071
+                step_seq = (ch_lfsr_steps[ch] + (2.0 * freq) * t_frame).astype(np.int64)
+                wave_samples = poly_seq[step_seq % poly_len]
+                delta_steps = (2.0 * freq) * (samples_per_frame / sample_rate)
+                ch_lfsr_steps[ch] = (ch_lfsr_steps[ch] + delta_steps) % poly_len
             elif dist == 0x00:
-                # Composite 5-bit + noise ($00)
+                # Composite 5-bit + noise ($00) clocked at AUDF divider rate
                 poly_idx = (phase_seq * (31.0 / (2.0 * math.pi))).astype(np.int64) % 31
-                wave_samples = POLY5_SEQ[poly_idx] * noise_pool[s_start:s_end]
+                use_9bit = bool(audctl & AUDCTL_9BIT_POLY)
+                poly_seq = POLY9_SEQ if use_9bit else POLY17_SEQ
+                poly_len = 511 if use_9bit else 131071
+                step_seq = (ch_lfsr_steps[ch] + (2.0 * freq) * t_frame).astype(np.int64)
+                noise_samples = poly_seq[step_seq % poly_len]
+                wave_samples = (POLY5_SEQ[poly_idx] * 2.0 - 1.0) * noise_samples
+                delta_steps = (2.0 * freq) * (samples_per_frame / sample_rate)
+                ch_lfsr_steps[ch] = (ch_lfsr_steps[ch] + delta_steps) % poly_len
             else:
                 # Fallback square wave
                 wave_samples = np.where(np.sin(phase_seq) >= 0.0, 1.0, -1.0)
