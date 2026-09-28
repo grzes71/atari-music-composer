@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.5.0 (2026-09-28)
+
+### Features
+
+- **visualizer**: Add interactive channel muting keys 1-4 and dark green theme
+  ([`6ebf55e`](https://github.com/grzes71/atari-music-composer/commit/6ebf55e7a15bb45269f62c9a7e2e75fc8333719e))
+
+
 ## v0.4.0 (2026-09-28)
 
 ### Features
