@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.5.1 (2026-09-28)
+
+### Bug Fixes
+
+- **release**: Synchronize package version tracking in init and semantic-release
+  ([`c740cf0`](https://github.com/grzes71/atari-music-composer/commit/c740cf0497c0aa0d7001c2029f65926df38fbbb6))
+
+
 ## v0.5.0 (2026-09-28)
 
 ### Features
