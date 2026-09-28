@@ -197,18 +197,21 @@ def generate_composition_with_retry(
                 previous_composition=previous_composition,
             )
         except AIProviderAPIError as api_err:
-            from atari_music.ai.providers.openai import _is_transient_http_error
+            from atari_music.ai.providers.openai import _is_transient_http_error, extract_retry_delay
             is_trans, code, desc = _is_transient_http_error(api_err)
             if is_trans and attempt_idx < max_attempts:
-                delay = 5.0 * (2 ** (attempt_idx - 1))
+                base_delay = 5.0 * (2 ** (attempt_idx - 1))
+                delay = extract_retry_delay(api_err, default_backoff=base_delay)
+                source = "server retryDelay" if delay != base_delay else "exponential backoff"
                 logger.warning(
                     "Composition Repair Loop: Transient API error [%s / code %s] on attempt %d: %s. "
-                    "Waiting %.1fs before retrying attempt...",
+                    "Waiting %.1fs (%s) before retrying attempt...",
                     desc,
                     code,
                     attempt_idx,
                     api_err,
                     delay,
+                    source,
                 )
                 time.sleep(delay)
                 continue

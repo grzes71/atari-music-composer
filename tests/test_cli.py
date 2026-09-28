@@ -98,6 +98,18 @@ def test_cli_public_commands_in_help():
         assert f"  {cmd} " not in result.output, f"Hidden command '{cmd}' should not appear in --help"
 
 
+def test_cli_version_flag():
+    """Verify that -v and --version options display the application version and exit cleanly."""
+    from atari_music import __version__
+
+    runner = CliRunner()
+    for flag in ["-v", "--version"]:
+        result = runner.invoke(cli, [flag])
+        assert result.exit_code == 0
+        assert "atari-music" in result.output
+        assert __version__ in result.output
+
+
 def test_cli_hidden_commands_still_callable():
     """Verify hidden commands remain callable for backward compatibility and research reproduction."""
     runner = CliRunner()

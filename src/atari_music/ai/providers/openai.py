@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
@@ -72,6 +73,99 @@ def _is_transient_http_error(err: Exception) -> Tuple[bool, int, str]:
     return False, 0, ""
 
 
+def extract_retry_delay(
+    err: Optional[Exception],
+    default_backoff: float,
+    max_delay: float = 300.0,
+    safety_margin: float = 1.0,
+) -> float:
+    """Extract server-requested retry delay from headers or error message.
+
+    Supports:
+    1. HTTP 'Retry-After' (seconds) and 'Retry-After-Ms' (milliseconds) response headers.
+    2. Google / OpenAI RPC RetryInfo in error response details (e.g. retryDelay: '57.489879459s').
+    3. Natural language strings in error message, such as:
+       - 'Please retry in 57.489879459s'
+       - 'retry in 35.18s'
+       - 'retry after 20s' / 'retry after 20 seconds'
+       - 'try again in 15 seconds'
+       - 'wait 10s' / 'reset in 10s'
+
+    If a server-specified delay is detected, adds safety_margin (default 1.0s) so the retry
+    strictly occurs after the server's rate-limit window resets, bounded by max_delay.
+    If no server delay is detected, returns default_backoff.
+    """
+    if err is None:
+        return default_backoff
+
+    candidates = [err]
+    cause = getattr(err, "__cause__", None)
+    if cause is not None and isinstance(cause, Exception):
+        candidates.append(cause)
+    context = getattr(err, "__context__", None)
+    if context is not None and isinstance(context, Exception):
+        candidates.append(context)
+
+    for target in candidates:
+        # 1. HTTP response headers
+        response = getattr(target, "response", None)
+        if response is not None:
+            headers = getattr(response, "headers", None)
+            if headers is not None:
+                val_header = headers.get("retry-after") or headers.get("Retry-After")
+                if val_header:
+                    try:
+                        parsed_val = float(val_header)
+                        return min(max_delay, max(0.5, parsed_val + safety_margin))
+                    except (ValueError, TypeError):
+                        pass
+
+                val_ms = headers.get("retry-after-ms") or headers.get("Retry-After-Ms")
+                if val_ms:
+                    try:
+                        parsed_ms = float(val_ms) / 1000.0
+                        return min(max_delay, max(0.5, parsed_ms + safety_margin))
+                    except (ValueError, TypeError):
+                        pass
+
+        # 2. Structured error body (OpenAI / Google Cloud RPC)
+        body = getattr(target, "body", None)
+        if isinstance(body, dict):
+            err_dict = body.get("error", {})
+            if isinstance(err_dict, dict):
+                details = err_dict.get("details", [])
+                if isinstance(details, list):
+                    for item in details:
+                        if isinstance(item, dict) and "retryDelay" in item:
+                            raw_rd = str(item["retryDelay"]).rstrip("s")
+                            try:
+                                parsed_rd = float(raw_rd)
+                                return min(max_delay, max(0.5, parsed_rd + safety_margin))
+                            except (ValueError, TypeError):
+                                pass
+
+        # 3. Regex inspection of error message string
+        msg = str(target)
+        patterns = [
+            r"retry\s+in\s+(\d+(?:\.\d+)?)\s*s(?:ec(?:ond)?s?)?",
+            r"retry\s+after\s+(\d+(?:\.\d+)?)\s*s(?:ec(?:ond)?s?)?",
+            r"try\s+again\s+in\s+(\d+(?:\.\d+)?)\s*s(?:ec(?:ond)?s?)?",
+            r"retrydelay['\":\s]+(\d+(?:\.\d+)?)\s*s?",
+            r"wait\s+(\d+(?:\.\d+)?)\s*s(?:ec(?:ond)?s?)?",
+            r"reset\s+in\s+(\d+(?:\.\d+)?)\s*s(?:ec(?:ond)?s?)?",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, msg, re.IGNORECASE)
+            if match:
+                try:
+                    parsed_sec = float(match.group(1))
+                    return min(max_delay, max(0.5, parsed_sec + safety_margin))
+                except (ValueError, TypeError):
+                    pass
+
+    return default_backoff
+
+
 class OpenAICompositionProvider(AICompositionProvider):
     """Generates Atari music composition JSON via OpenAI-compatible Chat Completions API with exponential backoff on 503/429."""
 
@@ -84,6 +178,7 @@ class OpenAICompositionProvider(AICompositionProvider):
         initial_backoff: float = 5.0,
         backoff_factor: float = 2.0,
         max_backoff: float = 30.0,
+        max_server_wait: float = 300.0,
     ) -> None:
         self.api_key = (
             api_key
@@ -110,6 +205,7 @@ class OpenAICompositionProvider(AICompositionProvider):
         self.initial_backoff = float(os.environ.get("AI_INITIAL_BACKOFF", initial_backoff))
         self.backoff_factor = float(os.environ.get("AI_BACKOFF_FACTOR", backoff_factor))
         self.max_backoff = float(os.environ.get("AI_MAX_BACKOFF", max_backoff))
+        self.max_server_wait = float(os.environ.get("AI_MAX_SERVER_WAIT", max_server_wait))
 
         if self.api_key:
             register_secret(self.api_key)
@@ -301,18 +397,25 @@ class OpenAICompositionProvider(AICompositionProvider):
             except Exception as err:
                 is_trans, code, desc = _is_transient_http_error(err)
                 if is_trans and transient_attempt < self.max_transient_retries:
-                    delay = min(
+                    base_delay = min(
                         self.max_backoff,
                         self.initial_backoff * (self.backoff_factor ** (transient_attempt - 1)),
                     )
+                    delay = extract_retry_delay(
+                        err,
+                        default_backoff=base_delay,
+                        max_delay=self.max_server_wait,
+                    )
                     clean_msg = self._sanitize_error_message(str(err))
+                    source = "server retryDelay" if delay != base_delay else "exponential backoff"
                     logger.warning(
                         "LLM API transient error [%s / code %s]: %s. "
-                        "Waiting %.1fs (exponential backoff) before retry (attempt %d/%d)...",
+                        "Waiting %.1fs (%s) before retry (attempt %d/%d)...",
                         desc,
                         code,
                         clean_msg,
                         delay,
+                        source,
                         transient_attempt,
                         self.max_transient_retries,
                     )
