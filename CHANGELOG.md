@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.5.3 (2026-09-28)
+
+### Bug Fixes
+
+- **export**: Align MADS assembly exporter with POKEY IR and WAV renderer
+  ([`e098a2c`](https://github.com/grzes71/atari-music-composer/commit/e098a2c1f6a5b8023cba50ea5d527f9728128fdf))
+
+
 ## v0.5.2 (2026-09-28)
 
 ### Bug Fixes
