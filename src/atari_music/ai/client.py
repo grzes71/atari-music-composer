@@ -269,6 +269,7 @@ def request_ai_composition(
     model: Optional[str] = None,
     api_key: Optional[str] = None,
     max_retries: int = 3,
+    env_path: Optional[Union[str, Path]] = None,
 ) -> AICompositionDoc:
     """Request an AI-generated composition, validate it with automatic retry loop, and return the validated document.
     
@@ -286,6 +287,8 @@ def request_ai_composition(
         API key override.
     max_retries : int, default=3
         Maximum retry attempts on validation error (1 initial + max_retries retries).
+    env_path : Optional[Union[str, Path]]
+        Path to custom .env configuration file.
         
     Returns
     -------
@@ -294,7 +297,7 @@ def request_ai_composition(
     """
     p_name = provider if isinstance(provider, str) else provider_name
     p_inst = provider if hasattr(provider, "generate_composition") else None
-    active_provider = p_inst or get_ai_provider(p_name, model=model, api_key=api_key)
+    active_provider = p_inst or get_ai_provider(p_name, model=model, api_key=api_key, env_path=env_path)
     return generate_composition_with_retry(request, active_provider, max_retries=max_retries)
 
 

@@ -433,21 +433,24 @@ Music IR & POKEY IR                                   Composition Fingerprint (S
 MADS ASM Exporter -> 6502 Player -> Atari XEX Executable (z graficznym timerem i VU)
 ```
 
-### 1. Konfiguracja Środowiska i `.env` (DeepSeek / OpenAI)
-Projekt wspiera elastyczną, 4-stopniową hierarchię konfiguracji z priorytetami:
-1. **Argumenty CLI** (najwyższy priorytet),
-2. **Zmienne środowiskowe systemu**,
-3. **Plik `.env`** (ładowany przez `python-dotenv`),
+### 1. Konfiguracja Środowiska AI i `.env`
+Projekt wspiera ujednoliconą, 4-stopniową hierarchię konfiguracji z rygorystycznymi priorytetami:
+1. **Argumenty CLI** (najwyższy priorytet, np. `--provider`, `--model`, `--api-key`, `--base-url`, `--env-file`),
+2. **Zmienne środowiskowe systemu** (nigdy nie są nadpisywane wartościami z `.env`),
+3. **Plik `.env`** (domyślnie `.env` lub wskazany przez globalną opcję `--env-file PATH`),
 4. **Wartości domyślne w kodzie** (najniższy priorytet).
 
 W katalogu głównym projektu znajduje się plik wzorcowy [.env.example](.env.example):
 ```env
-# Konfiguracja produkcyjna LLM (np. DeepSeek)
-DEEPSEEK_API_KEY=your_api_key_here
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-flash
+# Konfiguracja produkcyjna dostawcy AI
+AI_PROVIDER=deepseek
+AI_API_KEY=your_api_key_here
+AI_BASE_URL=https://api.deepseek.com
+AI_MODEL=deepseek-flash
 LOG_LEVEL=INFO
 ```
+
+> **Kompatybilność wsteczna:** System zachowuje pełną kompatybilność z istniejącymi konfiguracjami `.env` — w przypadku braku zmiennych `AI_*` automatycznie odpytywane są zmienne legacy: `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`, `DEEPSEEK_BASE_URL` / `OPENAI_BASE_URL` oraz `DEEPSEEK_MODEL` / `OPENAI_MODEL`. Opcja CLI `--provider` pozwala w każdej chwili jawnie nadpisać wartość `AI_PROVIDER`.
 
 > **Bezpieczeństwo:** Klucze API podlegają automatycznemu maskowaniu (`Config.masked_api_key()`) i **nigdy** nie są zapisywane w plikach JSON, kodzie asemblera, nagłówkach XEX ani raportach ewaluacyjnych.
 

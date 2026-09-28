@@ -25,6 +25,12 @@ def _set_log_level(ctx: click.Context, param: click.Parameter, value: Optional[s
 
 @click.group()
 @click.option(
+    "--env-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Path to custom .env configuration file (default: .env).",
+)
+@click.option(
     "--log-level",
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
     default=None,
@@ -34,9 +40,11 @@ def _set_log_level(ctx: click.Context, param: click.Parameter, value: Optional[s
     callback=_set_log_level,
     help="Global logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).",
 )
-def cli(log_level: Optional[str] = None) -> None:
+@click.pass_context
+def cli(ctx: click.Context, env_file: Optional[Path] = None, log_level: Optional[str] = None) -> None:
     """Atari 8-bit POKEY Music Composer & Toolchain: procedural and AI-assisted music composition, validation, software synthesis, and relocatable MOS 6502 assembly compilation."""
-    pass
+    ctx.ensure_object(dict)
+    ctx.obj["env_file"] = env_file
 
 
 
@@ -832,8 +840,14 @@ def build_xex_cmd(
 @click.option("--channels", type=int, default=4, help="POKEY channels (1..4)")
 @click.option("--use-16bit-bass/--no-16bit-bass", default=False, help="Enable 16-bit bass mode")
 @click.option("--structure", type=str, default="A-B-A", help="Song structure (e.g. A-B-A)")
-@click.option("--provider", type=click.Choice(["mock", "openai"], case_sensitive=False), default="mock", help="AI provider")
+@click.option("--provider", type=click.Choice(["mock", "openai", "deepseek"], case_sensitive=False), default=None, help="AI provider override (overrides AI_PROVIDER, e.g. mock, openai, deepseek)")
 @click.option("--model", type=str, default=None, help="AI model name override")
+@click.option(
+    "--env-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Path to custom .env configuration file (overrides global --env-file)",
+)
 @click.option("--max-retries", type=int, default=3, help="Maximum validation repair retry attempts (default: 3)")
 @click.option(
     "--log-level",
@@ -852,7 +866,9 @@ def build_xex_cmd(
     required=False,
     help="Output JSON path (omitted or '-' prints machine-readable JSON to stdout)",
 )
+@click.pass_context
 def ai_compose_cmd(
+    ctx: click.Context,
     style: str,
     mood: tuple[str, ...],
     duration: float,
@@ -860,14 +876,24 @@ def ai_compose_cmd(
     channels: int,
     use_16bit_bass: bool,
     structure: str,
-    provider: str,
+    provider: Optional[str],
     model: Optional[str],
+    env_file: Optional[Path],
     max_retries: int,
     output: Optional[Path],
 ) -> None:
     """Generate a valid AI composition JSON using an AI provider."""
     from atari_music.ai.providers.base import CompositionRequest
     from atari_music.ai.client import request_ai_composition
+    from atari_music.config import Config
+
+    global_env_file = ctx.obj.get("env_file") if (ctx and isinstance(ctx.obj, dict)) else None
+    effective_env_file = env_file or global_env_file
+    cfg = Config.from_args(args=[], env_path=effective_env_file or ".env", validate=False)
+
+    # Priority: CLI --provider > Config (AI_PROVIDER via env > env-file > default "mock")
+    effective_provider = provider if provider is not None else (cfg.ai_provider or "mock")
+    effective_model = model if model is not None else cfg.ai_model
 
     req = CompositionRequest(
         style=style,
@@ -881,12 +907,18 @@ def ai_compose_cmd(
     is_stdout = output is None or str(output) == "-"
 
     # Informational logs go to stderr so stdout is not polluted
-    click.echo(f"Requesting composition from provider '{provider}'...", err=True)
+    click.echo(f"Requesting composition from provider '{effective_provider}'...", err=True)
     click.echo(
         f"  Style: {style}, BPM: {bpm}, Channels: {channels}, 16-bit bass: {use_16bit_bass}, max retries: {max_retries}",
         err=True,
     )
-    comp = request_ai_composition(req, provider_name=provider, model=model, max_retries=max_retries)
+    comp = request_ai_composition(
+        req,
+        provider_name=effective_provider,
+        model=effective_model,
+        max_retries=max_retries,
+        env_path=effective_env_file,
+    )
     json_str = json.dumps(comp.model_dump(mode="json"), indent=2)
 
     if is_stdout:

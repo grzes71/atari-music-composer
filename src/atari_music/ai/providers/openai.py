@@ -43,16 +43,19 @@ class OpenAICompositionProvider(AICompositionProvider):
     ) -> None:
         self.api_key = (
             api_key
+            or os.environ.get("AI_API_KEY")
             or os.environ.get("DEEPSEEK_API_KEY")
             or os.environ.get("OPENAI_API_KEY")
         )
         self.base_url = (
             base_url
+            or os.environ.get("AI_BASE_URL")
             or os.environ.get("DEEPSEEK_BASE_URL")
             or os.environ.get("OPENAI_BASE_URL")
         )
         self.model = (
             model
+            or os.environ.get("AI_MODEL")
             or os.environ.get("DEEPSEEK_MODEL")
             or os.environ.get("OPENAI_MODEL")
             or "deepseek-flash"
@@ -77,7 +80,7 @@ class OpenAICompositionProvider(AICompositionProvider):
     ) -> Dict[str, Any]:
         if not self.api_key or self.api_key.strip() == "your_api_key_here":
             raise AIProviderMissingKeyError(
-                "API key is not configured. Provide DEEPSEEK_API_KEY or OPENAI_API_KEY in .env or environment."
+                "API key is not configured. Provide AI_API_KEY (or DEEPSEEK_API_KEY / OPENAI_API_KEY) in .env or environment."
             )
 
         try:
