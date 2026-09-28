@@ -21,7 +21,12 @@ from atari_music.serialization import (
     music_ir_to_json,
 )
 
-__version__ = "0.3.0"
+try:
+    from importlib.metadata import PackageNotFoundError, version
+
+    __version__ = version("atari-music")
+except (PackageNotFoundError, ImportError):
+    __version__ = "0.5.0"
 
 __all__ = [
     "generate_music",

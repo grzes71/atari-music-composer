@@ -285,3 +285,14 @@ def test_cli_build_xex_subprocess_execution(tmp_path: Path, monkeypatch):
     assert out_xex.exists()
 
 
+def test_cli_version_flag():
+    """Verify atari-music -v and --version output matches __version__."""
+    from atari_music import __version__
+
+    runner = CliRunner()
+    for flag in ["-v", "--version"]:
+        result = runner.invoke(cli, [flag])
+        assert result.exit_code == 0
+        assert f"atari-music, version {__version__}" in result.output
+
+
