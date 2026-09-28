@@ -328,7 +328,14 @@ def test_6502_player_multi_pattern_sequence_advance_regression(tmp_path):
     init_addr = mpu.memory[0x4012] | (mpu.memory[0x4013] << 8)
     play_addr = mpu.memory[0x4015] | (mpu.memory[0x4016] << 8)
     song_data = mpu.memory[0x400E] | (mpu.memory[0x4010] << 8)
-    update_addr = mpu.memory[0x403A] | (mpu.memory[0x403B] << 8)
+    # Find update_addr dynamically from harness main_loop JSR music_update
+    update_addr = None
+    for p in range(0x4000, 0x4100):
+        if mpu.memory[p] == 0x49 and mpu.memory[p+1] == 0x01:  # eor #1 (ch_mute_mask toggle)
+            jsr_addr = p + 5  # follows sta ch_mute_mask,x
+            update_addr = mpu.memory[jsr_addr+1] | (mpu.memory[jsr_addr+2] << 8)
+            break
+    assert update_addr is not None
 
     # Find seq_step_idx address via load_pattern_ptrs STA
     seq_idx_addr = None

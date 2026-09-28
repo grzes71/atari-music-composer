@@ -897,6 +897,139 @@ def test_stage11_zero_page_relocation_and_dungeon_16bit():
         assert ok is True, f"API scenario check failed for {scen}"
 
 
+def test_pokey_noise_audf_frequency_response():
+    """Verify DISTORTION_WHITE_NOISE ($E0) frequency and transition rate scale with AUDF."""
+    import numpy as np
+    from atari_music.constants import DISTORTION_WHITE_NOISE
+    from atari_music.pokey_synth import render_pokey_samples
+
+    # 1. Low frequency noise (AUDF=254, like bass drum / A2 note)
+    frames_low = np.zeros((50, 9), dtype=np.uint8)
+    frames_low[:, 0] = 254  # AUDF1
+    frames_low[:, 1] = DISTORTION_WHITE_NOISE | 0x0F  # AUDC1: full volume
+
+    # 2. High frequency noise (AUDF=5, like hi-hat / cymbal)
+    frames_high = np.zeros((50, 9), dtype=np.uint8)
+    frames_high[:, 0] = 5    # AUDF1
+    frames_high[:, 1] = DISTORTION_WHITE_NOISE | 0x0F  # AUDC1: full volume
+
+    samples_low = render_pokey_samples(frames_low, sample_rate=44100, frame_rate_hz=50.0)
+    samples_high = render_pokey_samples(frames_high, sample_rate=44100, frame_rate_hz=50.0)
+
+    # Count zero crossings
+    zc_low = np.sum(np.diff(np.sign(samples_low) >= 0) != 0)
+    zc_high = np.sum(np.diff(np.sign(samples_high) >= 0) != 0)
+
+    # High frequency noise must have drastically more zero crossings than low frequency noise
+    assert zc_high > zc_low * 5
+    # Low frequency noise (250 Hz divider) in 1 second should have roughly ~200-500 crossings, not ~20000
+    assert zc_low < 1500
+
+
+def test_pokey_noise_determinism():
+    """Verify POKEY noise synthesis produces bit-for-bit identical output for identical inputs."""
+    import numpy as np
+    from atari_music.constants import DISTORTION_WHITE_NOISE
+    from atari_music.pokey_synth import render_pokey_samples
+
+    frames = np.zeros((25, 9), dtype=np.uint8)
+    frames[:, 4] = 80   # Ch 3 AUDF
+    frames[:, 5] = DISTORTION_WHITE_NOISE | 0x0C
+
+    samples1 = render_pokey_samples(frames)
+    samples2 = render_pokey_samples(frames)
+
+    assert np.array_equal(samples1, samples2)
+
+
+def test_pokey_noise_9bit_vs_17bit():
+    """Verify AUDCTL_9BIT_POLY flag produces distinct noise texture from default 17-bit."""
+    import numpy as np
+    from atari_music.constants import AUDCTL_9BIT_POLY, DISTORTION_WHITE_NOISE
+    from atari_music.pokey_synth import render_pokey_samples
+
+    frames_17 = np.zeros((20, 9), dtype=np.uint8)
+    frames_17[:, 0] = 40
+    frames_17[:, 1] = DISTORTION_WHITE_NOISE | 0x0F
+    frames_17[:, 8] = 0x00
+
+    frames_9 = np.copy(frames_17)
+    frames_9[:, 8] = AUDCTL_9BIT_POLY
+
+    samples_17 = render_pokey_samples(frames_17)
+    samples_9 = render_pokey_samples(frames_9)
+
+    assert not np.array_equal(samples_17, samples_9)
+
+
+def test_game_over_percussion_rendering(tmp_path):
+    """Verify Game Over composition percussion event (A2 Comic Thud) generates proper punchy WAV."""
+    from pathlib import Path
+    import numpy as np
+    import wave
+    from atari_music.ai.schema import AICompositionDoc
+    from atari_music.ai.client import generate_music_from_composition
+    from atari_music.pokey_synth import render_pokey_to_wav
+
+    doc_dict = {
+        "format": "atari-music-composition",
+        "version": 1,
+        "metadata": {
+            "title": "Game Over",
+            "author": "Composer AI",
+            "key": "A",
+            "mode": "minor",
+            "bpm": 120,
+            "duration_seconds": 2.0,
+        },
+        "hardware": {
+            "channels": 4,
+            "use_16bit_bass": False,
+        },
+        "instruments": [
+            {"id": "lead", "name": "Lead", "character": "bright_lead"},
+            {"id": "bass", "name": "Bass", "character": "bass"},
+            {"id": "perc", "name": "Comic Thud", "character": "percussion"},
+        ],
+        "patterns": [
+            {
+                "id": "P1",
+                "length_steps": 16,
+                "channels": {
+                    "1": [{"step": 0, "note": "A4", "instrument": "lead", "duration": 4, "volume": 12}],
+                    "2": [{"step": 0, "note": "A2", "instrument": "bass", "duration": 8, "volume": 10}],
+                    "3": [
+                        {"step": 0, "note": "A2", "instrument": "perc", "duration": 2, "volume": 10},
+                        {"step": 8, "note": "A2", "instrument": "perc", "duration": 2, "volume": 9},
+                    ],
+                    "4": [],
+                },
+            }
+        ],
+        "sequence": ["P1"],
+        "loop_point": 0,
+    }
+
+    doc = AICompositionDoc.model_validate(doc_dict)
+    res = generate_music_from_composition(doc)
+    assert res.pokey_ir is not None
+
+    wav_path = tmp_path / "game_over.wav"
+    res.render_wav(wav_path)
+    assert wav_path.exists()
+    assert wav_path.stat().st_size > 0
+
+    with wave.open(str(wav_path), "rb") as wf:
+        assert wf.getframerate() == 44100
+        n_frames = wf.getnframes()
+        assert n_frames > 0
+        raw_bytes = wf.readframes(n_frames)
+        samples = np.frombuffer(raw_bytes, dtype=np.int16)
+        # Check non-silent output and no overflow
+        assert np.max(np.abs(samples)) > 1000
+
+
+
 
 
 
