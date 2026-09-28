@@ -1029,15 +1029,136 @@ def test_game_over_percussion_rendering(tmp_path):
         assert np.max(np.abs(samples)) > 1000
 
 
+def test_mads_export_percussion_consistency():
+    """Regression test: MADS export matches POKEY IR and WAV renderer semantics for percussion channel.
 
+    Verifies that:
+    1. CH3 uses the 'perc' instrument and its distortion ($E0).
+    2. CH3 does not overwrite note pitch (A2) with hardcoded AUDF=8.
+    3. CH3 AUDF matches the POKEY IR pitch conversion (min(254, frequency_to_audf_8bit) = $fe).
+    4. Channels 1 and 2 remain unaffected with their correct instruments and notes.
+    """
+    from atari_music.ai.client import generate_music_from_composition
+    from atari_music.ai.schema import AICompositionDoc
+    from atari_music.constants import DISTORTION_WHITE_NOISE
+    from atari_music.ir import frequency_to_audf_8bit, midi_pitch_to_frequency
+    from atari_music.mads_exporter import export_mads_asm
 
+    doc_dict = {
+        "format": "atari-music-composition",
+        "version": 1,
+        "metadata": {
+            "title": "Regression Game Over",
+            "author": "Composer AI",
+            "key": "A",
+            "mode": "minor",
+            "bpm": 120,
+            "duration_seconds": 2.0,
+        },
+        "hardware": {
+            "channels": 4,
+            "use_16bit_bass": False,
+        },
+        "instruments": [
+            {"id": "lead", "name": "Lead", "character": "bright_lead"},
+            {"id": "bass", "name": "Bass", "character": "bass"},
+            {"id": "perc", "name": "Comic Thud", "character": "percussion"},
+        ],
+        "patterns": [
+            {
+                "id": "P1",
+                "length_steps": 16,
+                "channels": {
+                    "0": [{"step": 0, "note": "A4", "instrument": "lead", "duration": 4, "volume": 12}],
+                    "1": [{"step": 0, "note": "A2", "instrument": "bass", "duration": 8, "volume": 10}],
+                    "2": [
+                        {"step": 0, "note": "A2", "instrument": "perc", "duration": 2, "volume": 10}
+                    ],
+                },
+            }
+        ],
+        "sequence": ["P1"],
+        "loop_point": 0,
+    }
 
+    doc = AICompositionDoc.model_validate(doc_dict)
+    res = generate_music_from_composition(doc)
+    asm = export_mads_asm(res)
 
+    # 1. Verify Instruments Table
+    lines = asm.splitlines()
+    inst_section = []
+    in_inst = False
+    for line in lines:
+        if "song_data_instruments:" in line:
+            in_inst = True
+            continue
+        if in_inst:
+            if line.strip() == "" or line.startswith("song_data_"):
+                break
+            inst_section.append(line.strip())
 
+    assert len(inst_section) == 4
+    # Ch 1 -> Lead ($a0)
+    assert "$a0" in inst_section[0] and "Lead" in inst_section[0]
+    # Ch 2 -> Bass ($c0)
+    assert "$c0" in inst_section[1] and "Bass" in inst_section[1]
+    # Ch 3 -> Comic Thud ($e0) - must preserve distortion from IRInstrument!
+    assert f"${DISTORTION_WHITE_NOISE:02x}" in inst_section[2]
+    assert "Comic Thud" in inst_section[2]
 
+    # 2. Verify CH3 track data does not use hardcoded AUDF=8
+    ch3_lines = []
+    in_ch3 = False
+    for line in lines:
+        if "song_data_pat_0_ch3:" in line:
+            in_ch3 = True
+            continue
+        if in_ch3:
+            if line.strip() == "" or line.startswith("song_data_"):
+                break
+            ch3_lines.append(line.strip())
 
+    first_ch3_note = ch3_lines[0]
+    # Must NOT be hardcoded $08
+    assert "$08" not in first_ch3_note, "CH3 note pitch was hardcoded to AUDF=8!"
 
+    # 3. Verify AUDF matches POKEY IR
+    expected_audf = min(254, max(0, frequency_to_audf_8bit(midi_pitch_to_frequency(45))))
+    assert f"${expected_audf:02x}" in first_ch3_note
+    assert "2" in first_ch3_note  # duration 2
+    assert "$0a" in first_ch3_note  # volume 10
 
+    # 4. Verify Ch 1 and Ch 2 are unaffected
+    ch1_lines = []
+    in_ch1 = False
+    for line in lines:
+        if "song_data_pat_0_ch1:" in line:
+            in_ch1 = True
+            continue
+        if in_ch1:
+            if line.strip() == "" or line.startswith("song_data_"):
+                break
+            ch1_lines.append(line.strip())
 
+    ch2_lines = []
+    in_ch2 = False
+    for line in lines:
+        if "song_data_pat_0_ch2:" in line:
+            in_ch2 = True
+            continue
+        if in_ch2:
+            if line.strip() == "" or line.startswith("song_data_"):
+                break
+            ch2_lines.append(line.strip())
 
+    # Ch 1 note: A4 -> AUDF 71 ($47), duration 4, volume 12 ($0c)
+    a4_audf = min(254, max(0, frequency_to_audf_8bit(midi_pitch_to_frequency(69))))
+    assert f"${a4_audf:02x}" in ch1_lines[0]
+    assert "$0c" in ch1_lines[0]
+
+    # Ch 2 note: A2 -> AUDF 254 ($fe), duration 8, volume 10 ($0a)
+    a2_audf = min(254, max(0, frequency_to_audf_8bit(midi_pitch_to_frequency(45))))
+    assert f"${a2_audf:02x}" in ch2_lines[0]
+    assert "$0a" in ch2_lines[0]
 
