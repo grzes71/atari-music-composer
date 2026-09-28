@@ -13,7 +13,7 @@ Format Specification:
 
 2. Instruments Table (4 x 5 = 20 bytes):
    Per channel 1..4:
-   .byte distortion            ; AUDC high nibble ($A0 = pure, $C0 = poly bass, $00 = noise)
+   .byte distortion            ; AUDC high nibble ($A0 = pure, $C0 = poly bass, $80 = noise)
    .byte attack_frames         ; Attack ramp frames (0..15)
    .byte decay_frames          ; Decay ramp frames (0..15)
    .byte sustain_vol           ; Sustain volume (0..15)
@@ -33,28 +33,30 @@ Format Specification:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from atari_music.api import MusicGenerationResult
+from atari_music import pokey_hw
 from atari_music.constants import (
-    AUDCTL_CH1_179MHZ,
     AUDCTL_JOIN_1_2_16BIT,
-    DISTORTION_4BIT_POLY,
     DISTORTION_PURE_TONE,
     DISTORTION_WHITE_NOISE,
-    PAL_64KHZ_CLOCK,
 )
 from atari_music.ir import (
     IRInstrument,
     IRNote,
     IRPattern,
     IRSong,
+    find_pitch_range_issues,
     frequency_to_audf_16bit,
     frequency_to_audf_8bit,
     midi_pitch_to_frequency,
     note_name_to_midi,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _note_to_midi(note: IRNote) -> Optional[int]:
@@ -199,19 +201,19 @@ def export_mads_asm(
                 # Its track data contains the high divider (AUDF2) and active note volume.
                 bass_notes = pat.tracks.get(1, [])
                 if not bass_notes:
-                    lines.append(f"    .byte $00, 32, $00  ; rest 32 ticks")
+                    lines.append(f"    .byte $00, {pat.rows:>2}, $00  ; rest ({pat.rows} rows)")
                     lines.append(f"    .byte $ff           ; end of track")
                     lines.append("")
                     continue
                 for note in bass_notes:
-                    dur = max(1, note.duration)
+                    dur = max(1, min(255, note.duration))
                     midi_val = _note_to_midi(note)
                     if note.is_rest or midi_val is None:
                         lines.append(f"    .byte $00, {dur:>2}, $00  ; rest ({dur} rows)")
                     else:
                         freq = midi_pitch_to_frequency(midi_val)
-                        div_low, div_hi = frequency_to_audf_16bit(freq)
-                        audf = min(254, div_hi)
+                        _, div_hi = frequency_to_audf_16bit(freq)
+                        audf = pokey_hw.clamp_audf_for_tracker(div_hi)
                         vol = min(15, max(0, note.volume))
                         lines.append(f"    .byte ${audf:02x}, {dur:>2}, ${vol:02x}  ; 16-bit hi {note.pitch or 'bass'} ({dur} rows)")
                 lines.append(f"    .byte $ff  ; end of track")
@@ -220,34 +222,37 @@ def export_mads_asm(
 
             track_notes = pat.tracks.get(ch, [])
             if not track_notes:
-                # 32 rows of rest
-                lines.append(f"    .byte $00, 32, $00  ; rest 32 ticks")
+                # Empty channel: rest for the full pattern so channels stay aligned
+                # (previously hardcoded to 32 rows regardless of pat.rows).
+                lines.append(f"    .byte $00, {pat.rows:>2}, $00  ; rest ({pat.rows} rows)")
                 lines.append(f"    .byte $ff           ; end of track")
                 lines.append("")
                 continue
 
             for note in track_notes:
-                dur = max(1, note.duration)
+                dur = max(1, min(255, note.duration))
                 midi_val = _note_to_midi(note)
-                if note.is_rest:
+                unpitched_perc = pokey_hw.is_unpitched_percussion(midi_val, note.channel_role)
+                if note.is_rest or (midi_val is None and not unpitched_perc):
+                    # No resolvable pitch -> silence. Kept identical to the WAV frame
+                    # compiler so both outputs agree (previously a hardcoded AUDF).
                     audf = 0
                     vol = 0
-                elif midi_val is not None:
+                elif unpitched_perc:
+                    # Unpitched percussion: explicit fallback divider shared with the
+                    # WAV frame compiler (previously silence here, MIDI 60 in the WAV).
+                    audf = pokey_hw.clamp_audf_for_tracker(pokey_hw.PERCUSSION_DEFAULT_AUDF)
+                    vol = min(15, max(0, note.volume))
+                else:
                     freq = midi_pitch_to_frequency(midi_val)
                     if song.uses_16bit_bass and ch == 1:
                         # 16-bit bass channel 1: low byte divider, muted volume
-                        div_low, div_hi = frequency_to_audf_16bit(freq)
-                        audf = min(254, div_low)
+                        div_low, _ = frequency_to_audf_16bit(freq)
+                        audf = pokey_hw.clamp_audf_for_tracker(div_low)
                         vol = 0
                     else:
-                        audf = min(254, max(0, frequency_to_audf_8bit(freq)))
+                        audf = pokey_hw.clamp_audf_for_tracker(frequency_to_audf_8bit(freq))
                         vol = min(15, max(0, note.volume))
-                elif note.channel_role == "percussion":
-                    vol = min(15, max(0, note.volume))
-                    audf = 12 if vol >= 14 else (24 if vol >= 11 else 8)
-                else:
-                    audf = 0
-                    vol = 0
 
                 comment = f"; {note.pitch or 'rest'} ({dur} rows)" if not note.is_rest else f"; rest ({dur} rows)"
                 lines.append(f"    .byte ${audf:02x}, {dur:>2}, ${vol:02x}  {comment}")
@@ -256,6 +261,23 @@ def export_mads_asm(
             lines.append("")
 
     content = "\n".join(lines) + "\n"
+
+    # Warn (never fail) when notes fall below the 8-bit range: POKEY will clamp them
+    # to AUDF ``AUDF_TRACKER_MAX`` and the result is silently sharp.
+    pitch_issues = find_pitch_range_issues(song)
+    if pitch_issues:
+        worst = max(pitch_issues, key=lambda issue: abs(float(issue["cents"])))
+        logger.warning(
+            "%d note(s) below the 8-bit POKEY range — e.g. %s: %.1f Hz requested, "
+            "%.1f Hz representable (AUDF $%02x) = %+.0f cents in 8-bit mode; "
+            "16-bit bass or a higher register would avoid the detuning.",
+            len(pitch_issues),
+            worst["pitch"],
+            worst["requested_hz"],
+            worst["representable_hz"],
+            pokey_hw.AUDF_TRACKER_MAX,
+            worst["cents"],
+        )
 
     if output_path:
         out_p = Path(output_path)

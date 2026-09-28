@@ -55,14 +55,20 @@ def map_instrument_character(
     """Map semantic character string to POKEY distortion, ADSR envelope, and channel role."""
     char = (inst_def.character or "bright_lead").strip().lower()
 
-    if "bass" in char:
-        role = ChannelRole.BASS
-        default_dist = DISTORTION_PURE_TONE if is_16bit_bass else DISTORTION_4BIT_POLY
-        default_env = IREnvelope(attack_frames=0, decay_frames=4, sustain_vol=11, release_frames=2)
-    elif "percussion" in char or "noise" in char or "drum" in char:
+    if any(k in char for k in ("kick", "tom", "thud")):
+        # Low membrane percussion -> poly4 (the classic POKEY kick/tom buzz).
+        role = ChannelRole.PERCUSSION
+        default_dist = DISTORTION_4BIT_POLY
+        default_env = IREnvelope(attack_frames=0, decay_frames=4, sustain_vol=6, release_frames=3)
+    elif any(k in char for k in ("percussion", "noise", "drum", "snare", "hihat", "hat", "cymbal", "clap", "shake")):
+        # POKEY's real noise generator is $80 (poly9/poly17 direct). $E0 is NOT noise.
         role = ChannelRole.PERCUSSION
         default_dist = DISTORTION_WHITE_NOISE
         default_env = IREnvelope(attack_frames=0, decay_frames=3, sustain_vol=8, release_frames=2)
+    elif "bass" in char:
+        role = ChannelRole.BASS
+        default_dist = DISTORTION_PURE_TONE if is_16bit_bass else DISTORTION_4BIT_POLY
+        default_env = IREnvelope(attack_frames=0, decay_frames=4, sustain_vol=11, release_frames=2)
     elif "dark" in char or "pad" in char or "drone" in char:
         role = ChannelRole.HARMONY
         default_dist = DISTORTION_PURE_TONE
@@ -218,6 +224,50 @@ def interpret_composition_to_music_ir(doc: AICompositionDoc) -> MusicSong:
 # Level 2 Translation: MusicSong + AI Doc -> POKEY IR (IRSong)
 # =============================================================================
 
+def _resolve_channel_instrument(
+    ai_pat: Optional[AIPatternDef],
+    ch_idx: int,
+    ai_has_zero: bool,
+    track: SymbolicTrack,
+    ir_instruments: List[IRInstrument],
+    inst_id_to_int: Dict[str, int],
+) -> int:
+    """Resolve the single instrument used by one channel.
+
+    The 6502 player writes AUDC distortion once per channel, so a track cannot
+    change instrument mid-channel. We pick one instrument per channel,
+    deterministically: the first non-rest event's instrument, else the first
+    event's instrument, else a role-based default.
+    """
+    if ai_pat is not None:
+        for orig_k, ev_list in ai_pat.channels.items():
+            if not ev_list or normalize_channel_idx(orig_k, has_zero=ai_has_zero) != ch_idx:
+                continue
+            chosen = None
+            for ev in ev_list:
+                is_rest = (ev.note is None) or str(ev.note).upper() in ("---", "REST", "OFF", "SIL", "")
+                if not is_rest and ev.instrument in inst_id_to_int:
+                    chosen = ev.instrument
+                    break
+            if chosen is None and ev_list[0].instrument in inst_id_to_int:
+                chosen = ev_list[0].instrument
+            if chosen is not None:
+                return inst_id_to_int[chosen]
+            break
+
+    role_map = {
+        ChannelRole.PERCUSSION: "percussion",
+        ChannelRole.BASS: "bass",
+        ChannelRole.HARMONY: "harmony",
+    }
+    wanted = role_map.get(track.role)
+    if wanted:
+        for inst in ir_instruments:
+            if inst.role == wanted:
+                return inst.id
+    return ir_instruments[0].id if ir_instruments else 0
+
+
 def compile_composition_to_pokey_ir(
     doc: AICompositionDoc,
     music_song: Optional[MusicSong] = None,
@@ -264,39 +314,24 @@ def compile_composition_to_pokey_ir(
 
         ai_has_zero = any(str(k).strip() == "0" for k in ai_pat.channels.keys()) if ai_pat else False
         for ch_idx, track in sp.tracks.items():
-            ir_notes: List[IRNote] = []
-            found_event_inst = False
-            for n in track.notes:
-                # Find matching instrument ID
-                inst_id = 0
-                if ai_pat and ch_idx in [normalize_channel_idx(k, has_zero=ai_has_zero) for k in ai_pat.channels.keys()]:
-                    # Find instrument referenced by channel events
-                    for orig_k, ev_list in ai_pat.channels.items():
-                        if normalize_channel_idx(orig_k, has_zero=ai_has_zero) == ch_idx and ev_list:
-                            first_inst_str = ev_list[0].instrument
-                            if first_inst_str in inst_id_to_int:
-                                inst_id = inst_id_to_int[first_inst_str]
-                                found_event_inst = True
-                                break
-                else:
-                    inst_id = 1 if ch_idx == 1 else (2 if ch_idx == 2 else (0 if ch_idx == 3 else 3))
-
-                # Handle percussion role if no explicit event instrument was matched
-                if not found_event_inst and track.role == ChannelRole.PERCUSSION:
-                    perc_id = next((inst.id for inst in ir_instruments if inst.role == "percussion" or inst.distortion == DISTORTION_WHITE_NOISE), 3)
-                    inst_id = perc_id
-
-                ir_notes.append(
-                    IRNote(
-                        pitch=n.pitch_name,
-                        midi_pitch=n.pitch,
-                        duration=n.duration,
-                        volume=n.velocity,
-                        instrument_id=inst_id,
-                        channel_role=track.role.value,
-                        is_rest=n.is_rest,
-                    )
+            # POKEY writes AUDC distortion once per channel, so a track uses exactly
+            # one instrument. Resolve it deterministically. This also documents the
+            # loss explicitly instead of silently taking the first event's instrument.
+            inst_id = _resolve_channel_instrument(
+                ai_pat, ch_idx, ai_has_zero, track, ir_instruments, inst_id_to_int
+            )
+            ir_notes = [
+                IRNote(
+                    pitch=n.pitch_name,
+                    midi_pitch=n.pitch,
+                    duration=n.duration,
+                    volume=n.velocity,
+                    instrument_id=inst_id,
+                    channel_role=track.role.value,
+                    is_rest=n.is_rest,
                 )
+                for n in track.notes
+            ]
             ir_tracks[ch_idx] = ir_notes
         pokey_patterns.append(IRPattern(id=sp.id, name=sp.name, rows=sp.rows, tracks=ir_tracks))
 

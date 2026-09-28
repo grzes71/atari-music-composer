@@ -299,7 +299,7 @@ def test_musical_invalid_loop_point(minimal_valid_doc):
 # =========================================================================
 
 def test_hardware_volume_out_of_range(minimal_valid_doc):
-    """Test D.1: Volume > 15 raises MusicIRValidationError."""
+    """Test D.1: Volume > 15 raises MusicIRValidationError (Tier-3 hardware validation)."""
     bad_doc = dict(minimal_valid_doc)
     bad_doc["patterns"] = [
         {
