@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from atari_music import pokey_hw
 from atari_music.constants import (
     AUDCTL_15KHZ,
     AUDCTL_9BIT_POLY,
@@ -23,11 +24,7 @@ from atari_music.constants import (
     AUDCTL_JOIN_1_2_16BIT,
     AUDCTL_JOIN_3_4_16BIT,
     DISTORTION_PURE_TONE,
-    DISTORTION_WHITE_NOISE,
     NOTE_NAMES,
-    PAL_15KHZ_CLOCK,
-    PAL_64KHZ_CLOCK,
-    PAL_CLOCK_HZ,
 )
 from atari_music.models import ChannelVoiceState, MusicalFeaturesSummary
 
@@ -46,38 +43,29 @@ def calculate_channel_frequency(
     audf_pair_low: Optional[int] = None,
 ) -> Tuple[Optional[float], float]:
     """Calculate fundamental frequency in Hz for a POKEY channel.
-    
+
+    Delegates to :mod:`atari_music.pokey_hw` so the decoder uses the same
+    hardware model as the generator.
+
     Returns:
         (frequency_hz, confidence_score)
     """
+    def _ok(freq: float, conf: float) -> Tuple[Optional[float], float]:
+        return (freq, conf) if 10.0 <= freq <= 20000.0 else (None, 0.0)
+
     # 16-bit paired mode: channel 2 (paired with 1) or channel 4 (paired with 3)
     if channel_idx == 2 and (audctl_val & AUDCTL_JOIN_1_2_16BIT) and audf_pair_low is not None:
         div_16 = audf_pair_low + (audf_val << 8)
-        if audctl_val & AUDCTL_CH1_179MHZ:
-            freq = PAL_CLOCK_HZ / (2.0 * (div_16 + 7))
-        else:
-            base = PAL_15KHZ_CLOCK if (audctl_val & AUDCTL_15KHZ) else PAL_64KHZ_CLOCK
-            freq = base / (2.0 * (div_16 + 2))
-        return (freq, 0.99) if 10.0 <= freq <= 20000.0 else (None, 0.0)
+        return _ok(pokey_hw.hz_from_audf_16bit(div_16, audctl_val, channel=1), 0.99)
 
     if channel_idx == 4 and (audctl_val & AUDCTL_JOIN_3_4_16BIT) and audf_pair_low is not None:
         div_16 = audf_pair_low + (audf_val << 8)
-        base = PAL_15KHZ_CLOCK if (audctl_val & AUDCTL_15KHZ) else PAL_64KHZ_CLOCK
-        freq = base / (2.0 * (div_16 + 2))
-        return (freq, 0.99) if 10.0 <= freq <= 20000.0 else (None, 0.0)
+        return _ok(pokey_hw.hz_from_audf_16bit(div_16, audctl_val, channel=3), 0.99)
 
-    # 8-bit modes
-    if channel_idx == 1 and (audctl_val & AUDCTL_CH1_179MHZ):
-        freq = PAL_CLOCK_HZ / (2.0 * (audf_val + 4))
-        return (freq, 0.98) if 10.0 <= freq <= 20000.0 else (None, 0.0)
-
-    if channel_idx == 3 and (audctl_val & AUDCTL_CH3_179MHZ):
-        freq = PAL_CLOCK_HZ / (2.0 * (audf_val + 4))
-        return (freq, 0.98) if 10.0 <= freq <= 20000.0 else (None, 0.0)
-
-    base = PAL_15KHZ_CLOCK if (audctl_val & AUDCTL_15KHZ) else PAL_64KHZ_CLOCK
-    freq = base / (2.0 * (audf_val + 1))
-    return (freq, 0.95) if 10.0 <= freq <= 20000.0 else (None, 0.0)
+    # 8-bit modes (high-speed clock handled inside the shared model)
+    freq = pokey_hw.hz_from_audf_8bit(audf_val, audctl_val, channel=channel_idx)
+    hs = channel_idx in (1, 3) and bool(audctl_val & (AUDCTL_CH1_179MHZ | AUDCTL_CH3_179MHZ))
+    return _ok(freq, 0.98 if hs else 0.95)
 
 
 def frequency_to_musical_pitch(freq_hz: Optional[float], distortion: int) -> Tuple[Optional[str], float, Optional[float], Optional[float]]:
@@ -85,8 +73,8 @@ def frequency_to_musical_pitch(freq_hz: Optional[float], distortion: int) -> Tup
     if freq_hz is None or freq_hz <= 15.0 or freq_hz > 18000.0:
         return None, 0.0, None, None
 
-    # Noise modes do not have musical pitches
-    if distortion in (DISTORTION_WHITE_NOISE, 0x80, 0x00):
+    # Noise modes do not have musical pitches (hardware-accurate decode)
+    if pokey_hw.is_noise_waveform(pokey_hw.decode_audc(distortion)):
         return None, 0.0, None, None
 
     # Calculate fractional MIDI pitch: A4 (69) = 440 Hz
@@ -137,7 +125,7 @@ def interpret_voice_state(
     elif channel_idx == 3 and (audctl & AUDCTL_JOIN_3_4_16BIT):
         is_16bit_high = True
 
-    is_noise = distortion == DISTORTION_WHITE_NOISE or volume_only
+    is_noise = volume_only or pokey_hw.is_noise_waveform(pokey_hw.decode_audc(audc))
 
     if not is_active or is_16bit_high:
         return ChannelVoiceState(

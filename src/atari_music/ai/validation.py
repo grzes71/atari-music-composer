@@ -20,7 +20,8 @@ from atari_music.ai.schema import (
     ValidationIssue,
     ValidationReport,
 )
-from atari_music.ir import note_name_to_midi
+from atari_music import pokey_hw
+from atari_music.ir import midi_pitch_to_frequency, note_name_to_midi
 
 
 # =============================================================================
@@ -49,6 +50,9 @@ INVALID_DISTORTION = "INVALID_DISTORTION"
 CHANNEL_OUT_OF_RANGE = "CHANNEL_OUT_OF_RANGE"
 VOLUME_OUT_OF_RANGE = "VOLUME_OUT_OF_RANGE"
 BASS16_CHANNEL_CONFLICT = "BASS16_CHANNEL_CONFLICT"
+
+# Warning-only code: the composition is still playable, but not at the requested pitch.
+PITCH_OUT_OF_8BIT_RANGE = "PITCH_OUT_OF_8BIT_RANGE"
 
 
 
@@ -260,8 +264,8 @@ def validate_hardware(doc: AICompositionDoc) -> None:
             f"Hardware channel count {doc.hardware.channels} exceeds POKEY physical limits (1..4 channels)."
         )
 
-    # 2. Check distortion across instruments
-    valid_distortions = {0, 2, 4, 6, 8, 10, 12, 14, 0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0}
+    # 2. Check distortion across instruments (must be a real AUDC bits 5..7 value)
+    valid_distortions = {0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0}
     for inst in doc.instruments:
         if inst.distortion is not None and inst.distortion not in valid_distortions:
             raise MusicIRValidationError(
@@ -596,7 +600,7 @@ def validate_composition_report(data: Union[Dict[str, Any], str, AICompositionDo
             details={"channels": doc.hardware.channels},
         )
 
-    valid_distortions = {0, 2, 4, 6, 8, 10, 12, 14, 0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0}
+    valid_distortions = {0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0}
     for inst_idx, inst in enumerate(doc.instruments):
         if inst.distortion is not None and inst.distortion not in valid_distortions:
             report.add_issue(
@@ -630,6 +634,52 @@ def validate_composition_report(data: Union[Dict[str, Any], str, AICompositionDo
                         message=f"[Pattern '{pat.id}', Channel {ch_idx}, Step {ev.step}]: Volume {ev.volume} exceeds POKEY 4-bit volume range [0..15].",
                         path=f"patterns[{pat.id}].channels[{ch_key}].events[{ev_idx}].volume",
                         details={"pattern": pat.id, "channel": ch_idx, "step": ev.step, "volume": ev.volume},
+                    )
+
+    # -------------------------------------------------------------------------
+    # Tier 3 (non-fatal): 8-bit pitch range
+    # -------------------------------------------------------------------------
+    # The 8-bit divider cannot encode arbitrarily low notes: the tracker reserves
+    # AUDF $FF as its end-of-track marker, so the floor is $FE (~124.19 Hz). Lower
+    # notes still play, but POKEY clamps them and they come out audibly sharp. That
+    # is lossy, not invalid, so it is recorded as a warning — it must never fail
+    # validation nor trigger composition repair.
+    if not doc.hardware.use_16bit_bass:
+        for pat in doc.patterns:
+            has_zero = any(str(k).strip() == "0" for k in pat.channels.keys())
+            for ch_key, events in pat.channels.items():
+                try:
+                    ch_idx = normalize_channel_idx(ch_key, has_zero=has_zero)
+                except Exception:
+                    continue
+                for ev_idx, ev in enumerate(events):
+                    if not ev.note:
+                        continue
+                    midi = note_name_to_midi(ev.note)
+                    if midi is None:
+                        continue
+                    info = pokey_hw.describe_8bit_range_error(midi_pitch_to_frequency(midi))
+                    if info is None:
+                        continue
+                    report.add_warning(
+                        category="hardware",
+                        code=PITCH_OUT_OF_8BIT_RANGE,
+                        message=(
+                            f"[Pattern '{pat.id}', Channel {ch_idx}, Step {ev.step}]: Note {ev.note} "
+                            f"({info['requested_hz']:.1f} Hz) is below the 8-bit POKEY range "
+                            f"({pokey_hw.eight_bit_floor_hz():.1f} Hz minimum). It will be clamped to "
+                            f"AUDF $fe = {info['representable_hz']:.1f} Hz, i.e. {info['cents']:+.0f} cents "
+                            "sharp. Use 16-bit bass or a higher register to keep the intended pitch."
+                        ),
+                        path=f"patterns[{pat.id}].channels[{ch_key}].events[{ev_idx}].note",
+                        details={
+                            "pattern": pat.id,
+                            "channel": ch_idx,
+                            "step": ev.step,
+                            "note": ev.note,
+                            "midi_pitch": midi,
+                            **info,
+                        },
                     )
 
     if doc.hardware.use_16bit_bass:

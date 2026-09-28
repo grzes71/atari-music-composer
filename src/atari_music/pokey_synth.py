@@ -2,12 +2,13 @@
 
 Simulates POKEY hardware audio generation directly from a stream of 50 Hz register writes:
 - 4 independent monophonic channels
-- Distortion modes:
-    * $A0: Pure tone (50% duty square wave)
-    * $C0: 4-bit polynomial LFSR (15 states, buzzing lead/snare)
-    * $20 / $60: 5-bit polynomial LFSR (31 states, gritty metallic lead)
-    * $E0 / $80: 17-bit / 9-bit LFSR (white noise, hi-hats, explosions)
-    * $00: 5-bit + 17-bit composite poly (deep rumble)
+- Distortion modes are decoded by :mod:`atari_music.pokey_hw` (hardware truth):
+    * $A0 / $E0: pure tone (PURETONE outranks POLY4, so $E0 == $A0)
+    * $C0:       poly4 direct (15-step buzz)
+    * $20 / $60: poly5-gated pure tone (buzzy; $60 == $20)
+    * $40:       poly5-gated poly4
+    * $80:       poly9/poly17 direct — the real ungated noise mode
+    * $00:       poly5-gated poly9/poly17
 - 16-bit channel pairing (CH1 + CH2 joined in AUDCTL)
 - 4-bit non-linear POKEY DAC ladder
 - Direct export to standard 16-bit PCM WAV at 44.1 kHz
@@ -22,19 +23,10 @@ import wave
 
 import numpy as np
 
+from atari_music import pokey_hw
 from atari_music.constants import (
-    AUDCTL_15KHZ,
     AUDCTL_9BIT_POLY,
-    AUDCTL_CH1_179MHZ,
     AUDCTL_JOIN_1_2_16BIT,
-    DISTORTION_4BIT_POLY,
-    DISTORTION_5BIT_POLY_1,
-    DISTORTION_5BIT_POLY_2,
-    DISTORTION_PURE_TONE,
-    DISTORTION_WHITE_NOISE,
-    PAL_15KHZ_CLOCK,
-    PAL_64KHZ_CLOCK,
-    PAL_CLOCK_HZ,
 )
 
 # 4-bit polynomial sequence (15 states)
@@ -128,7 +120,6 @@ def render_pokey_samples(
             audf = int(f_row[ch * 2])
             audc = int(f_row[ch * 2 + 1])
             vol = audc & 0x0F
-            dist = audc & 0xE0
 
             if vol == 0:
                 continue
@@ -139,62 +130,55 @@ def render_pokey_samples(
                 continue
 
             if is_16bit_1_2 and ch == 1:
-                # 16-bit paired mode
-                div_low = int(f_row[0])
-                div_hi = int(f_row[2])
-                div16 = div_low + (div_hi << 8)
-                if audctl & AUDCTL_CH1_179MHZ:
-                    freq = PAL_CLOCK_HZ / (2.0 * (div16 + 7))
-                else:
-                    base = PAL_15KHZ_CLOCK if (audctl & AUDCTL_15KHZ) else PAL_64KHZ_CLOCK
-                    freq = base / (2.0 * (div16 + 2))
+                # 16-bit paired mode (shared POKEY model)
+                div16 = int(f_row[0]) + (int(f_row[2]) << 8)
+                freq = pokey_hw.hz_from_audf_16bit(div16, audctl)
             else:
-                # Standard 8-bit mode
-                base = PAL_15KHZ_CLOCK if (audctl & AUDCTL_15KHZ) else PAL_64KHZ_CLOCK
-                freq = base / (2.0 * (audf + 1))
+                # Standard 8-bit mode (shared POKEY model)
+                freq = pokey_hw.hz_from_audf_8bit(audf, audctl, channel=ch + 1)
 
             freq = max(10.0, min(freq, 20000.0))
             amp = POKEY_DAC[vol]
 
-            # Generate waveform based on distortion mode
+            waveform = pokey_hw.decode_audc(audc)
+            if waveform == pokey_hw.Waveform.VOLUME_ONLY:
+                continue
+
+            # Generate waveform based on the generator POKEY actually uses
             delta_phase = 2.0 * math.pi * freq * (samples_per_frame / sample_rate)
             phase_seq = ch_phases[ch] + 2.0 * math.pi * freq * t_frame
             ch_phases[ch] = (ch_phases[ch] + delta_phase) % (2.0 * math.pi)
+            poly5_idx = (phase_seq * (31.0 / (2.0 * math.pi))).astype(np.int64) % 31
+            poly4_idx = (phase_seq * (15.0 / (2.0 * math.pi))).astype(np.int64) % 15
+            use_9bit = bool(audctl & AUDCTL_9BIT_POLY)
+            noise_seq = POLY9_SEQ if use_9bit else POLY17_SEQ
+            poly_len = 511 if use_9bit else 131071
 
-            if dist == DISTORTION_PURE_TONE:
-                # Pure 50% square wave ($A0)
+            if waveform == pokey_hw.Waveform.PURE_TONE:
                 wave_samples = np.where(np.sin(phase_seq) >= 0.0, 1.0, -1.0)
-            elif dist == DISTORTION_4BIT_POLY:
-                # 4-bit poly buzz ($C0)
-                poly_idx = (phase_seq * (15.0 / (2.0 * math.pi))).astype(np.int64) % 15
-                wave_samples = POLY4_SEQ[poly_idx] * 2.0 - 1.0
-            elif dist in (DISTORTION_5BIT_POLY_1, DISTORTION_5BIT_POLY_2):
-                # 5-bit poly metallic ($20 / $60)
-                poly_idx = (phase_seq * (31.0 / (2.0 * math.pi))).astype(np.int64) % 31
-                wave_samples = POLY5_SEQ[poly_idx] * 2.0 - 1.0
-            elif dist in (DISTORTION_WHITE_NOISE, 0x80):
-                # White noise ($E0 / $80) clocked at AUDF divider rate
-                use_9bit = bool(audctl & AUDCTL_9BIT_POLY)
-                poly_seq = POLY9_SEQ if use_9bit else POLY17_SEQ
-                poly_len = 511 if use_9bit else 131071
+            elif waveform == pokey_hw.Waveform.POLY4:
+                wave_samples = POLY4_SEQ[poly4_idx] * 2.0 - 1.0
+            elif waveform == pokey_hw.Waveform.POLY9_17:
                 step_seq = (ch_lfsr_steps[ch] + (2.0 * freq) * t_frame).astype(np.int64)
-                wave_samples = poly_seq[step_seq % poly_len]
+                wave_samples = noise_seq[step_seq % poly_len]
+            elif waveform == pokey_hw.Waveform.POLY5_GATED_PURE:
+                wave_samples = POLY5_SEQ[poly5_idx] * 2.0 - 1.0
+            elif waveform == pokey_hw.Waveform.POLY5_GATED_POLY4:
+                # poly5 gates a sample-and-hold of poly4
+                gate = POLY5_SEQ[poly5_idx] > 0.5
+                body = POLY4_SEQ[poly4_idx] * 2.0 - 1.0
+                src = np.where(gate, np.arange(gate.shape[0]), 0)
+                np.maximum.accumulate(src, out=src)
+                wave_samples = body[src]
+            else:  # POLY5_GATED_POLY9_17
+                noise_samples = noise_seq[
+                    (ch_lfsr_steps[ch] + (2.0 * freq) * t_frame).astype(np.int64) % poly_len
+                ]
+                wave_samples = (POLY5_SEQ[poly5_idx] * 2.0 - 1.0) * noise_samples
+
+            if waveform in (pokey_hw.Waveform.POLY9_17, pokey_hw.Waveform.POLY5_GATED_POLY9_17):
                 delta_steps = (2.0 * freq) * (samples_per_frame / sample_rate)
                 ch_lfsr_steps[ch] = (ch_lfsr_steps[ch] + delta_steps) % poly_len
-            elif dist == 0x00:
-                # Composite 5-bit + noise ($00) clocked at AUDF divider rate
-                poly_idx = (phase_seq * (31.0 / (2.0 * math.pi))).astype(np.int64) % 31
-                use_9bit = bool(audctl & AUDCTL_9BIT_POLY)
-                poly_seq = POLY9_SEQ if use_9bit else POLY17_SEQ
-                poly_len = 511 if use_9bit else 131071
-                step_seq = (ch_lfsr_steps[ch] + (2.0 * freq) * t_frame).astype(np.int64)
-                noise_samples = poly_seq[step_seq % poly_len]
-                wave_samples = (POLY5_SEQ[poly_idx] * 2.0 - 1.0) * noise_samples
-                delta_steps = (2.0 * freq) * (samples_per_frame / sample_rate)
-                ch_lfsr_steps[ch] = (ch_lfsr_steps[ch] + delta_steps) % poly_len
-            else:
-                # Fallback square wave
-                wave_samples = np.where(np.sin(phase_seq) >= 0.0, 1.0, -1.0)
 
             audio_mix[s_start:s_end] += wave_samples * amp
 

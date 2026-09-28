@@ -18,25 +18,49 @@ POKEY_REGS = [
     "AUDCTL",
 ]
 
-# Distortion / Noise Modes (AUDC bits 5..7: 0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0)
-DISTORTION_PURE_TONE = 0xA0
-DISTORTION_WHITE_NOISE = 0xE0
-DISTORTION_4BIT_POLY = 0xC0
-DISTORTION_5BIT_POLY_1 = 0x20
-DISTORTION_5BIT_POLY_2 = 0x60
-DISTORTION_5_AND_4BIT = 0x40
-DISTORTION_5_AND_17BIT = 0x00
-DISTORTION_17BIT_ONLY = 0x80
+# Distortion / Noise Modes — hardware-accurate (AUDC bits 5..7).
+#
+# Verified against two independent reference emulators: atari800 `pokeysnd.c`
+# (Ron Fries) and `mzpokeysnd.c` (Borisov / Nikiel). Both decode AUDC bits as:
+#
+#   bit7 NOTPOLY5 = 1:  bit5 PURETONE=1 -> pure tone
+#                       else bit6 POLY4=1 -> poly4
+#                       else              -> poly9/poly17 (noise)
+#   bit7 NOTPOLY5 = 0:  bit5 PURETONE=1 -> poly5-gated pure tone
+#                       else bit6 POLY4=1 -> poly5-gated poly4
+#                       else              -> poly5-gated poly9/poly17
+#
+# Consequences that matter for this project:
+#   * $A0 and $E0 are AUDIBLY IDENTICAL (PURETONE outranks POLY4) -> both pure tone.
+#     POKEY has NO white-noise mode at $E0.
+#   * $20 and $60 are AUDIBLY IDENTICAL (both poly5-gated pure tone).
+#   * $80 is the ONLY true ungated noise mode (poly9/poly17 direct).
+DISTORTION_5_AND_17BIT = 0x00   # poly5-gated poly9/17 (gated noise)
+DISTORTION_5BIT_POLY_1 = 0x20   # poly5-gated pure tone
+DISTORTION_5_AND_4BIT = 0x40    # poly5-gated poly4
+DISTORTION_5BIT_POLY_2 = 0x60   # poly5-gated pure tone (== $20)
+DISTORTION_WHITE_NOISE = 0x80   # poly9/poly17 direct — the real noise mode
+DISTORTION_17BIT_ONLY = 0x80    # legacy alias of DISTORTION_WHITE_NOISE
+DISTORTION_PURE_TONE = 0xA0     # pure tone (clean square)
+DISTORTION_4BIT_POLY = 0xC0     # poly4 direct (15-step buzz)
+DISTORTION_PURE_TONE_ALT = 0xE0  # pure tone (== $A0)
+
+# AUDC bit masks
+AUDC_VOLUME_MASK = 0x0F
+AUDC_VOLUME_ONLY = 0x10
+AUDC_PURETONE = 0x20
+AUDC_POLY4 = 0x40
+AUDC_NOTPOLY5 = 0x80
 
 DISTORTION_DESCRIPTIONS = {
-    0x00: "5-bit + 17-bit poly (buzzy rumble / bass)",
-    0x20: "5-bit poly (metallic gritty lead/bass)",
-    0x40: "5-bit + 4-bit poly (flute/buzz)",
-    0x60: "5-bit poly (metallic lead)",
-    0x80: "17-bit poly (deep noise)",
-    0xA0: "Pure Tone (clean melodic square wave)",
-    0xC0: "4-bit poly (smooth buzz / chiptune lead/snare)",
-    0xE0: "17-bit / 9-bit white noise (hi-hat / cymbal / drum)",
+    0x00: "poly5-gated poly9/17 (gated noise)",
+    0x20: "poly5-gated pure tone (buzzy)",
+    0x40: "poly5-gated poly4",
+    0x60: "poly5-gated pure tone (== $20)",
+    0x80: "poly9/17 direct (ungated noise)",
+    0xA0: "pure tone (clean square)",
+    0xC0: "poly4 direct (15-step buzz)",
+    0xE0: "pure tone (== $A0)",
 }
 
 # AUDCTL Control Bits

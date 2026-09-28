@@ -1033,15 +1033,14 @@ def test_mads_export_percussion_consistency():
     """Regression test: MADS export matches POKEY IR and WAV renderer semantics for percussion channel.
 
     Verifies that:
-    1. CH3 uses the 'perc' instrument and its distortion ($E0).
+    1. CH3 uses the 'perc' instrument and its distortion ($80 = real POKEY noise).
     2. CH3 does not overwrite note pitch (A2) with hardcoded AUDF=8.
-    3. CH3 AUDF matches the POKEY IR pitch conversion (min(254, frequency_to_audf_8bit) = $fe).
+    3. CH3 AUDF matches a HAND-COMPUTED divider (not the production helper).
     4. Channels 1 and 2 remain unaffected with their correct instruments and notes.
     """
     from atari_music.ai.client import generate_music_from_composition
     from atari_music.ai.schema import AICompositionDoc
     from atari_music.constants import DISTORTION_WHITE_NOISE
-    from atari_music.ir import frequency_to_audf_8bit, midi_pitch_to_frequency
     from atari_music.mads_exporter import export_mads_asm
 
     doc_dict = {
@@ -1103,7 +1102,7 @@ def test_mads_export_percussion_consistency():
     assert "$a0" in inst_section[0] and "Lead" in inst_section[0]
     # Ch 2 -> Bass ($c0)
     assert "$c0" in inst_section[1] and "Bass" in inst_section[1]
-    # Ch 3 -> Comic Thud ($e0) - must preserve distortion from IRInstrument!
+    # Ch 3 -> Comic Thud noise ($80) - must preserve distortion from IRInstrument!
     assert f"${DISTORTION_WHITE_NOISE:02x}" in inst_section[2]
     assert "Comic Thud" in inst_section[2]
 
@@ -1123,8 +1122,14 @@ def test_mads_export_percussion_consistency():
     # Must NOT be hardcoded $08
     assert "$08" not in first_ch3_note, "CH3 note pitch was hardcoded to AUDF=8!"
 
-    # 3. Verify AUDF matches POKEY IR
-    expected_audf = min(254, max(0, frequency_to_audf_8bit(midi_pitch_to_frequency(45))))
+    # 3. Verify AUDF matches a HAND-COMPUTED POKEY divider.
+    #    PAL base = 1773447/28 Hz; AUDF = round(base/(2*f)) - 1; the tracker clamps
+    #    to $FE because $FF is the end-of-track marker. A2 = 110 Hz -> 287 -> $FE.
+    #    (Deliberately NOT calling the production helper, so this test cannot pass
+    #    merely because the code agrees with itself.)
+    a2_hz = 440.0 * 2.0 ** ((45 - 69) / 12.0)
+    expected_audf = min(0xFE, max(0, round((1773447.0 / 28.0) / (2.0 * a2_hz)) - 1))
+    assert expected_audf == 0xFE
     assert f"${expected_audf:02x}" in first_ch3_note
     assert "2" in first_ch3_note  # duration 2
     assert "$0a" in first_ch3_note  # volume 10
@@ -1152,13 +1157,13 @@ def test_mads_export_percussion_consistency():
                 break
             ch2_lines.append(line.strip())
 
-    # Ch 1 note: A4 -> AUDF 71 ($47), duration 4, volume 12 ($0c)
-    a4_audf = min(254, max(0, frequency_to_audf_8bit(midi_pitch_to_frequency(69))))
+    # Ch 1 note: A4 (440 Hz) -> hand-computed AUDF 71 ($47), duration 4, volume 12 ($0c)
+    a4_audf = min(0xFE, max(0, round((1773447.0 / 28.0) / (2.0 * 440.0)) - 1))
+    assert a4_audf == 0x47
     assert f"${a4_audf:02x}" in ch1_lines[0]
     assert "$0c" in ch1_lines[0]
 
-    # Ch 2 note: A2 -> AUDF 254 ($fe), duration 8, volume 10 ($0a)
-    a2_audf = min(254, max(0, frequency_to_audf_8bit(midi_pitch_to_frequency(45))))
-    assert f"${a2_audf:02x}" in ch2_lines[0]
+    # Ch 2 note: A2 (110 Hz) -> hand-computed AUDF 254 ($fe), duration 8, volume 10 ($0a)
+    assert f"${expected_audf:02x}" in ch2_lines[0]
     assert "$0a" in ch2_lines[0]
 

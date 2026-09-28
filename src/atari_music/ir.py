@@ -15,21 +15,18 @@ Compiled to:
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from pydantic import BaseModel, Field
 
+from atari_music import pokey_hw
 from atari_music.constants import (
     AUDCTL_JOIN_1_2_16BIT,
-    DISTORTION_4BIT_POLY,
     DISTORTION_PURE_TONE,
-    DISTORTION_WHITE_NOISE,
     NOTE_NAMES,
     PAL_64KHZ_CLOCK,
-    PAL_CLOCK_HZ,
 )
 
 
@@ -42,7 +39,16 @@ class IREnvelope(BaseModel):
 
 
 class IRMacroStep(BaseModel):
-    """Micro-envelope step for percussion or ornaments."""
+    """Micro-envelope step for percussion or ornaments.
+
+    RESERVED — not rendered and not exported. The 6502 player sets AUDC once per
+    channel and has no per-frame pitch modulation, and the tracker format has no
+    macro encoding, so macro steps would make the WAV preview diverge from what the
+    Atari actually plays (see ``_render_note_to_frames``). Percussion is still
+    audible because an unpitched hit now falls back to
+    ``pokey_hw.PERCUSSION_DEFAULT_AUDF`` with the instrument's own distortion and
+    envelope; only the per-step sweep/volume ramp is missing.
+    """
     audf_offset: int = 0
     distortion: int = DISTORTION_PURE_TONE
     volume: int = 15
@@ -55,7 +61,7 @@ class IRInstrument(BaseModel):
     distortion: int = DISTORTION_PURE_TONE
     role: str = "melody"  # "melody", "bass", "harmony", "percussion"
     envelope: IREnvelope = Field(default_factory=IREnvelope)
-    macro: Optional[List[IRMacroStep]] = None
+    macro: Optional[List[IRMacroStep]] = None  # RESERVED: not rendered/exported, see IRMacroStep
     vibrato_depth: int = 0
     vibrato_speed: int = 0
     is_16bit: bool = False
@@ -152,20 +158,31 @@ def note_name_to_midi(name: str) -> Optional[int]:
 
 
 def frequency_to_audf_8bit(freq_hz: float, base_clock: float = PAL_64KHZ_CLOCK) -> int:
-    """Calculate 8-bit AUDF register value for a given frequency."""
+    """Calculate 8-bit AUDF register value for a given frequency.
+
+    Delegates to :mod:`atari_music.pokey_hw` so this is the single definition
+    shared with the WAV renderer and the MADS exporter.
+    """
+    if base_clock == PAL_64KHZ_CLOCK:
+        return pokey_hw.audf_from_hz_8bit(freq_hz)
     if freq_hz <= 0:
         return 255
-    audf = int(round(base_clock / (2.0 * freq_hz))) - 1
-    return max(0, min(255, audf))
+    return max(0, min(255, int(round(base_clock / (2.0 * freq_hz))) - 1))
 
 
 def frequency_to_audf_16bit(freq_hz: float, base_clock: float = PAL_64KHZ_CLOCK) -> Tuple[int, int]:
-    """Calculate 16-bit joined AUDF values (low_ch1, high_ch2)."""
+    """Calculate 16-bit joined AUDF values (low_ch1, high_ch2).
+
+    Hardware divider is ``round(base/(2*f)) - 1`` (offset ``+1``), NOT ``-2``.
+    """
+    if base_clock == PAL_64KHZ_CLOCK:
+        if freq_hz <= 0:
+            return 255, 255
+        return pokey_hw.split_audf16(pokey_hw.audf16_from_hz(freq_hz))
     if freq_hz <= 0:
         return 255, 255
-    div16 = int(round(base_clock / (2.0 * freq_hz))) - 2
-    div16 = max(0, min(65535, div16))
-    return (div16 & 0xFF), ((div16 >> 8) & 0xFF)
+    divider = max(0, min(65535, int(round(base_clock / (2.0 * freq_hz))) - 1))
+    return pokey_hw.split_audf16(divider)
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +249,39 @@ def compile_ir_to_pokey_frames(song: IRSong) -> np.ndarray:
     return frames
 
 
+def find_pitch_range_issues(song: IRSong) -> List[Dict[str, Any]]:
+    """List notes whose pitch cannot be represented in 8-bit POKEY mode.
+
+    Only genuine out-of-range requests are reported (see
+    :func:`atari_music.pokey_hw.describe_8bit_range_error`); ordinary AUDF rounding
+    is never flagged. Channels joined as 16-bit bass are skipped because that pair
+    has a much wider range.
+    """
+    issues: List[Dict[str, Any]] = []
+    for pat in song.patterns:
+        for ch, notes in pat.tracks.items():
+            if song.uses_16bit_bass and ch in (1, 2):
+                continue
+            for note in notes:
+                if note.is_rest:
+                    continue
+                midi = note.midi_pitch
+                if midi is None and note.pitch:
+                    midi = note_name_to_midi(str(note.pitch))
+                if midi is None:
+                    continue
+                info = pokey_hw.describe_8bit_range_error(midi_pitch_to_frequency(midi))
+                if info:
+                    issues.append({
+                        "pattern": pat.name,
+                        "channel": ch,
+                        "pitch": note.pitch,
+                        "midi_pitch": midi,
+                        **info,
+                    })
+    return issues
+
+
 def _render_note_to_frames(
     frames: np.ndarray,
     ch: int,
@@ -242,7 +292,12 @@ def _render_note_to_frames(
     song: IRSong,
 ) -> None:
     """Render a single note event across frame range into POKEY register buffer."""
-    if note.is_rest or (note.midi_pitch is None and not note.pitch and note.channel_role != "percussion"):
+    midi_val = note.midi_pitch
+    if midi_val is None and note.pitch:
+        midi_val = note_name_to_midi(str(note.pitch))
+    unpitched_percussion = pokey_hw.is_unpitched_percussion(midi_val, note.channel_role)
+
+    if note.is_rest or (midi_val is None and not unpitched_percussion):
         # Channel is silent
         audc_col = (ch - 1) * 2 + 1
         frames[start_f:end_f, audc_col] = 0
@@ -253,72 +308,46 @@ def _render_note_to_frames(
     peak_vol = min(15, max(0, note.volume))
     note_len = end_f - start_f
 
-    # Handle percussion macro if present
-    if inst and inst.macro and len(inst.macro) > 0:
-        macro_len = len(inst.macro)
-        for offset in range(note_len):
-            f_idx = start_f + offset
-            if f_idx >= end_f:
-                break
-            step_idx = min(offset, macro_len - 1)
-            step = inst.macro[step_idx]
-            
-            # Apply macro parameters
-            audf_col = (ch - 1) * 2
-            audc_col = (ch - 1) * 2 + 1
-            
-            macro_audf = max(0, min(255, step.audf_offset))
-            macro_vol = min(15, max(0, step.volume))
-            frames[f_idx, audf_col] = macro_audf
-            frames[f_idx, audc_col] = (step.distortion & 0xE0) | macro_vol
-        return
-
-    # Standard melodic note
-    base_midi = note.midi_pitch if note.midi_pitch is not None else (note_name_to_midi(note.pitch or "") or 60)
+    # NOTE: IRNote.vibrato/slide/arpeggio and IRInstrument.macro are intentionally
+    # NOT rendered. The 6502 player sets AUDC distortion once per channel and has
+    # no per-frame pitch modulation, so applying them here would make the WAV
+    # preview diverge from what real hardware plays. They are reserved fields.
     envelope = inst.envelope if inst else IREnvelope()
+    volumes = pokey_hw.player_envelope_volumes(
+        note_len,
+        song.frames_per_tick,
+        peak_vol,
+        envelope.attack_frames,
+        envelope.decay_frames,
+        envelope.sustain_vol,
+        envelope.release_frames,
+    )
+    current_freq = 0.0 if unpitched_percussion else midi_pitch_to_frequency(midi_val)
+
+    audf_col = (ch - 1) * 2
+    audc_col = (ch - 1) * 2 + 1
 
     for offset in range(note_len):
         f_idx = start_f + offset
         if f_idx >= end_f:
             break
+        vol = volumes[offset]
 
-        # Calculate ADSR volume
-        vol = _calculate_envelope_volume(offset, note_len, peak_vol, envelope)
-
-        # Arpeggio / pitch offsets
-        pitch_mod = 0
-        if note.arpeggio_offsets and len(note.arpeggio_offsets) > 0:
-            arp_idx = (offset // 2) % len(note.arpeggio_offsets)
-            pitch_mod += note.arpeggio_offsets[arp_idx]
-
-        # Pitch slide
-        if note.slide_semitones != 0 and note_len > 1:
-            pitch_mod += int(round(note.slide_semitones * (offset / (note_len - 1))))
-
-        # Vibrato
-        if inst and inst.vibrato_depth > 0 and inst.vibrato_speed > 0 and offset > envelope.attack_frames:
-            vib_phase = (offset * inst.vibrato_speed * 0.3)
-            vib_offset = math.sin(vib_phase) * (inst.vibrato_depth * 0.1)
-        else:
-            vib_offset = 0.0
-
-        current_freq = midi_pitch_to_frequency(base_midi + pitch_mod + vib_offset)
-
-        audf_col = (ch - 1) * 2
-        audc_col = (ch - 1) * 2 + 1
-
-        # Check 16-bit bass pairing (CH1 + CH2)
-        if song.uses_16bit_bass and (ch in (1, 2)):
+        if unpitched_percussion:
+            # Explicit fallback: a real percussive hit, never an implicit MIDI 60.
+            frames[f_idx, audf_col] = pokey_hw.PERCUSSION_DEFAULT_AUDF
+            frames[f_idx, audc_col] = (distortion & 0xE0) | vol
+        elif song.uses_16bit_bass and (ch in (1, 2)):
             if ch == 1:
                 # Channel 1 outputs low byte, muted volume
                 div_low, div_hi = frequency_to_audf_16bit(current_freq)
-                frames[f_idx, 0] = div_low  # AUDF1
+                frames[f_idx, 0] = pokey_hw.clamp_audf_for_tracker(div_low)  # AUDF1
                 frames[f_idx, 1] = 0        # AUDC1 (muted)
-                frames[f_idx, 2] = div_hi   # AUDF2
+                frames[f_idx, 2] = pokey_hw.clamp_audf_for_tracker(div_hi)  # AUDF2
                 frames[f_idx, 3] = (distortion & 0xE0) | vol  # AUDC2 (active)
         else:
             # Standard 8-bit channel
-            audf_val = frequency_to_audf_8bit(current_freq)
+            audf_val = pokey_hw.clamp_audf_for_tracker(frequency_to_audf_8bit(current_freq))
             frames[f_idx, audf_col] = audf_val
             frames[f_idx, audc_col] = (distortion & 0xE0) | vol
 
@@ -328,28 +357,24 @@ def _calculate_envelope_volume(
     total_len: int,
     peak_vol: int,
     env: IREnvelope,
+    frames_per_tick: int = 4,
 ) -> int:
-    """Calculate envelope volume 0..15 at given frame offset."""
-    if frame_offset < env.attack_frames:
-        # Attack phase: 0 -> peak_vol
-        frac = (frame_offset + 1) / max(1, env.attack_frames)
-        return int(round(frac * peak_vol))
+    """Envelope volume 0..15 at a given frame offset, matching ``player.asm``.
 
-    decay_pos = frame_offset - env.attack_frames
-    if decay_pos < env.decay_frames:
-        # Decay phase: peak_vol -> sustain_vol
-        frac = decay_pos / max(1, env.decay_frames)
-        vol = peak_vol - frac * (peak_vol - env.sustain_vol)
-        return int(round(vol))
-
-    # Sustain phase
-    remaining = total_len - frame_offset
-    if remaining <= env.release_frames:
-        # Release phase: sustain_vol -> 0
-        frac = remaining / max(1, env.release_frames)
-        return int(round(frac * env.sustain_vol))
-
-    return env.sustain_vol
+    Kept as a thin wrapper over :func:`atari_music.pokey_hw.player_envelope_volumes`
+    for backward compatibility; prefer the batched call in the frame compiler.
+    """
+    volumes = pokey_hw.player_envelope_volumes(
+        max(1, total_len),
+        frames_per_tick,
+        peak_vol,
+        env.attack_frames,
+        env.decay_frames,
+        env.sustain_vol,
+        env.release_frames,
+    )
+    idx = max(0, min(len(volumes) - 1, frame_offset))
+    return volumes[idx]
 
 
 # ---------------------------------------------------------------------------

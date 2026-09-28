@@ -202,15 +202,21 @@ def generate_stage2_report(dataset_jsonl_path: Path, output_report_path: Path) -
         "|---|---|---|---|",
     ])
 
+    # Equivalence groups follow the hardware AUDC decode in `pokey_hw.decode_audc`:
+    # $A0/$E0 and $20/$60 are the same generator (PURETONE is tested before POLY4),
+    # while $00, $40, $80 and $C0 are each distinct. $E0 is NOT noise.
     for dist_val, name, desc in [
-        (0xA0, "$A0 (Pure Tone)", "Czysta fala prostokątna (główna melodia, czysty bas)"),
-        (0xC0, "$C0 (4-bit Poly)", "Brzęczący chiptune lead, snare drum, agresywny synth"),
-        (0xE0, "$E0 (White Noise)", "Szum biały (talerze, werble, wybuchy)"),
-        (0x20, "$20 / $60 (5-bit Poly)", "Metaliczny, chropowaty bas i barwy perkusyjne"),
-        (0x00, "$00 / $80 (17-bit Poly)", "Niski szum, głęboki rumble"),
+        (0xA0, "$A0 / $E0 (Pure Tone)", "Czysta fala prostokątna (główna melodia, czysty bas)"),
+        (0xC0, "$C0 (Poly4, 15-step)", "Brzęczący chiptune lead, snare drum, agresywny synth"),
+        (0x20, "$20 / $60 (poly5-gated pure tone)", "Metaliczny, chropowaty bas i barwy perkusyjne"),
+        (0x80, "$80 (Poly9/17 — jedyny prawdziwy szum)", "Szum biały (talerze, werble, wybuchy)"),
+        (0x40, "$40 (poly5-gated Poly4)", "Chropowaty, gęsty szum o niskiej gęstości"),
+        (0x00, "$00 (poly5-gated Poly9/17)", "Niski, przytłumiony szum / głęboki rumble"),
     ]:
-        if dist_val in (0x20, 0x00):
-            c_val = distortion_counts[dist_val] + distortion_counts[dist_val + 0x40]
+        if dist_val == 0xA0:
+            c_val = distortion_counts[0xA0] + distortion_counts[0xE0]
+        elif dist_val == 0x20:
+            c_val = distortion_counts[0x20] + distortion_counts[0x60]
         else:
             c_val = distortion_counts[dist_val]
         p_val = (c_val / total_records) * 100.0

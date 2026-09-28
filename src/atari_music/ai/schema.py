@@ -98,6 +98,10 @@ class ValidationReport(BaseModel):
     """Structured report consolidating all issues found across all validation tiers."""
     valid: bool = Field(default=True, description="True if no issues were encountered")
     issues: List[ValidationIssue] = Field(default_factory=list, description="List of recorded validation issues")
+    warnings: List[ValidationIssue] = Field(
+        default_factory=list,
+        description="Non-fatal issues: playable, but not exactly as requested (never invalidates the report)",
+    )
 
     @property
     def errors(self) -> List[ValidationIssue]:
@@ -115,6 +119,30 @@ class ValidationReport(BaseModel):
         """Record an issue and mark report as invalid."""
         self.valid = False
         self.issues.append(
+            ValidationIssue(
+                category=category,
+                code=code,
+                message=message,
+                path=path,
+                details=details or {},
+            )
+        )
+
+    def add_warning(
+        self,
+        category: str,
+        code: str,
+        message: str,
+        path: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record a non-fatal issue without invalidating the report.
+
+        Warnings describe lossy-but-playable hardware outcomes (for example a pitch
+        below the 8-bit AUDF floor). They must not fail validation and must not
+        trigger composition repair, so ``valid`` is deliberately left untouched.
+        """
+        self.warnings.append(
             ValidationIssue(
                 category=category,
                 code=code,
@@ -185,13 +213,18 @@ class AIInstrumentDef(BaseModel):
     name: str = Field(description="Human readable instrument name")
     character: str = Field(
         default="bright_lead",
-        description="Semantic timbre archetype: bright_lead, dark_lead, bass, soft_pad, percussion, noise, bell",
+        description="Semantic timbre archetype. Supported: bright_lead, dark_lead, soft_pad, bass, "
+        "percussion, noise, drum, snare, hihat, kick, tom, bell, ornament, harmony, counter",
     )
-    distortion: Optional[int] = Field(default=None, description="Optional POKEY AUDC distortion override ($A0, $C0, $80)")
-    attack_frames: Optional[int] = Field(default=None, description="Optional ADSR attack frames (0..15)")
-    decay_frames: Optional[int] = Field(default=None, description="Optional ADSR decay frames (0..15)")
-    sustain_vol: Optional[int] = Field(default=None, description="Optional ADSR sustain volume (0..15)")
-    release_frames: Optional[int] = Field(default=None, description="Optional ADSR release frames (0..15)")
+    distortion: Optional[int] = Field(
+        default=None,
+        description="Optional POKEY AUDC distortion override: $00, $20, $40, $60, $80, $A0, $C0 or $E0 "
+        "(note: $E0 is audibly identical to $A0; the real noise mode is $80)",
+    )
+    attack_frames: Optional[int] = Field(default=None, ge=0, le=15, description="Optional ADSR attack frames (0..15)")
+    decay_frames: Optional[int] = Field(default=None, ge=0, le=15, description="Optional ADSR decay frames (0..15)")
+    sustain_vol: Optional[int] = Field(default=None, ge=0, le=15, description="Optional ADSR sustain volume (0..15)")
+    release_frames: Optional[int] = Field(default=None, ge=0, le=15, description="Optional ADSR release frames (0..15)")
 
 
 class AIPatternChannelEvent(BaseModel):
@@ -199,8 +232,8 @@ class AIPatternChannelEvent(BaseModel):
     step: int = Field(ge=0, description="Step offset within the pattern (0-indexed)")
     note: Optional[str] = Field(default=None, description="Note pitch name (e.g. 'C4', 'A#2', 'Eb3') or None/'REST'")
     instrument: str = Field(description="Instrument ID matching an instrument in instruments list")
-    duration: int = Field(default=1, description="Duration in steps (>= 1)")
-    volume: Optional[int] = Field(default=14, description="Initial velocity/volume (0..15)")
+    duration: int = Field(default=1, description="Duration in steps (>= 1; enforced by hardware validation)")
+    volume: Optional[int] = Field(default=14, description="Initial velocity/volume (0..15; enforced by hardware validation)")
 
 
 class AIPatternDef(BaseModel):

@@ -69,7 +69,8 @@ def classify_channel_activity(
         conf = min(0.95, round(vol_only_count / total_active_frames, 2))
         return ROLE_DIGI_SAMPLE, conf
 
-    # 2. Check Percussion (White Noise $E0 dominance or rapid decay bursts)
+    # 2. Check Percussion (ungated poly9/17 noise $80 dominance or rapid decay bursts).
+    #    $E0 is pure tone (== $A0), so it is deliberately NOT counted as noise here.
     if noise_count / total_active_frames >= 0.40:
         conf = min(0.95, round(noise_count / total_active_frames, 2))
         return ROLE_PERCUSSION, conf

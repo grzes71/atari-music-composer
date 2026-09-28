@@ -32,6 +32,7 @@ ABSOLUTE OUTPUT RESTRICTIONS:
 ATARI 8-BIT & POKEY HARDWARE CHARACTERISTICS:
 - 4 monophonic audio channels (indexed as "0", "1", "2", "3" or "1", "2", "3", "4").
 - Strictly monophonic per channel: each channel can play at most one note at any given step. Overlapping notes on the same channel are illegal.
+- ONE instrument per channel: POKEY sets the waveform per channel, so every note on a given channel uses the SAME instrument. Never switch instrument mid-channel; use a different channel for a different timbre.
 - Authentic chiptune aesthetic:
   * Compose music that sounds natural and believable on an Atari 8-bit computer with POKEY.
   * Do NOT compose a dense modern orchestral or multi-layered synthesizer track and force it into four channels.
@@ -55,9 +56,11 @@ Instruments map to POKEY sound generator roles and timbres. Choose instruments t
 - "bright_lead": Primary melody voice with a clear, punchy pure tone.
 - "dark_lead" / "soft_pad": Warmer, softer pure tone for secondary melodies, gentle sustained harmonies, or softer accompaniment.
 - "bass": Rhythmic and harmonic foundation; characteristic 4-bit polyphonic chiptune bass or deep 16-bit pure bass.
-- "percussion" / "noise": White-noise percussion voice for rhythmic pulses (kicks, snares, hats, clicks).
+- "noise" / "percussion" / "drum" / "snare" / "hihat": POKEY's real noise generator (poly9/poly17) for snares, hi-hats and percussion. Use a high pitch for a tight hit and a low pitch for a loose hit.
+- "kick" / "tom": Poly4-based low percussive hit (use a low pitch).
 - "bell" / "ornament": Bright, staccato pure-tone accents, rapid arpeggios, and ornamental flourishes.
 - "harmony" / "counter": Counterpoint or harmonic support voice that dialogues with the lead.
+Use exactly one of these `character` words per instrument: bright_lead, dark_lead, soft_pad, bass, percussion, noise, drum, snare, hihat, kick, tom, bell, ornament, harmony, counter.
 
 COMPOSITION HIERARCHY & FORM:
 Follow this priority order:
