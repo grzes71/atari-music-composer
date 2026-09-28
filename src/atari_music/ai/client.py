@@ -6,6 +6,7 @@ import json
 import logging
 from pathlib import Path
 import subprocess
+import time
 from typing import Any, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ from atari_music.ai.providers import (
 from atari_music.ai.schema import (
     AICompositionDoc,
     AICompositionGenerationError,
+    AIProviderAPIError,
     CompositionAttempt,
     MusicCompositionError,
 )
@@ -188,11 +190,29 @@ def generate_composition_with_retry(
         )
 
         # 1. Ask provider for composition (with feedback/context if retrying)
-        raw_dict = provider.generate_composition(
-            request,
-            feedback=feedback,
-            previous_composition=previous_composition,
-        )
+        try:
+            raw_dict = provider.generate_composition(
+                request,
+                feedback=feedback,
+                previous_composition=previous_composition,
+            )
+        except AIProviderAPIError as api_err:
+            from atari_music.ai.providers.openai import _is_transient_http_error
+            is_trans, code, desc = _is_transient_http_error(api_err)
+            if is_trans and attempt_idx < max_attempts:
+                delay = 5.0 * (2 ** (attempt_idx - 1))
+                logger.warning(
+                    "Composition Repair Loop: Transient API error [%s / code %s] on attempt %d: %s. "
+                    "Waiting %.1fs before retrying attempt...",
+                    desc,
+                    code,
+                    attempt_idx,
+                    api_err,
+                    delay,
+                )
+                time.sleep(delay)
+                continue
+            raise
         p_name = getattr(provider, "provider_name", type(provider).__name__)
         raw_keys = list(raw_dict.keys()) if isinstance(raw_dict, dict) else []
         logger.debug(
