@@ -506,6 +506,9 @@ class OpenAICompositionProvider(AICompositionProvider):
         system_prompt = build_dsl_system_prompt(version=dsl_ver)
         user_prompt = build_dsl_user_prompt(request)
 
+        logger.debug("Music DSL System Prompt (version=%s):\n%s", dsl_ver, system_prompt)
+        logger.debug("Music DSL User Prompt:\n%s", user_prompt)
+
         if feedback:
             repair_content = (
                 f"{feedback}\n\n"
@@ -515,6 +518,7 @@ class OpenAICompositionProvider(AICompositionProvider):
                 f"Modify ONLY what is necessary to resolve the reported errors. "
                 f"Return ONLY the complete corrected Music DSL plain text without markdown fences."
             )
+            logger.debug("Music DSL Repair Prompt:\n%s", repair_content)
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -526,6 +530,34 @@ class OpenAICompositionProvider(AICompositionProvider):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ]
+
+        endpoint = _sanitize_endpoint(self.base_url)
+        roles = [m.get("role", "unknown") for m in messages]
+        request_params = {
+            "endpoint": endpoint,
+            "model": self.model,
+            "format": "dsl",
+            "dsl_version": dsl_ver,
+            "messages_count": len(messages),
+            "roles": roles,
+            "has_feedback": bool(feedback),
+        }
+        logger.debug(
+            "LLM API Request -> Endpoint: %s | Model: %s | Format: dsl (version: %s) | Messages: %d | Roles: %s",
+            endpoint,
+            self.model,
+            dsl_ver,
+            len(messages),
+            roles,
+        )
+        logger.debug("LLM API Request Parameters: %s", request_params)
+
+        safe_payload = sanitize_for_logging({
+            "model": self.model,
+            "messages": messages,
+            "endpoint": endpoint,
+        })
+        logger.debug("LLM API Request Payload (DSL):\n%s", json.dumps(safe_payload, indent=2))
 
         for transient_attempt in range(1, self.max_transient_retries + 1):
             try:
@@ -546,6 +578,12 @@ class OpenAICompositionProvider(AICompositionProvider):
 
                 choice = response.choices[0]
                 raw_content = choice.message.content or ""
+                logger.debug(
+                    "LLM API Response received (DSL, length: %d chars, id=%s):\n%s",
+                    len(raw_content),
+                    getattr(response, "id", "unknown"),
+                    raw_content,
+                )
                 cleaned = raw_content.strip()
                 if cleaned.startswith("```"):
                     lines = cleaned.splitlines()

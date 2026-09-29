@@ -294,3 +294,113 @@ def test_cli_stream_separation_stdout_clean_json_under_debug():
     assert "Requesting composition from provider" in result.stderr
     assert "Composition validation PASSED" in result.stderr
 
+
+# =============================================================================
+# 6. Music DSL Prompt Logging in DEBUG
+# =============================================================================
+
+def test_openai_provider_dsl_prompt_debug_logging():
+    """Verify OpenAI provider logs Music DSL system prompt, user prompt, and payload under DEBUG."""
+    secret_key = "sk-dsl-prompt-secret-key-9876543210"
+
+    stream = io.StringIO()
+    setup_logging(level="DEBUG", stream=stream)
+
+    provider = OpenAICompositionProvider(
+        api_key=secret_key,
+        model="deepseek-flash",
+        base_url="https://api.deepseek.com/v1",
+    )
+
+    mock_choice = MagicMock()
+    mock_choice.message.content = 'TITLE "DSL Log Test"\nKEY C\nMODE MINOR\nBPM 120\nSEQUENCE A\n[PATTERN A]\nCH1 LEAD V14\nC4/4\n'
+
+    mock_completion = MagicMock()
+    mock_completion.id = "chatcmpl-dsl-debug-001"
+    mock_completion.choices = [mock_choice]
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = mock_completion
+
+    mock_openai = MagicMock()
+    mock_openai.OpenAI.return_value = mock_client
+
+    req = CompositionRequest(style="dungeon", format="dsl", dsl_version="v1.1", duration_seconds=16)
+
+    import sys
+    with patch.dict(sys.modules, {"openai": mock_openai}):
+        result = provider.generate_composition_dsl(req)
+
+    assert "TITLE" in result
+    log_output = stream.getvalue()
+
+    # 1. DSL Prompts MUST be logged at DEBUG level
+    assert "Music DSL System Prompt (version=v1.1):" in log_output
+    assert "Do not specify pattern length." in log_output
+    assert "Music DSL User Prompt:" in log_output
+    assert "LLM API Request -> Endpoint: https://api.deepseek.com/v1" in log_output
+    assert "Format: dsl" in log_output
+    assert "LLM API Request Payload (DSL):" in log_output
+    assert "LLM API Response received (DSL" in log_output
+
+    # 2. Secret key MUST NOT be present in plain text
+    assert secret_key not in log_output
+
+
+def test_openai_provider_dsl_repair_prompt_debug_logging():
+    """Verify repair feedback and previous DSL are logged under DEBUG level when repairing."""
+    secret_key = "sk-dsl-repair-secret-9999"
+
+    stream = io.StringIO()
+    setup_logging(level="DEBUG", stream=stream)
+
+    provider = OpenAICompositionProvider(
+        api_key=secret_key,
+        model="deepseek-flash",
+        base_url="https://api.deepseek.com/v1",
+    )
+
+    mock_choice = MagicMock()
+    mock_choice.message.content = 'TITLE "Repaired"\nKEY C\nMODE MINOR\nBPM 120\nSEQUENCE A\n[PATTERN A]\nCH1 LEAD V14\nC4/4\n'
+
+    mock_completion = MagicMock()
+    mock_completion.id = "chatcmpl-dsl-repair-002"
+    mock_completion.choices = [mock_choice]
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = mock_completion
+
+    mock_openai = MagicMock()
+    mock_openai.OpenAI.return_value = mock_client
+
+    req = CompositionRequest(style="action", format="dsl", dsl_version="v1.1")
+
+    import sys
+    with patch.dict(sys.modules, {"openai": mock_openai}):
+        provider.generate_composition_dsl(
+            req,
+            feedback="Line 5: Pattern exceeds explicit length",
+            previous_dsl="[PATTERN A length=8]\nCH1 LEAD V14\nC4/16",
+        )
+
+    log_output = stream.getvalue()
+    assert "Music DSL Repair Prompt:" in log_output
+    assert "Line 5: Pattern exceeds explicit length" in log_output
+    assert "Previous Music DSL to repair:" in log_output
+
+
+def test_mock_provider_dsl_prompt_debug_logging():
+    """Verify MockAICompositionProvider logs DSL prompts in DEBUG mode."""
+    stream = io.StringIO()
+    setup_logging(level="DEBUG", stream=stream)
+
+    provider = MockAICompositionProvider()
+    req = CompositionRequest(style="action", format="dsl", dsl_version="v1.1")
+
+    provider.generate_composition_dsl(req)
+    log_output = stream.getvalue()
+
+    assert "Music DSL System Prompt (mock, version=v1.1):" in log_output
+    assert "Music DSL User Prompt (mock):" in log_output
+
+
