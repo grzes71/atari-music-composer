@@ -3,9 +3,14 @@
 from atari_music.ai import (
     AICompositionDoc,
     build_xex_from_composition,
+    export_music_dsl,
     generate_music_from_composition,
+    generate_music_from_dsl,
     generate_music_from_json,
+    load_composition,
+    load_composition_dsl,
     load_composition_json,
+    parse_music_dsl,
     request_ai_composition,
 )
 from atari_music.api import (
@@ -40,8 +45,13 @@ __all__ = [
     "music_ir_from_json",
     # AI Composition
     "AICompositionDoc",
+    "load_composition",
+    "load_composition_dsl",
     "load_composition_json",
+    "parse_music_dsl",
+    "export_music_dsl",
     "generate_music_from_composition",
+    "generate_music_from_dsl",
     "generate_music_from_json",
     "request_ai_composition",
     "build_xex_from_composition",

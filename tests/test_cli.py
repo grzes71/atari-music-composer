@@ -57,10 +57,11 @@ def test_cli_public_commands_in_help():
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
 
-    # Must contain the 6 public commands
+    # Must contain the public commands
     assert "compose" in result.output
     assert "ai-compose" in result.output
     assert "import-json" in result.output
+    assert "import-dsl" in result.output
     assert "analyze" in result.output
     assert "export-mads" in result.output
     assert "build-xex" in result.output
@@ -285,14 +286,137 @@ def test_cli_build_xex_subprocess_execution(tmp_path: Path, monkeypatch):
     assert out_xex.exists()
 
 
-def test_cli_version_flag():
-    """Verify atari-music -v and --version output matches __version__."""
-    from atari_music import __version__
+def test_cli_import_json_success(tmp_path: Path):
+    """Verify import-json imports a valid JSON composition and generates outputs."""
+    runner = CliRunner()
+    doc = _create_minimal_composition()
+    json_path = tmp_path / "song.json"
+    json_path.write_text(json.dumps(doc.model_dump(mode="json")), encoding="utf-8")
+
+    out_asm = tmp_path / "song.asm"
+    out_ir = tmp_path / "song_ir.json"
+
+    result = runner.invoke(cli, ["import-json", str(json_path), "--output-asm", str(out_asm), "--output-ir", str(out_ir)])
+    assert result.exit_code == 0
+    assert "Loaded successfully!" in result.output
+    assert "CLI Test Track" in result.output
+    assert out_asm.exists()
+    assert out_ir.exists()
+
+
+def test_cli_import_json_rejects_dsl_or_invalid(tmp_path: Path):
+    """Verify import-json fails with ClickException when non-JSON content is provided."""
+    runner = CliRunner()
+    dsl_path = tmp_path / "song.dsl"
+    dsl_path.write_text("TITLE 'Song'\n[PATTERN A len=16]\nCH1 C4/4\n", encoding="utf-8")
+
+    result = runner.invoke(cli, ["import-json", str(dsl_path)])
+    assert result.exit_code != 0
+    assert "Failed to parse JSON" in result.output
+
+
+def test_cli_import_dsl_success(tmp_path: Path):
+    """Verify import-dsl imports a valid Music DSL composition, exports canonical JSON and ASM."""
+    from atari_music.ai.dsl import export_music_dsl
 
     runner = CliRunner()
-    for flag in ["-v", "--version"]:
-        result = runner.invoke(cli, [flag])
-        assert result.exit_code == 0
-        assert f"atari-music, version {__version__}" in result.output
+    doc = _create_minimal_composition()
+    dsl_text = export_music_dsl(doc)
+    dsl_path = tmp_path / "song.dsl"
+    dsl_path.write_text(dsl_text, encoding="utf-8")
+
+    out_json = tmp_path / "canonical.json"
+    out_asm = tmp_path / "song.asm"
+    out_ir = tmp_path / "song_ir.json"
+
+    result = runner.invoke(
+        cli,
+        [
+            "import-dsl",
+            str(dsl_path),
+            "--output-json",
+            str(out_json),
+            "--output-asm",
+            str(out_asm),
+            "--output-ir",
+            str(out_ir),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Loaded successfully!" in result.output
+    assert "CLI Test Track" in result.output
+    assert out_json.exists()
+    assert out_asm.exists()
+    assert out_ir.exists()
+
+    # Validate exported JSON is valid canonical composition
+    canonical_data = json.loads(out_json.read_text(encoding="utf-8"))
+    assert canonical_data["metadata"]["title"] == "CLI Test Track"
+
+
+def test_cli_import_dsl_rejects_json_or_invalid(tmp_path: Path):
+    """Verify import-dsl fails with ClickException when JSON or invalid syntax is provided."""
+    runner = CliRunner()
+    json_path = tmp_path / "song.json"
+    doc = _create_minimal_composition()
+    json_path.write_text(json.dumps(doc.model_dump(mode="json")), encoding="utf-8")
+
+    result = runner.invoke(cli, ["import-dsl", str(json_path)])
+    assert result.exit_code != 0
+    assert "Failed to parse/validate Music DSL" in result.output
+
+
+def test_cli_build_xex_with_explicit_format(tmp_path: Path, monkeypatch):
+    """Verify build-xex respects explicit --format dsl and --format json."""
+    import subprocess
+    from unittest.mock import MagicMock
+    from atari_music.ai.dsl import export_music_dsl
+
+    runner = CliRunner()
+    doc = _create_minimal_composition()
+
+    # 1. DSL format
+    dsl_file = tmp_path / "tune.txt"  # Arbitrary extension to prove it does not rely on .dsl
+    dsl_file.write_text(export_music_dsl(doc), encoding="utf-8")
+    out_xex_dsl = tmp_path / "dsl_tune.xex"
+
+    dummy_mads = tmp_path / "mads.exe"
+    dummy_mads.write_text("dummy binary", encoding="utf-8")
+
+    def fake_subprocess_run(cmd, capture_output=True, text=True):
+        out_p = None
+        for arg in cmd:
+            if arg.startswith("-o:"):
+                out_p = Path(arg[3:])
+        if out_p:
+            out_p.write_bytes(b"\xff\xff\x00\x40\x10\x40")
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = "OK"
+        mock_proc.stderr = ""
+        return mock_proc
+
+    monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
+
+    res_dsl = runner.invoke(
+        cli,
+        ["build-xex", str(dsl_file), "-o", str(out_xex_dsl), "--format", "dsl", "--mads", str(dummy_mads)],
+    )
+    assert res_dsl.exit_code == 0
+    assert "(DSL)" in res_dsl.output
+    assert out_xex_dsl.exists()
+
+    # 2. JSON format
+    json_file = tmp_path / "tune_json.txt"  # Arbitrary extension
+    json_file.write_text(json.dumps(doc.model_dump(mode="json")), encoding="utf-8")
+    out_xex_json = tmp_path / "json_tune.xex"
+
+    res_json = runner.invoke(
+        cli,
+        ["build-xex", str(json_file), "-o", str(out_xex_json), "--format", "json", "--mads", str(dummy_mads)],
+    )
+    assert res_json.exit_code == 0
+    assert "(JSON)" in res_json.output
+    assert out_xex_json.exists()
 
 

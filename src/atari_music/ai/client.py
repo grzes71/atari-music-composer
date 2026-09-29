@@ -27,7 +27,9 @@ from atari_music.ai.schema import (
     AIProviderAPIError,
     CompositionAttempt,
     MusicCompositionError,
+    ValidationReport,
 )
+from atari_music.ai.dsl import DSLSyntaxError, export_music_dsl, parse_music_dsl
 from atari_music.ai.validation import validate_composition, validate_composition_report
 from atari_music.api import MusicGenerationMetadata, MusicGenerationResult
 from atari_music.composer_v4 import ComposerV4QualityReport
@@ -67,6 +69,94 @@ def load_composition_json(source: Union[str, Path, Dict[str, Any]]) -> AIComposi
     return validate_composition(data)
 
 
+def load_composition(
+    source: Union[str, Path, Dict[str, Any], AICompositionDoc],
+    format: Optional[str] = None,
+) -> AICompositionDoc:
+    """Load and validate an AI Composition document from file, string, dict, or instance.
+
+    Supports both canonical JSON and Music DSL.
+    If format is omitted, inspects file extension or delegates to JSON parser.
+
+    Parameters
+    ----------
+    source : Union[str, Path, Dict[str, Any], AICompositionDoc]
+        Path to file (.json or .dsl), raw string, parsed dictionary, or doc instance.
+    format : Optional[str]
+        Explicit format: 'json' or 'dsl'. If None, detected by file extension or tried as JSON.
+
+    Returns
+    -------
+    AICompositionDoc
+        Fully validated canonical composition document.
+    """
+    if isinstance(source, AICompositionDoc):
+        return source
+
+    if isinstance(source, dict):
+        return validate_composition(source)
+
+    if isinstance(source, Path) or (isinstance(source, str) and len(source) < 512 and Path(source).is_file()):
+        p = Path(source)
+        fmt = (format or "").lower()
+        text = p.read_text(encoding="utf-8")
+        if fmt == "dsl":
+            doc = parse_music_dsl(text)
+            return validate_composition(doc)
+        elif fmt == "json":
+            return load_composition_json(text)
+        else:
+            # Format not specified: detect by content without relying on file extension
+            stripped = text.strip()
+            if stripped.startswith("{"):
+                return load_composition_json(text)
+            else:
+                doc = parse_music_dsl(text)
+                return validate_composition(doc)
+
+    # Raw string
+    fmt = (format or "").lower()
+    if fmt == "dsl":
+        doc = parse_music_dsl(source)
+        return validate_composition(doc)
+    elif fmt == "json":
+        return load_composition_json(source)
+    else:
+        stripped = str(source).strip()
+        if stripped.startswith("{"):
+            return load_composition_json(source)
+        else:
+            doc = parse_music_dsl(source)
+            return validate_composition(doc)
+
+
+def load_composition_dsl(source: Union[str, Path]) -> AICompositionDoc:
+    """Load and validate an AI Composition document strictly from Music DSL source.
+    
+    Parameters
+    ----------
+    source : Union[str, Path]
+        Path to .dsl file or raw Music DSL text string.
+        
+    Returns
+    -------
+    AICompositionDoc
+        Fully validated canonical composition document.
+    """
+    if isinstance(source, Path) or (isinstance(source, str) and len(source) < 512 and Path(source).is_file()):
+        text = Path(source).read_text(encoding="utf-8")
+    else:
+        text = str(source)
+    doc = parse_music_dsl(text)
+    return validate_composition(doc)
+
+
+def generate_music_from_dsl(dsl_source: Union[str, Path]) -> MusicGenerationResult:
+    """Compile a Music DSL source string or file directly through the generation pipeline."""
+    doc = load_composition_dsl(dsl_source)
+    return generate_music_from_composition(doc)
+
+
 def generate_music_from_composition(
     composition: Union[AICompositionDoc, Dict[str, Any], str, Path],
 ) -> MusicGenerationResult:
@@ -75,7 +165,7 @@ def generate_music_from_composition(
     Parameters
     ----------
     composition : Union[AICompositionDoc, Dict[str, Any], str, Path]
-        The composition document to process.
+        The composition document to process (AICompositionDoc, Dict, or file/string path).
         
     Returns
     -------
@@ -83,7 +173,7 @@ def generate_music_from_composition(
         Standard result object containing Music IR, POKEY IR, and export methods (render_wav, save_json).
     """
     if not isinstance(composition, AICompositionDoc):
-        doc = load_composition_json(composition)
+        doc = load_composition(composition)
     else:
         doc = composition
 
@@ -150,12 +240,14 @@ def generate_composition_with_retry(
     request: CompositionRequest,
     provider: AICompositionProvider,
     max_retries: int = 3,
-) -> AICompositionDoc:
+    return_history: bool = False,
+) -> Union[AICompositionDoc, Tuple[AICompositionDoc, List[CompositionAttempt]]]:
     """Generate and validate an AI composition using an iterative repair loop with feedback.
     
     Attempts up to 1 + max_retries generations (default: 1 initial + 3 retries = max 4 attempts).
     If validation fails, the structured validation report is formatted into feedback
     and sent back to the provider along with the previous invalid composition.
+    Supports both canonical JSON and Music DSL modes based on request.format.
     
     Parameters
     ----------
@@ -165,11 +257,13 @@ def generate_composition_with_retry(
         AI provider backend to query (Mock or OpenAI).
     max_retries : int, default=3
         Maximum retry attempts after initial failure. Must be >= 0.
+    return_history : bool, default=False
+        If True, return tuple of (validated_doc, history).
         
     Returns
     -------
-    AICompositionDoc
-        Fully validated composition document.
+    AICompositionDoc or Tuple[AICompositionDoc, List[CompositionAttempt]]
+        Fully validated composition document (and attempt history if requested).
         
     Raises
     ------
@@ -180,22 +274,37 @@ def generate_composition_with_retry(
     history: list[CompositionAttempt] = []
     feedback: Optional[str] = None
     previous_composition: Optional[Dict[str, Any]] = None
+    previous_dsl: Optional[str] = None
+    is_dsl_mode = (getattr(request, "format", "json") or "json").lower() == "dsl"
 
     for attempt_idx in range(1, max_attempts + 1):
+        attempt_start_time = time.perf_counter()
         logger.debug(
-            "Composition Repair Loop: starting attempt %d/%d (max_retries=%d)",
+            "Composition Repair Loop: starting attempt %d/%d (max_retries=%d, format=%s)",
             attempt_idx,
             max_attempts,
             max_retries,
+            "dsl" if is_dsl_mode else "json",
         )
 
         # 1. Ask provider for composition (with feedback/context if retrying)
         try:
-            raw_dict = provider.generate_composition(
-                request,
-                feedback=feedback,
-                previous_composition=previous_composition,
-            )
+            if is_dsl_mode:
+                if not hasattr(provider, "generate_composition_dsl"):
+                    raise MusicCompositionError(
+                        f"Provider '{type(provider).__name__}' does not support Music DSL generation."
+                    )
+                raw_dsl = provider.generate_composition_dsl(
+                    request,
+                    feedback=feedback,
+                    previous_dsl=previous_dsl,
+                )
+            else:
+                raw_dict = provider.generate_composition(
+                    request,
+                    feedback=feedback,
+                    previous_composition=previous_composition,
+                )
         except AIProviderAPIError as api_err:
             from atari_music.ai.providers.openai import _is_transient_http_error, extract_retry_delay
             is_trans, code, desc = _is_transient_http_error(api_err)
@@ -216,44 +325,118 @@ def generate_composition_with_retry(
                 time.sleep(delay)
                 continue
             raise
+
         p_name = getattr(provider, "provider_name", type(provider).__name__)
-        raw_keys = list(raw_dict.keys()) if isinstance(raw_dict, dict) else []
-        logger.debug(
-            "Received raw composition payload from provider '%s' (attempt %d, top-level keys: %s)",
-            p_name,
-            attempt_idx,
-            raw_keys,
-        )
 
-        # 2. Run full 3-Tier validation report
-        report = validate_composition_report(raw_dict)
-        attempt_record = CompositionAttempt(
-            attempt_number=attempt_idx,
-            composition=raw_dict,
-            report=report,
-        )
-        history.append(attempt_record)
-
-        # 3. Check validity
-        if report.valid:
+        if is_dsl_mode:
             logger.debug(
-                "Composition validation PASSED on attempt %d (0 issues). Proceeding with validated composition.",
+                "Received raw DSL payload from provider '%s' (attempt %d, length: %d chars)",
+                p_name,
                 attempt_idx,
+                len(raw_dsl),
             )
-            return validate_composition(raw_dict)
+            # Try parsing DSL
+            try:
+                doc = parse_music_dsl(raw_dsl, validate=False)
+                report = validate_composition_report(doc)
+                raw_dict_for_history = doc.model_dump(mode="json")
+            except DSLSyntaxError as syn_err:
+                report = ValidationReport(valid=False, issues=[])
+                report.add_issue(
+                    category="schema",
+                    code="DSL_SYNTAX_ERROR",
+                    message=f"DSL syntax error on line {syn_err.line_number}:{syn_err.column or 1}: {syn_err.message} (Line content: {syn_err.line_text!r})",
+                    path=f"line_{syn_err.line_number}",
+                    details={"line": syn_err.line_number, "col": syn_err.column, "snippet": syn_err.line_text},
+                )
+                raw_dict_for_history = {"raw_dsl": raw_dsl}
+            except Exception as parse_err:
+                report = ValidationReport(valid=False, issues=[])
+                report.add_issue(
+                    category="schema",
+                    code="DSL_PARSE_ERROR",
+                    message=f"DSL parsing failed: {parse_err}",
+                    path="<root>",
+                    details={"error": str(parse_err)},
+                )
+                raw_dict_for_history = {"raw_dsl": raw_dsl}
 
-        # Log detailed validation failure
-        issues_summary = [f"[{i.category.upper()}] {i.code}: {i.message}" for i in report.issues]
-        logger.debug(
-            "Composition validation FAILED on attempt %d with %d issue(s): %s",
-            attempt_idx,
-            len(report.issues),
-            "; ".join(issues_summary),
-        )
+            attempt_wall_ms = round((time.perf_counter() - attempt_start_time) * 1000.0, 2)
+            attempt_record = CompositionAttempt(
+                attempt_number=attempt_idx,
+                composition=raw_dict_for_history,
+                report=report,
+                usage=getattr(provider, "last_usage", None),
+                wall_time_ms=attempt_wall_ms,
+            )
+            history.append(attempt_record)
 
-        # 4. Prepare structured feedback for next attempt
-        feedback = report.format_feedback()
-        previous_composition = raw_dict
+            if report.valid:
+                logger.debug(
+                    "DSL Composition validation PASSED on attempt %d (0 issues). Proceeding with validated composition.",
+                    attempt_idx,
+                )
+                valid_doc = validate_composition(doc)
+                if return_history:
+                    return valid_doc, history
+                return valid_doc
+
+            issues_summary = [f"[{i.category.upper()}] {i.code}: {i.message}" for i in report.issues]
+            logger.debug(
+                "DSL Composition validation FAILED on attempt %d with %d issue(s): %s",
+                attempt_idx,
+                len(report.issues),
+                "; ".join(issues_summary),
+            )
+
+            feedback = report.format_feedback()
+            previous_dsl = raw_dsl
+            previous_composition = raw_dict_for_history
+
+        else:
+            raw_keys = list(raw_dict.keys()) if isinstance(raw_dict, dict) else []
+            logger.debug(
+                "Received raw composition payload from provider '%s' (attempt %d, top-level keys: %s)",
+                p_name,
+                attempt_idx,
+                raw_keys,
+            )
+
+            # 2. Run full 3-Tier validation report
+            report = validate_composition_report(raw_dict)
+            attempt_wall_ms = round((time.perf_counter() - attempt_start_time) * 1000.0, 2)
+            attempt_record = CompositionAttempt(
+                attempt_number=attempt_idx,
+                composition=raw_dict,
+                report=report,
+                usage=getattr(provider, "last_usage", None),
+                wall_time_ms=attempt_wall_ms,
+            )
+            history.append(attempt_record)
+
+            # 3. Check validity
+            if report.valid:
+                logger.debug(
+                    "Composition validation PASSED on attempt %d (0 issues). Proceeding with validated composition.",
+                    attempt_idx,
+                )
+                valid_doc = validate_composition(raw_dict)
+                if return_history:
+                    return valid_doc, history
+                return valid_doc
+
+            # Log detailed validation failure
+            issues_summary = [f"[{i.category.upper()}] {i.code}: {i.message}" for i in report.issues]
+            logger.debug(
+                "Composition validation FAILED on attempt %d with %d issue(s): %s",
+                attempt_idx,
+                len(report.issues),
+                "; ".join(issues_summary),
+            )
+
+            # 4. Prepare structured feedback for next attempt
+            feedback = report.format_feedback()
+            previous_composition = raw_dict
 
         if attempt_idx < max_attempts:
             logger.debug(
@@ -293,6 +476,7 @@ def request_ai_composition(
     api_key: Optional[str] = None,
     max_retries: int = 3,
     env_path: Optional[Union[str, Path]] = None,
+    format: Optional[str] = None,
 ) -> AICompositionDoc:
     """Request an AI-generated composition, validate it with automatic retry loop, and return the validated document.
     
@@ -312,12 +496,16 @@ def request_ai_composition(
         Maximum retry attempts on validation error (1 initial + max_retries retries).
     env_path : Optional[Union[str, Path]]
         Path to custom .env configuration file.
+    format : Optional[str]
+        Explicit composition format override: 'json' or 'dsl'.
         
     Returns
     -------
     AICompositionDoc
         Validated composition document.
     """
+    if format:
+        request.format = format.lower()
     p_name = provider if isinstance(provider, str) else provider_name
     p_inst = provider if hasattr(provider, "generate_composition") else None
     active_provider = p_inst or get_ai_provider(p_name, model=model, api_key=api_key, env_path=env_path)
@@ -333,6 +521,7 @@ def build_xex_from_composition(
     zp_base: int = 0x80,
     mads_bin: Optional[Union[str, Path]] = None,
     player_asm: Optional[Union[str, Path]] = None,
+    format: Optional[str] = None,
     **kwargs: Any,
 ) -> Path:
     """Compile an AI composition directly into an executable Atari XEX file via MADS.
@@ -354,6 +543,8 @@ def build_xex_from_composition(
     player_asm : Optional[Union[str, Path]]
         Optional explicit path to player.asm. If omitted, checks current working directory,
         repository root, and package directory.
+    format : Optional[str]
+        Optional explicit format: 'json' or 'dsl'.
     Returns
     -------
     Path
@@ -365,6 +556,8 @@ def build_xex_from_composition(
         mads_bin = kwargs["mads_exe"]
     if "player_asm" in kwargs and player_asm is None:
         player_asm = kwargs["player_asm"]
+    if "format" in kwargs and format is None:
+        format = kwargs["format"]
 
     if isinstance(player_address, int):
         player_addr_str = f"${player_address:04X}"
@@ -377,7 +570,13 @@ def build_xex_from_composition(
             music_addr_str = f"${music_address:04X}"
         else:
             music_addr_str = str(music_address)
-    res = generate_music_from_composition(composition)
+
+    if not isinstance(composition, AICompositionDoc):
+        comp_doc = load_composition(composition, format=format)
+    else:
+        comp_doc = composition
+
+    res = generate_music_from_composition(comp_doc)
     song_asm = export_mads_asm(res)
 
     out_p = Path(output_path)
@@ -428,11 +627,6 @@ def build_xex_from_composition(
             else:
                 res.append(0)
         return res
-
-    if not isinstance(composition, AICompositionDoc):
-        comp_doc = load_composition_json(composition)
-    else:
-        comp_doc = composition
 
     title_str = (comp_doc.metadata.title or "POKEY Music")[:28]
     title_antic = _ascii_to_antic(f"TITLE:   {title_str}")

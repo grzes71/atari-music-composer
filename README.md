@@ -231,12 +231,24 @@ Importuje zewnętrzny plik kompozycji `atari-music-composition` JSON, waliduje g
 atari-music import-json song.json --output-wav song.wav --output-asm song.asm
 ```
 
-#### F. Polecenie `build-xex`
+#### F. Polecenie `import-dsl`
 
-Kompiluje plik kompozycji JSON bezpośrednio do samodzielnego pliku wykonywalnego Atari XEX:
+Importuje kompaktowy plik Music DSL (`.dsl`), waliduje go i konwertuje na formaty produkcyjne lub kanoniczny JSON:
 
 ```bash
-atari-music build-xex song.json -o song.xex --mads tools/mads/mads.exe
+atari-music import-dsl song.dsl --output-wav song.wav --output-asm song.asm --output-json song.json
+```
+
+#### G. Polecenie `build-xex`
+
+Kompiluje plik kompozycji (JSON lub Music DSL) bezpośrednio do samodzielnego pliku wykonywalnego Atari XEX:
+
+```bash
+# Dla pliku JSON:
+atari-music build-xex song.json -o song.xex --format json --mads tools/mads/mads.exe
+
+# Dla pliku Music DSL:
+atari-music build-xex song.dsl -o song.xex --format dsl --mads tools/mads/mads.exe
 ```
 
 

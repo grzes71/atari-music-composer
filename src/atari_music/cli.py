@@ -119,10 +119,10 @@ def analyze_cmd(
 ) -> None:
     """Analyze musical properties, hardware constraints, and structure of a composition JSON."""
     from atari_music.ai.analysis import analyze_composition
-    from atari_music.ai.client import load_composition_json
+    from atari_music.ai.client import load_composition
     from atari_music.ai.structure_analysis import analyze_composition_structure
 
-    comp_doc = load_composition_json(composition_json)
+    comp_doc = load_composition(composition_json)
     rep = analyze_composition(comp_doc)
     struct_rep = analyze_composition_structure(comp_doc) if structure else None
 
@@ -768,10 +768,17 @@ def import_json_cmd(
 ) -> None:
     """Validate and import an AI composition JSON document."""
     from atari_music.ai.client import load_composition_json, generate_music_from_composition
+    from atari_music.ai.schema import MusicCompositionError
     from atari_music.mads_exporter import export_mads_asm
 
-    click.echo(f"Validating and loading composition from {composition_json}...")
-    comp = load_composition_json(composition_json)
+    click.echo(f"Validating and loading JSON composition from {composition_json}...")
+    try:
+        comp = load_composition_json(composition_json)
+    except json.JSONDecodeError as err:
+        raise click.ClickException(f"Failed to parse JSON in '{composition_json}': {err}")
+    except MusicCompositionError as err:
+        raise click.ClickException(f"Validation failed for '{composition_json}': {err}")
+
     click.echo(f"Loaded successfully!")
     click.echo(f"  Title: {comp.metadata.title} (Author: {comp.metadata.author or 'Unknown'})")
     click.echo(f"  Key: {comp.metadata.key} {comp.metadata.mode}, BPM: {comp.metadata.bpm}")
@@ -792,24 +799,76 @@ def import_json_cmd(
             click.echo(f"Exported MADS ASM -> {output_asm}")
 
 
+@cli.command("import-dsl")
+@click.argument("composition_dsl", type=click.Path(exists=True, path_type=Path))
+@click.option("--output-wav", type=click.Path(path_type=Path), default=None, help="Render and save audio WAV")
+@click.option("--output-asm", type=click.Path(path_type=Path), default=None, help="Export MADS assembly file")
+@click.option("--output-ir", type=click.Path(path_type=Path), default=None, help="Export POKEY IR JSON")
+@click.option("--output-json", type=click.Path(path_type=Path), default=None, help="Export canonical composition JSON")
+def import_dsl_cmd(
+    composition_dsl: Path,
+    output_wav: Optional[Path],
+    output_asm: Optional[Path],
+    output_ir: Optional[Path],
+    output_json: Optional[Path],
+) -> None:
+    """Validate and import an AI composition Music DSL document."""
+    from atari_music.ai.client import load_composition_dsl, generate_music_from_composition
+    from atari_music.ai.schema import MusicCompositionError
+    from atari_music.mads_exporter import export_mads_asm
+
+    click.echo(f"Validating and loading Music DSL from {composition_dsl}...")
+    try:
+        comp = load_composition_dsl(composition_dsl)
+    except MusicCompositionError as err:
+        raise click.ClickException(f"Failed to parse/validate Music DSL in '{composition_dsl}': {err}")
+
+    click.echo(f"Loaded successfully!")
+    click.echo(f"  Title: {comp.metadata.title} (Author: {comp.metadata.author or 'Unknown'})")
+    click.echo(f"  Key: {comp.metadata.key} {comp.metadata.mode}, BPM: {comp.metadata.bpm}")
+    click.echo(f"  Channels: {comp.hardware.channels}, 16-bit bass: {comp.hardware.use_16bit_bass}")
+    click.echo(f"  Patterns: {len(comp.patterns)}, Sequence: {' -> '.join(comp.sequence)}")
+
+    if output_json:
+        comp_json = comp.model_dump_json(indent=2)
+        output_json.parent.mkdir(parents=True, exist_ok=True)
+        output_json.write_text(comp_json, encoding="utf-8")
+        click.echo(f"Saved Composition JSON -> {output_json}")
+
+    if output_wav or output_asm or output_ir:
+        click.echo("Compiling composition through Music IR & POKEY IR...")
+        res = generate_music_from_composition(comp)
+        if output_ir:
+            res.save_json(output_ir)
+            click.echo(f"Saved POKEY IR -> {output_ir}")
+        if output_wav:
+            res.render_wav(output_wav)
+            click.echo(f"Rendered WAV -> {output_wav}")
+        if output_asm:
+            export_mads_asm(res.pokey_ir, output_asm)
+            click.echo(f"Exported MADS ASM -> {output_asm}")
+
+
 @cli.command("build-xex")
-@click.argument("composition_json", type=click.Path(exists=True, path_type=Path))
+@click.argument("composition_file", type=click.Path(exists=True, path_type=Path))
 @click.option("--output", "-o", type=click.Path(path_type=Path), default=Path("output.xex"), help="Output Atari XEX binary path")
+@click.option("--format", "composition_format", type=click.Choice(["json", "dsl"], case_sensitive=False), default=None, help="Input format: 'json' or 'dsl' (defaults to json or inferred if omitted)")
 @click.option("--player-address", type=str, default="0x6000", help="Relocatable player address (hex or dec, e.g. 0x6000)")
 @click.option("--music-address", type=str, default="0x8000", help="Relocatable music data address (hex or dec, e.g. 0x8000)")
 @click.option("--zp-base", type=str, default="0x80", help="Zero-page base address (hex or dec, e.g. 0x80)")
 @click.option("--mads", type=click.Path(path_type=Path), default=Path("tools/mads/mads.exe"), help="Path to mads.exe")
 @click.option("--player-asm", type=click.Path(exists=True, path_type=Path), default=None, help="Path to player.asm (defaults to current directory or repository root)")
 def build_xex_cmd(
-    composition_json: Path,
+    composition_file: Path,
     output: Path,
+    composition_format: Optional[str],
     player_address: str,
     music_address: str,
     zp_base: str,
     mads: Path,
     player_asm: Optional[Path],
 ) -> None:
-    """Compile AI composition JSON directly to relocatable Atari XEX binary using MADS."""
+    """Compile AI composition (JSON or Music DSL) directly to relocatable Atari XEX binary using MADS."""
     from atari_music.ai.client import build_xex_from_composition
 
     def parse_addr(val: str) -> int:
@@ -824,16 +883,18 @@ def build_xex_cmd(
     m_addr = parse_addr(music_address)
     z_addr = parse_addr(zp_base)
 
-    click.echo(f"Building Atari XEX from {composition_json}...")
+    fmt_label = f" ({composition_format.upper()})" if composition_format else ""
+    click.echo(f"Building Atari XEX from {composition_file}{fmt_label}...")
     click.echo(f"  Configuration: player=${p_addr:04X}, music=${m_addr:04X}, ZP=${z_addr:02X}")
     xex_path = build_xex_from_composition(
-        composition_json,
+        composition_file,
         output_xex=output,
         player_address=p_addr,
         music_address=m_addr,
         zp_base=z_addr,
         mads_exe=mads,
         player_asm=player_asm,
+        format=composition_format,
     )
     size = xex_path.stat().st_size
     click.echo(f"Successfully compiled XEX -> {xex_path} ({size} bytes)")
@@ -847,6 +908,7 @@ def build_xex_cmd(
 @click.option("--channels", type=int, default=4, help="POKEY channels (1..4)")
 @click.option("--use-16bit-bass/--no-16bit-bass", default=False, help="Enable 16-bit bass mode")
 @click.option("--structure", type=str, default="A-B-A", help="Song structure (e.g. A-B-A)")
+@click.option("--format", "composition_format", type=click.Choice(["json", "dsl"], case_sensitive=False), default="json", help="Composition format for LLM generation: json (default) or dsl")
 @click.option("--provider", type=click.Choice(["mock", "openai", "deepseek"], case_sensitive=False), default=None, help="AI provider override (overrides AI_PROVIDER, e.g. mock, openai, deepseek)")
 @click.option("--model", type=str, default=None, help="AI model name override")
 @click.option(
@@ -871,7 +933,7 @@ def build_xex_cmd(
     type=click.Path(path_type=Path),
     default=None,
     required=False,
-    help="Output JSON path (omitted or '-' prints machine-readable JSON to stdout)",
+    help="Output file path (omitted or '-' prints to stdout)",
 )
 @click.pass_context
 def ai_compose_cmd(
@@ -883,15 +945,17 @@ def ai_compose_cmd(
     channels: int,
     use_16bit_bass: bool,
     structure: str,
+    composition_format: str,
     provider: Optional[str],
     model: Optional[str],
     env_file: Optional[Path],
     max_retries: int,
     output: Optional[Path],
 ) -> None:
-    """Generate a valid AI composition JSON using an AI provider."""
+    """Generate a valid AI composition (JSON or Music DSL) using an AI provider."""
     from atari_music.ai.providers.base import CompositionRequest
     from atari_music.ai.client import request_ai_composition
+    from atari_music.ai.dsl import export_music_dsl
     from atari_music.config import Config
 
     global_env_file = ctx.obj.get("env_file") if (ctx and isinstance(ctx.obj, dict)) else None
@@ -910,11 +974,12 @@ def ai_compose_cmd(
         channels=channels,
         use_16bit_bass=use_16bit_bass,
         structure=structure,
+        format=composition_format.lower(),
     )
     is_stdout = output is None or str(output) == "-"
 
     # Informational logs go to stderr so stdout is not polluted
-    click.echo(f"Requesting composition from provider '{effective_provider}'...", err=True)
+    click.echo(f"Requesting composition from provider '{effective_provider}' (format: {req.format})...", err=True)
     click.echo(
         f"  Style: {style}, BPM: {bpm}, Channels: {channels}, 16-bit bass: {use_16bit_bass}, max retries: {max_retries}",
         err=True,
@@ -925,15 +990,20 @@ def ai_compose_cmd(
         model=effective_model,
         max_retries=max_retries,
         env_path=effective_env_file,
+        format=req.format,
     )
-    json_str = json.dumps(comp.model_dump(mode="json"), indent=2)
+
+    if req.format == "dsl":
+        content_str = export_music_dsl(comp)
+    else:
+        content_str = json.dumps(comp.model_dump(mode="json"), indent=2)
 
     if is_stdout:
-        click.echo(json_str)
+        click.echo(content_str)
     else:
         output.parent.mkdir(parents=True, exist_ok=True)
         with open(output, "w", encoding="utf-8") as f:
-            f.write(json_str)
+            f.write(content_str)
         click.echo(f"Successfully generated and validated composition -> {output}", err=True)
         click.echo(f"  Title: {comp.metadata.title}", err=True)
 

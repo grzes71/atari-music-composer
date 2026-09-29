@@ -368,14 +368,24 @@ atari-music import-json dungeon.json \
     --output-ir dungeon_pokey.json
 ```
 
-#### 4. `export-mads` (Convert POKEY IR JSON to MADS ASM)
+#### 4. `import-dsl` (Validate, Render & Export Music DSL)
+```bash
+atari-music import-dsl dungeon.dsl \
+    --output-wav dungeon.wav \
+    --output-asm dungeon_data.asm \
+    --output-ir dungeon_pokey.json \
+    --output-json canonical_dungeon.json
+```
+
+#### 5. `export-mads` (Convert POKEY IR JSON to MADS ASM)
 ```bash
 atari-music export-mads dungeon_pokey.json -o dungeon_data.asm
 ```
 
-#### 5. `build-xex` (Directly Compile Composition JSON to Atari XEX)
+#### 6. `build-xex` (Directly Compile Composition JSON or DSL to Atari XEX)
 ```bash
 atari-music build-xex dungeon.json \
+    --format json \
     --output dungeon.xex \
     --player-address 0x4000 \
     --music-address 0x6000 \

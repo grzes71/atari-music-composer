@@ -1,0 +1,78 @@
+{
+  "metadata": {
+    "date": "2026-09-29T10:45:27.885133+00:00",
+    "trial_count": 30
+  },
+  "conditions": {
+    "json": {
+      "total_trials": 15,
+      "initial_success_count": 15,
+      "initial_success_rate": 1.0,
+      "final_success_count": 15,
+      "final_success_rate": 1.0,
+      "median_repair_attempts": 0,
+      "p95_repair_attempts": 0,
+      "repair_attempts_distribution": {
+        "success_after_0_repairs": 15,
+        "success_after_1_repair": 0,
+        "success_after_2_repairs": 0,
+        "success_after_3_repairs": 0,
+        "failed_after_repairs": 0
+      },
+      "usage_status": "estimated",
+      "total_tokens_consumed": 0,
+      "total_prompt_tokens": 0,
+      "total_completion_tokens": 0,
+      "tokens_per_successful_composition": 0.0,
+      "avg_wall_time_ms": 0.7,
+      "median_wall_time_ms": 0.6,
+      "complexity_medians": {
+        "median_duration": 5.12,
+        "median_pattern_count": 2,
+        "median_sequence_length": 64,
+        "median_active_channels": 4,
+        "median_note_count": 88,
+        "median_rest_count": 0,
+        "median_unique_instruments": 4,
+        "median_unique_pitches": 12,
+        "median_lead_note_count": 22
+      },
+      "failure_distribution": {}
+    },
+    "dsl": {
+      "total_trials": 15,
+      "initial_success_count": 15,
+      "initial_success_rate": 1.0,
+      "final_success_count": 15,
+      "final_success_rate": 1.0,
+      "median_repair_attempts": 0,
+      "p95_repair_attempts": 0,
+      "repair_attempts_distribution": {
+        "success_after_0_repairs": 15,
+        "success_after_1_repair": 0,
+        "success_after_2_repairs": 0,
+        "success_after_3_repairs": 0,
+        "failed_after_repairs": 0
+      },
+      "usage_status": "estimated",
+      "total_tokens_consumed": 0,
+      "total_prompt_tokens": 0,
+      "total_completion_tokens": 0,
+      "tokens_per_successful_composition": 0.0,
+      "avg_wall_time_ms": 1.3,
+      "median_wall_time_ms": 1.1,
+      "complexity_medians": {
+        "median_duration": 5.12,
+        "median_pattern_count": 2,
+        "median_sequence_length": 64,
+        "median_active_channels": 4,
+        "median_note_count": 88,
+        "median_rest_count": 20,
+        "median_unique_instruments": 4,
+        "median_unique_pitches": 12,
+        "median_lead_note_count": 22
+      },
+      "failure_distribution": {}
+    }
+  }
+}
