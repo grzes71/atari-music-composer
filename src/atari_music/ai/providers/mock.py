@@ -120,6 +120,15 @@ class MockAICompositionProvider(AICompositionProvider):
         self.received_feedbacks.append(feedback)
         self.received_previous_compositions.append({"raw_dsl": previous_dsl} if previous_dsl else None)
 
+        from atari_music.ai.prompts import build_dsl_system_prompt, build_dsl_user_prompt
+        dsl_ver = getattr(request, "dsl_version", "v1.1")
+        system_prompt = build_dsl_system_prompt(version=dsl_ver)
+        user_prompt = build_dsl_user_prompt(request)
+        logger.debug("Music DSL System Prompt (mock, version=%s):\n%s", dsl_ver, system_prompt)
+        logger.debug("Music DSL User Prompt (mock):\n%s", user_prompt)
+        if feedback:
+            logger.debug("Music DSL Feedback (mock):\n%s", feedback)
+
         if self.scenario == "dsl_syntax_error_then_valid":
             if self.call_count == 1:
                 return 'TITLE "Broken"\nSEQUENCE A\n[PATTERN A]\nCH1 LEAD V14\nC4/0\n'
