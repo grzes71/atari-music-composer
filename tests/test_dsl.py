@@ -798,6 +798,93 @@ def test_dsl_v1_1_export_omits_lengths_by_default():
     assert re_doc.patterns[0].length_steps == 16
 
 
+def test_dsl_v1_1_builtin_equivalence_ir_asm_wav(tmp_path: Path):
+    """Verify built-in composition JSON -> AICompositionDoc -> DSL v1.1 (no length) -> AICompositionDoc produces identical POKEY IR, MADS ASM, and WAV."""
+    sample_doc_dict = {
+        "format": "atari-music-composition",
+        "version": 1,
+        "metadata": {
+            "title": "Builtin Equivalence Test",
+            "author": "CI Tester",
+            "bpm": 120,
+            "key": "D",
+            "mode": "minor",
+        },
+        "hardware": {"channels": 4, "use_16bit_bass": True},
+        "instruments": [
+            {"id": "bass", "name": "Bass", "character": "bass"},
+            {"id": "lead", "name": "Lead", "character": "bright_lead"},
+            {"id": "perc", "name": "Perc", "character": "percussion"},
+        ],
+        "patterns": [
+            {
+                "id": "A1",
+                "length_steps": 32,
+                "role": "theme",
+                "channels": {
+                    "1": [
+                        {"step": 0, "note": "D2", "instrument": "bass", "duration": 8, "volume": 14},
+                        {"step": 8, "note": "F2", "instrument": "bass", "duration": 8, "volume": 14},
+                        {"step": 16, "note": "C2", "instrument": "bass", "duration": 8, "volume": 14},
+                        {"step": 24, "note": "D2", "instrument": "bass", "duration": 8, "volume": 14},
+                    ],
+                    "2": [],
+                    "3": [
+                        {"step": 0, "note": "D4", "instrument": "lead", "duration": 4, "volume": 12},
+                        {"step": 4, "note": "F4", "instrument": "lead", "duration": 4, "volume": 12},
+                        {"step": 8, "note": "A4", "instrument": "lead", "duration": 4, "volume": 12},
+                        {"step": 12, "note": "D5", "instrument": "lead", "duration": 4, "volume": 12},
+                        {"step": 16, "note": "F4", "instrument": "lead", "duration": 8, "volume": 12},
+                        {"step": 24, "note": "D4", "instrument": "lead", "duration": 8, "volume": 12},
+                    ],
+                    "4": [
+                        {"step": 0, "note": "C4", "instrument": "perc", "duration": 2, "volume": 10},
+                        {"step": 4, "note": "C4", "instrument": "perc", "duration": 2, "volume": 10},
+                        {"step": 8, "note": "C4", "instrument": "perc", "duration": 2, "volume": 10},
+                        {"step": 12, "note": "C4", "instrument": "perc", "duration": 2, "volume": 10},
+                        {"step": 16, "note": "C4", "instrument": "perc", "duration": 2, "volume": 10},
+                        {"step": 20, "note": "C4", "instrument": "perc", "duration": 2, "volume": 10},
+                        {"step": 24, "note": "C4", "instrument": "perc", "duration": 2, "volume": 10},
+                        {"step": 28, "note": "C4", "instrument": "perc", "duration": 2, "volume": 10},
+                    ],
+                },
+            }
+        ],
+        "sequence": ["A1", "A1"],
+        "loop_point": 0,
+    }
+    doc_json = AICompositionDoc.model_validate(sample_doc_dict)
+
+    # 1. Baseline from JSON
+    p_ir_json = compile_composition_to_pokey_ir(doc_json)
+    asm_json = export_mads_asm(p_ir_json)
+    res_json = generate_music_from_composition(doc_json)
+    wav_json_path = tmp_path / "builtin_json.wav"
+    res_json.render_wav(wav_json_path)
+    wav_json = wav_json_path.read_bytes()
+
+    # 2. Export to DSL v1.1 (include_lengths=False) and parse back
+    dsl_text = export_music_dsl(doc_json, include_lengths=False)
+    assert "length=" not in dsl_text or "[PATTERN" in dsl_text
+    doc_dsl = parse_music_dsl(dsl_text)
+
+    # Verify pattern length was inferred and preserved
+    assert doc_dsl.patterns[0].length_steps == 32
+
+    # 3. Compile from DSL
+    p_ir_dsl = compile_composition_to_pokey_ir(doc_dsl)
+    asm_dsl = export_mads_asm(p_ir_dsl)
+    res_dsl = generate_music_from_composition(doc_dsl)
+    wav_dsl_path = tmp_path / "builtin_dsl.wav"
+    res_dsl.render_wav(wav_dsl_path)
+    wav_dsl = wav_dsl_path.read_bytes()
+
+    # 4. Rigorous bit-level assertions
+    assert p_ir_json.model_dump() == p_ir_dsl.model_dump(), "POKEY IR mismatch on builtin test"
+    assert asm_json == asm_dsl, "MADS ASM mismatch on builtin test"
+    assert wav_json == wav_dsl, "WAV audio bytes mismatch on builtin test"
+
+
 @pytest.mark.parametrize("example_filename", [
     "action_fast.json",
     "dungeon_dark.json",
@@ -805,7 +892,10 @@ def test_dsl_v1_1_export_omits_lengths_by_default():
 ])
 def test_dsl_v1_1_full_equivalence_ir_asm_wav(example_filename: str, tmp_path: Path):
     """Verify JSON -> AICompositionDoc -> DSL v1.1 (no length) -> AICompositionDoc produces identical POKEY IR, MADS ASM, and WAV."""
+    from conftest import require_local_artifact
     ex_path = Path("examples/ai") / example_filename
+    require_local_artifact(ex_path)
+
     json_data = json.loads(ex_path.read_text(encoding="utf-8"))
     doc_json = AICompositionDoc.model_validate(json_data)
 
@@ -838,5 +928,6 @@ def test_dsl_v1_1_full_equivalence_ir_asm_wav(example_filename: str, tmp_path: P
     assert p_ir_json.model_dump() == p_ir_dsl.model_dump(), f"POKEY IR mismatch for {example_filename}"
     assert asm_json == asm_dsl, f"MADS ASM mismatch for {example_filename}"
     assert wav_json == wav_dsl, f"WAV audio bytes mismatch for {example_filename}"
+
 
 
