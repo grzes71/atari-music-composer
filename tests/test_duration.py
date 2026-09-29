@@ -420,6 +420,6 @@ def test_xex_harness_channel_mute_and_colors(tmp_path: Path):
     # Channel muting via keys 1-4
     assert "key_table:" in asm_text
     assert "cmp key_table,x" in asm_text
-    assert ".byte $1E, $1D, $19, $18" in asm_text  # Keys '1', '2', '3', '4'
+    assert ".byte $1F, $1E, $1A, $18" in asm_text  # Keys '1', '2', '3', '4'
     assert "ch_mute_mask" in asm_text
 

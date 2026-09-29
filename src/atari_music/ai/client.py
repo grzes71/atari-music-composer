@@ -842,7 +842,7 @@ def build_xex_from_composition(
         "@pr_str_done:",
         "    rts",
         "",
-        "key_table:       .byte $1E, $1D, $19, $18",
+        "key_table:       .byte $1F, $1E, $1A, $18",
         "",
         "template_ch:",
         "    .byte $23, $28, $11, $1A, 0, $3B, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, $3D, 0, $2F, $2E, 0, $FF",
