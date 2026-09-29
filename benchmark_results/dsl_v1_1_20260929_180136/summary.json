@@ -1,0 +1,239 @@
+{
+  "dsl_v1": {
+    "total_trials": 15,
+    "initial_success_count": 13,
+    "initial_success_rate": 0.8667,
+    "final_success_count": 15,
+    "final_success_rate": 1.0,
+    "hardware_validation_count": 15,
+    "hardware_validation_rate": 1.0,
+    "repair_attempts_total": 2,
+    "mean_repair_attempts": 0.133,
+    "repair_success_rate": 1.0,
+    "length_errors_count": 2,
+    "syntax_errors_count": 0,
+    "semantic_errors_count": 0,
+    "hardware_errors_count": 0,
+    "tokens": {
+      "total": 217753,
+      "prompt": 31402,
+      "completion": 186351,
+      "mean_total": 14516.9,
+      "mean_prompt": 2093.5,
+      "mean_completion": 12423.4,
+      "tokens_per_successful_composition": 14516.9
+    },
+    "latency_seconds": {
+      "median_total": 42.2,
+      "mean_total": 44.98,
+      "median_initial_gen": 42.2,
+      "mean_initial_gen": 43.45
+    },
+    "complexity_distributions": {
+      "duration_seconds": {
+        "mean": 31.21,
+        "median": 32.0,
+        "min": 15.04,
+        "max": 45.12,
+        "q25": 20.48,
+        "q75": 41.6
+      },
+      "pattern_count": {
+        "mean": 4.53,
+        "median": 4.0,
+        "min": 2.0,
+        "max": 10.0,
+        "q25": 3.0,
+        "q75": 6.0
+      },
+      "sequence_length": {
+        "mean": 353.87,
+        "median": 320.0,
+        "min": 188.0,
+        "max": 564.0,
+        "q25": 256.0,
+        "q75": 416.0
+      },
+      "active_channels": {
+        "mean": 3.4,
+        "median": 4.0,
+        "min": 2.0,
+        "max": 4.0,
+        "q25": 3.0,
+        "q75": 4.0
+      },
+      "note_count": {
+        "mean": 312.53,
+        "median": 379.0,
+        "min": 84.0,
+        "max": 504.0,
+        "q25": 110.0,
+        "q75": 448.0
+      },
+      "rest_count": {
+        "mean": 37.6,
+        "median": 20.0,
+        "min": 0.0,
+        "max": 129.0,
+        "q25": 3.0,
+        "q75": 66.0
+      },
+      "unique_instruments": {
+        "mean": 3.47,
+        "median": 4.0,
+        "min": 2.0,
+        "max": 4.0,
+        "q25": 3.0,
+        "q75": 4.0
+      },
+      "unique_pitches": {
+        "mean": 25.13,
+        "median": 25.0,
+        "min": 17.0,
+        "max": 31.0,
+        "q25": 22.0,
+        "q75": 29.0
+      },
+      "lead_note_count": {
+        "mean": 91.8,
+        "median": 91.0,
+        "min": 34.0,
+        "max": 185.0,
+        "q25": 59.0,
+        "q75": 121.0
+      }
+    }
+  },
+  "dsl_v1_1": {
+    "total_trials": 15,
+    "initial_success_count": 15,
+    "initial_success_rate": 1.0,
+    "final_success_count": 15,
+    "final_success_rate": 1.0,
+    "hardware_validation_count": 15,
+    "hardware_validation_rate": 1.0,
+    "repair_attempts_total": 0,
+    "mean_repair_attempts": 0,
+    "repair_success_rate": 1.0,
+    "length_errors_count": 0,
+    "syntax_errors_count": 0,
+    "semantic_errors_count": 0,
+    "hardware_errors_count": 0,
+    "tokens": {
+      "total": 174398,
+      "prompt": 18750,
+      "completion": 155648,
+      "mean_total": 11626.5,
+      "mean_prompt": 1250.0,
+      "mean_completion": 10376.5,
+      "tokens_per_successful_composition": 11626.5
+    },
+    "latency_seconds": {
+      "median_total": 41.91,
+      "mean_total": 37.71,
+      "median_initial_gen": 41.9,
+      "mean_initial_gen": 37.71
+    },
+    "complexity_distributions": {
+      "duration_seconds": {
+        "mean": 29.98,
+        "median": 31.2,
+        "min": 10.24,
+        "max": 44.8,
+        "q25": 20.48,
+        "q75": 38.4
+      },
+      "pattern_count": {
+        "mean": 4.13,
+        "median": 4.0,
+        "min": 2.0,
+        "max": 6.0,
+        "q25": 3.0,
+        "q75": 6.0
+      },
+      "sequence_length": {
+        "mean": 340.27,
+        "median": 312.0,
+        "min": 128.0,
+        "max": 560.0,
+        "q25": 256.0,
+        "q75": 384.0
+      },
+      "active_channels": {
+        "mean": 3.4,
+        "median": 4.0,
+        "min": 2.0,
+        "max": 4.0,
+        "q25": 3.0,
+        "q75": 4.0
+      },
+      "note_count": {
+        "mean": 293.27,
+        "median": 292.0,
+        "min": 64.0,
+        "max": 679.0,
+        "q25": 94.0,
+        "q75": 435.0
+      },
+      "rest_count": {
+        "mean": 43.53,
+        "median": 39.0,
+        "min": 0.0,
+        "max": 141.0,
+        "q25": 9.0,
+        "q75": 59.0
+      },
+      "unique_instruments": {
+        "mean": 3.33,
+        "median": 4.0,
+        "min": 2.0,
+        "max": 4.0,
+        "q25": 3.0,
+        "q75": 4.0
+      },
+      "unique_pitches": {
+        "mean": 23.07,
+        "median": 22.0,
+        "min": 18.0,
+        "max": 30.0,
+        "q25": 19.0,
+        "q75": 27.0
+      },
+      "lead_note_count": {
+        "mean": 82.73,
+        "median": 80.0,
+        "min": 28.0,
+        "max": 144.0,
+        "q25": 46.0,
+        "q75": 132.0
+      }
+    }
+  },
+  "equivalence": {
+    "action_fast.json": {
+      "pokey_ir_identical": true,
+      "mads_asm_identical": true,
+      "wav_bit_identical": true,
+      "has_length_tags": false,
+      "asm_sha256": "0bbe5a66e6566890",
+      "wav_sha256": "c4fcd3ea917fd8ac"
+    },
+    "dungeon_dark.json": {
+      "pokey_ir_identical": true,
+      "mads_asm_identical": true,
+      "wav_bit_identical": true,
+      "has_length_tags": false,
+      "asm_sha256": "7a891b9041fe550d",
+      "wav_sha256": "1f325b64115b27b9"
+    },
+    "funny_prl.json": {
+      "pokey_ir_identical": true,
+      "mads_asm_identical": true,
+      "wav_bit_identical": true,
+      "has_length_tags": false,
+      "asm_sha256": "0e0aad4d55654f6a",
+      "wav_sha256": "0e785b94383881e0"
+    }
+  },
+  "git_sha": "a82b8033dd977d7d3a870457ce9dcd68db0a46b7"
+}

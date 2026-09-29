@@ -609,13 +609,16 @@ def parse_music_dsl(text: str, validate: bool = True) -> AICompositionDoc:
 # Exporter: AICompositionDoc -> DSL
 # =============================================================================
 
-def export_music_dsl(doc: AICompositionDoc) -> str:
+def export_music_dsl(doc: AICompositionDoc, include_lengths: bool = False) -> str:
     """Serialize an ``AICompositionDoc`` into compact, readable Music DSL text.
 
     Parameters
     ----------
     doc : AICompositionDoc
         Canonical composition document.
+    include_lengths : bool, default=False
+        Whether to explicitly append `length=<N>` to pattern headers. When False (v1.1 default),
+        pattern lengths are omitted and automatically inferred from channel events upon parsing.
 
     Returns
     -------
@@ -670,8 +673,10 @@ def export_music_dsl(doc: AICompositionDoc) -> str:
 
     for pat in doc.patterns:
         header_parts = [f"[PATTERN {pat.id}"]
-        # Include length parameter if needed
-        header_parts.append(f"length={pat.length_steps}")
+        # Include length parameter if requested, or if needed to preserve non-default empty pattern length
+        has_any_events = any(bool(ev_list) for ev_list in pat.channels.values())
+        if include_lengths or (not has_any_events and pat.length_steps != 16):
+            header_parts.append(f"length={pat.length_steps}")
         if pat.role:
             header_parts.append(f"role={pat.role}")
         header_line = " ".join(header_parts) + "]"

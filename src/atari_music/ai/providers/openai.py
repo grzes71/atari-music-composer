@@ -502,7 +502,8 @@ class OpenAICompositionProvider(AICompositionProvider):
         """Generate raw Music DSL text from OpenAI provider."""
         client = self._get_client()
 
-        system_prompt = build_dsl_system_prompt()
+        dsl_ver = getattr(request, "dsl_version", "v1.1")
+        system_prompt = build_dsl_system_prompt(version=dsl_ver)
         user_prompt = build_dsl_user_prompt(request)
 
         if feedback:

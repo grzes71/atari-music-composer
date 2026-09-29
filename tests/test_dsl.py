@@ -625,3 +625,218 @@ def test_build_xex_directly_from_dsl_file(tmp_path: Path):
     assert res_path.stat().st_size > 0
 
 
+# =============================================================================
+# E. DSL v1.1 INFERRED LENGTH & EDGE CASE REGRESSION TESTS
+# =============================================================================
+
+def test_dsl_v1_1_inferred_length_single_channel():
+    """Verify single channel pattern length is inferred accurately without length=."""
+    dsl = """
+    TITLE "Single Channel Inferred"
+    KEY C
+    MODE MINOR
+    BPM 120
+    SEQUENCE A1
+
+    [PATTERN A1]
+    CH1 LEAD V10
+    C4/4 D4/4 E4/4 F4/4
+    """
+    doc = parse_music_dsl(dsl)
+    assert doc.patterns[0].length_steps == 16
+
+
+def test_dsl_v1_1_inferred_length_multichannel_max():
+    """Verify pattern length is derived from max end step across channels (32 vs 64 steps)."""
+    dsl = """
+    TITLE "Multi-Length Inferred"
+    KEY D
+    MODE MINOR
+    BPM 120
+    SEQUENCE A1
+
+    [PATTERN A1]
+    CH1 BASS V12
+    D2/8 F2/8 C2/8 D2/8
+
+    CH3 LEAD V14
+    D4/16 F4/16 A4/16 G4/16
+    """
+    doc = parse_music_dsl(dsl)
+    # CH1 = 8 * 4 = 32 steps
+    # CH3 = 16 * 4 = 64 steps
+    assert doc.patterns[0].length_steps == 64
+
+
+def test_dsl_v1_1_inferred_length_trailing_rest():
+    """Verify trailing rests advance step and influence derived pattern length."""
+    dsl = """
+    TITLE "Trailing Rest Inferred"
+    KEY E
+    MODE MINOR
+    BPM 120
+    SEQUENCE A1
+
+    [PATTERN A1]
+    CH1 LEAD V10
+    C4/4 R/4 R/8
+    """
+    doc = parse_music_dsl(dsl)
+    # 4 + 4 + 8 = 16 steps
+    assert doc.patterns[0].length_steps == 16
+
+
+def test_dsl_v1_1_empty_pattern_default_length():
+    """Verify empty pattern receives deterministic default length of 16 steps."""
+    dsl = """
+    TITLE "Empty Pattern"
+    KEY C
+    MODE MAJOR
+    BPM 120
+    SEQUENCE A1
+
+    [PATTERN A1]
+    """
+    doc = parse_music_dsl(dsl)
+    assert doc.patterns[0].length_steps == 16
+
+
+def test_dsl_v1_1_16bit_bass_pairing():
+    """Verify BASS 16BIT directive pairs CH1+CH2 correctly without requiring length=."""
+    dsl = """
+    TITLE "16-Bit Bass Track"
+    KEY D
+    MODE MINOR
+    BPM 90
+    BASS 16BIT
+    SEQUENCE A1
+
+    [PATTERN A1]
+    CH1 BASS V14
+    D2/8 F2/8
+    CH3 LEAD V12
+    D4/16
+    """
+    doc = parse_music_dsl(dsl)
+    assert doc.hardware.use_16bit_bass is True
+    assert doc.patterns[0].length_steps == 16
+    assert len(doc.patterns[0].channels["1"]) == 2
+    assert len(doc.patterns[0].channels["2"]) == 0  # Slave channel empty
+
+
+def test_dsl_v1_1_explicit_length_backward_compatibility():
+    """Verify existing explicit length= parameter is still parsed and honored."""
+    dsl = """
+    TITLE "Explicit Length Compat"
+    KEY A
+    MODE MINOR
+    BPM 120
+    SEQUENCE A1
+
+    [PATTERN A1 length=64 role=theme]
+    CH1 BASS V12
+    A2/16 E2/16
+    """
+    doc = parse_music_dsl(dsl)
+    assert doc.patterns[0].length_steps == 64
+    assert doc.patterns[0].role == "theme"
+
+
+def test_dsl_v1_1_explicit_length_mismatch_too_small_raises():
+    """Verify explicit length smaller than channel events strictly raises DSLSyntaxError."""
+    dsl = """
+    TITLE "Length Too Small"
+    KEY C
+    MODE MINOR
+    BPM 120
+    SEQUENCE A1
+
+    [PATTERN A1 length=8]
+    CH1 LEAD V14
+    C4/4 D4/4 E4/4
+    """
+    with pytest.raises(DSLSyntaxError, match="exceeding explicit length"):
+        parse_music_dsl(dsl)
+
+
+def test_dsl_v1_1_explicit_length_larger_than_events_retained():
+    """Verify explicit length larger than events preserves the declared length."""
+    dsl = """
+    TITLE "Length Larger"
+    KEY C
+    MODE MINOR
+    BPM 120
+    SEQUENCE A1
+
+    [PATTERN A1 length=32]
+    CH1 LEAD V14
+    C4/4 D4/4
+    """
+    doc = parse_music_dsl(dsl)
+    # Events take 8 steps, but explicit length was 32
+    assert doc.patterns[0].length_steps == 32
+
+
+def test_dsl_v1_1_export_omits_lengths_by_default():
+    """Verify export_music_dsl defaults to omitting length= parameter."""
+    dsl_src = """
+    TITLE "No Length Export"
+    KEY C
+    MODE MINOR
+    BPM 120
+    SEQUENCE A1
+
+    [PATTERN A1]
+    CH1 LEAD V14
+    C4/4 D4/4 E4/4 F4/4
+    """
+    doc = parse_music_dsl(dsl_src)
+    exported = export_music_dsl(doc)
+    assert "length=" not in exported
+    # Reparsing reproduces identical length
+    re_doc = parse_music_dsl(exported)
+    assert re_doc.patterns[0].length_steps == 16
+
+
+@pytest.mark.parametrize("example_filename", [
+    "action_fast.json",
+    "dungeon_dark.json",
+    "funny_prl.json",
+])
+def test_dsl_v1_1_full_equivalence_ir_asm_wav(example_filename: str, tmp_path: Path):
+    """Verify JSON -> AICompositionDoc -> DSL v1.1 (no length) -> AICompositionDoc produces identical POKEY IR, MADS ASM, and WAV."""
+    ex_path = Path("examples/ai") / example_filename
+    json_data = json.loads(ex_path.read_text(encoding="utf-8"))
+    doc_json = AICompositionDoc.model_validate(json_data)
+
+    # 1. Baseline from JSON
+    p_ir_json = compile_composition_to_pokey_ir(doc_json)
+    asm_json = export_mads_asm(p_ir_json)
+    res_json = generate_music_from_composition(doc_json)
+    wav_json_path = tmp_path / f"{example_filename}_json.wav"
+    res_json.render_wav(wav_json_path)
+    wav_json = wav_json_path.read_bytes()
+
+    # 2. Export to DSL v1.1 (include_lengths=False) and parse back
+    dsl_text = export_music_dsl(doc_json, include_lengths=False)
+    assert "length=" not in dsl_text or "[PATTERN" in dsl_text  # Check no unnecessary length tags
+    doc_dsl = parse_music_dsl(dsl_text)
+
+    # Verify pattern lengths were fully preserved
+    for p_j, p_d in zip(doc_json.patterns, doc_dsl.patterns):
+        assert p_j.length_steps == p_d.length_steps
+
+    # 3. Compile from DSL
+    p_ir_dsl = compile_composition_to_pokey_ir(doc_dsl)
+    asm_dsl = export_mads_asm(p_ir_dsl)
+    res_dsl = generate_music_from_composition(doc_dsl)
+    wav_dsl_path = tmp_path / f"{example_filename}_dsl.wav"
+    res_dsl.render_wav(wav_dsl_path)
+    wav_dsl = wav_dsl_path.read_bytes()
+
+    # 4. Rigorous assertions
+    assert p_ir_json.model_dump() == p_ir_dsl.model_dump(), f"POKEY IR mismatch for {example_filename}"
+    assert asm_json == asm_dsl, f"MADS ASM mismatch for {example_filename}"
+    assert wav_json == wav_dsl, f"WAV audio bytes mismatch for {example_filename}"
+
+

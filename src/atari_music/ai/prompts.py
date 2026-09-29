@@ -174,9 +174,17 @@ def build_user_prompt(request: CompositionRequest) -> str:
     return "\n".join(lines)
 
 
-def build_dsl_system_prompt() -> str:
+def build_dsl_system_prompt(version: str = "v1.1") -> str:
     """Generate system instructions for the LLM composer using Music DSL format."""
-    return """You are a composer creating authentic chiptune music for the 1980s Atari 8-bit computer family (Atari 800 XL / 65 XE) equipped with the POKEY sound chip.
+    if version == "v1":
+        pattern_syntax = "   [PATTERN <id>]        # pattern block header (e.g. [PATTERN A1] or [PATTERN A1 length=16])"
+    else:
+        pattern_syntax = (
+            "   [PATTERN <id>]        # pattern block header (e.g. [PATTERN A1])\n"
+            "   # Do not specify pattern length. Pattern length is calculated automatically from the events."
+        )
+
+    return f"""You are a composer creating authentic chiptune music for the 1980s Atari 8-bit computer family (Atari 800 XL / 65 XE) equipped with the POKEY sound chip.
 
 YOUR ROLE & SEPARATION OF RESPONSIBILITIES:
 - You are purely the COMPOSER. You decide musical concepts, melody, rhythm, harmony, instrumentation, and form.
@@ -216,7 +224,7 @@ MUSIC DSL SYNTAX SPECIFICATION:
    SEQUENCE <pat_id1> <pat_id2> ... # ordered playback of pattern IDs
 
 3. Patterns and Channels:
-   [PATTERN <id>]        # pattern block header (e.g. [PATTERN A1] or [PATTERN A1 length=16])
+{pattern_syntax}
    CH<1..4> <inst> V<vol> # channel header with instrument role and default volume (0..15)
    <notes>               # sequential note events on this channel
 
@@ -285,14 +293,21 @@ def build_dsl_user_prompt(request: CompositionRequest) -> str:
         fpt = 6 if bpm <= 80 else (5 if bpm <= 110 else (4 if bpm <= 145 else 3))
         step_duration = fpt / 50.0
         target_total_steps = int(round(request.duration_seconds / step_duration))
-        lines.extend([
+        guidance = [
             "- Duration & Scale Guidance:",
             f"  * Target duration of ~{request.duration_seconds}s corresponds to approximately {target_total_steps} total steps in sequence at tempo {bpm} BPM.",
-            "  * Choose pattern lengths, distinct patterns, and sequence repetitions that naturally suit the style, mood, and requested duration.",
-        ])
+        ]
+        dsl_ver = getattr(request, "dsl_version", "v1.1")
+        if dsl_ver == "v1":
+            guidance.append("  * Choose pattern lengths, distinct patterns, and sequence repetitions that naturally suit the style, mood, and requested duration.")
+        else:
+            guidance.append("  * Do not specify pattern length. Pattern length is calculated automatically from the events.")
+            guidance.append("  * Choose distinct patterns and sequence repetitions that naturally suit the style, mood, and requested duration.")
+        lines.extend(guidance)
 
     lines.append("\nReturn ONLY the plain text Music DSL document without markdown fences or commentary.")
     return "\n".join(lines)
+
 
 
 

@@ -4,7 +4,7 @@
 [![Platform: Atari 8-bit](https://img.shields.io/badge/platform-Atari%20800%20XL%20%2F%2065%20XE-red.svg)](https://en.wikipedia.org/wiki/Atari_8-bit_family)
 [![Assembler: MADS](https://img.shields.io/badge/assembler-MADS%201.9.6-green.svg)](http://mads.atari8.info/)
 [![CPU: MOS 6502](https://img.shields.io/badge/cpu-MOS%206502-orange.svg)](https://en.wikipedia.org/wiki/MOS_Technology_6502)
-[![Tests: 189 Passed](https://img.shields.io/badge/tests-189%20passed-brightgreen.svg)](tests/)
+[![Tests: 283 Passed](https://img.shields.io/badge/tests-283%20passed-brightgreen.svg)](tests/)
 
 Kompletny, profesjonalny system generowania, aranżacji, syntezy i odtwarzania muzyki dla komputerów **Atari 8-bit (Atari 800 XL / 65 XE)** wyposażonych w układ dźwiękowy **POKEY**.
 
@@ -15,19 +15,25 @@ Projekt łączy proceduralną kompozycję w Pythonie z natywnym eksportem do ase
 ## 🚀 Kompletny Pipeline Projektu
 
 ```text
-┌───────────────────────────────┐        ┌───────────────────────────────┐
-│     Composer v4 (Python)      │        │      AI LLM Composer (JSON)   │
-│  Proceduralna kompozycja      │        │  DeepSeek / OpenAI Structured │
-└──────────────┬────────────────┘        └──────────────┬────────────────┘
-               │                                        │  AICompositionDoc v1
-               │                                        ▼
-               │                         ┌───────────────────────────────┐
-               │                         │  3-Tier Validator & Repair    │
-               │                         │  Schema + Musical + Hardware  │
-               │                         └──────────────┬────────────────┘
-               │                                        │  Composition Interpreter
-               │  MusicGenerationResult                 │  & Analysis Engine
-               └───────────────────┬────────────────────┘
+┌───────────────────────────────┐        ┌───────────────────────────────────────────┐
+│     Composer v4 (Python)      │        │          AI LLM Composer                  │
+│  Proceduralna kompozycja      │        │       DeepSeek / OpenAI                   │
+└──────────────┬────────────────┘        └─────────────┬───────────────────┬─────────┘
+               │                                       │ JSON              │ Music DSL
+               │                                       ▼                   ▼
+               │                         ┌───────────────────────────┐ ┌─────────────┐
+               │                         │  AICompositionDoc v1      │ │ DSL Parser  │
+               │                         │  (Canonical SSOT)         │◄┤ (lossless)  │
+               │                         └─────────────┬─────────────┘ └─────────────┘
+               │                                       │
+               │                                       ▼
+               │                         ┌───────────────────────────┐
+               │                         │  3-Tier Validator & Repair│
+               │                         │  Schema + Music + Hardware│
+               │                         └─────────────┬─────────────┘
+               │                                       │  Composition Interpreter
+               │  MusicGenerationResult                │  & Analysis Engine
+               └───────────────────┬───────────────────┘
                                    │  Music IR + POKEY IR
                                    ▼
                     ┌───────────────────────────────┐
@@ -66,6 +72,10 @@ Projekt łączy proceduralną kompozycję w Pythonie z natywnym eksportem do ase
   * **Minimalny narzut pamięci:** Kod playera to **754 bajty**, zmienne RAM to **55 bajtów**, dane utworu to **340–750 bajtów**. Cały moduł mieści się w **< 1.6 KB RAM**.
   * **Znikomy narzut CPU:** Średnio **~110–140 cykli na ramkę** (< 1.5% ramki PAL 50 Hz).
   * **Standardowe API:** `music_init`, `music_play`, `music_stop`, `music_update`, `music_is_playing`.
+* **Kompaktowy Music DSL (Domain-Specific Language):**
+  * Alternatywne, oszczędne wejście tekstowe dla LLM, redukujące zużycie tokenów o **~49.4%** względem JSON w kontrolowanych testach empirycznych (oraz do 83% przy kompresji tokenizera).
+  * Bezstratny parser i serializer dwukierunkowy (`AICompositionDoc` $\leftrightarrow$ Music DSL) ze ścisłą diagnostyką składniową (linia i kolumna).
+  * Pełna integracja z 3-stopniową walidacją, syntezą WAV oraz bezpośrednią kompilacją do plików Atari XEX.
 * **Gotowe Executable XEX:**
   * Samodzielne pliki `.xex` gotowe do uruchomienia na fizycznym Atari lub w emulatorze.
   * Synchronizacja z ramką obrazu VBLANK (50 Hz PAL) przez `RTCLOK` (`$14`).
@@ -216,8 +226,11 @@ Zrewidowany system prompt zapewnia pełną swobodę artystyczną oraz autentyczn
 * **Elastyczność formalna:** Brak sztywnych szablonów sekcji — model sam dobiera formę (loop, A/B, rondo, wariacje) do stylu i nastroju.
 
 ```bash
-# Wygenerowanie utworu dungeon ambient z zapisem do JSON:
+# Wygenerowanie utworu dungeon ambient z zapisem do kanonicznego JSON:
 atari-music ai-compose --style "dungeon exploration" -m dark -m mysterious --duration 20 -o dungeon.json
+
+# Wygenerowanie utworu w kompaktowym formacie Music DSL (--format dsl):
+atari-music ai-compose --style "dungeon exploration" --format dsl -o dungeon.dsl
 
 # Streaming czystego JSON na stdout dla agentów (logi diagnostyczne kierowane na stderr):
 atari-music ai-compose --style "fast arcade action" -m energetic --duration 16 > action.json
@@ -514,7 +527,7 @@ Mechanizmy aranżacyjne przekształcające kompozycje z mechanicznych pętli w r
 ### 9. Przykłady Użycia CLI dla AI Composition
 
 ```bash
-# 1. Wygenerowanie kompozycji z automatyczną pętlą naprawczą (mock lub openai/deepseek):
+# 1. Wygenerowanie kompozycji (JSON lub Music DSL) z automatyczną pętlą naprawczą:
 atari-music ai-compose \
     --style "dark dungeon exploration" \
     --duration 90 \
@@ -522,21 +535,28 @@ atari-music ai-compose \
     --use-16bit-bass \
     --max-retries 3 \
     --provider openai \
+    --format json \
     --output dungeon.json
+
+# Wersja w kompaktowym formacie Music DSL (--format dsl):
+atari-music ai-compose --style "dark dungeon exploration" --format dsl -o dungeon.dsl
 
 # 2. Walidacja i import kompozycji JSON (eksport do WAV, ASM i POKEY IR):
 atari-music import-json dungeon.json \
     --output-wav dungeon.wav \
     --output-asm dungeon.asm
 
-# 3. Bezpośrednia kompilacja kompozycji JSON do Atari XEX (z relokacją i timerem):
-atari-music build-xex dungeon.json \
-    --output dungeon.xex \
-    --player-address 0x4000 \
-    --zp-base 0x80 \
-    --player-asm player.asm
+# 3. Walidacja i import kompozycji Music DSL (eksport do WAV, ASM, IR lub kanonicznego JSON):
+atari-music import-dsl dungeon.dsl \
+    --output-wav dungeon.wav \
+    --output-asm dungeon.asm \
+    --output-json canonical_dungeon.json
 
-# 4. Szczegółowa analiza właściwości muzycznych i sprzętowych kompozycji:
+# 4. Bezpośrednia kompilacja kompozycji (JSON lub DSL) do Atari XEX (z relokacją i timerem):
+atari-music build-xex dungeon.json --format json --output dungeon.xex
+atari-music build-xex dungeon.dsl --format dsl --output dungeon.xex
+
+# 5. Szczegółowa analiza właściwości muzycznych i sprzętowych kompozycji:
 atari-music analyze dungeon.json --structure
 ```
 
@@ -545,6 +565,9 @@ atari-music analyze dungeon.json --structure
 ```python
 from atari_music.ai import (
     load_composition_json,
+    load_composition_dsl,
+    parse_music_dsl,
+    export_music_dsl,
     generate_music_from_composition,
     build_xex_from_composition,
     request_ai_composition,
@@ -554,25 +577,28 @@ from atari_music.ai import (
     CompositionRequest,
 )
 
-# 1. Żądanie kompozycji od providera (automatyczna obsługa .env i retry loop)
+# 1. Żądanie kompozycji od providera (obsługa JSON lub format="dsl")
 req = CompositionRequest(
     style="dark dungeon exploration",
     bpm=88,
     channels=4,
     use_16bit_bass=True,
     duration_seconds=90,
+    format="dsl",
 )
 comp = request_ai_composition(req, provider="openai", max_retries=2)
 
-# 2. Analiza struktury i wariacji (Etap 16/17)
+# 2. Bezstratna konwersja do / z Music DSL
+dsl_text = export_music_dsl(comp)
+comp_from_dsl = load_composition_dsl(dsl_text)
+
+# 3. Analiza struktury i wariacji
 struct_metrics = analyze_composition_structure(comp)
 print(f"Liczba patternów: {struct_metrics.pattern_count}")
 print(f"Repetition Ratio: {struct_metrics.repetition_ratio:.1%}")
-print(f"Wariacje tematyczne: {struct_metrics.variation_count}")
-print(f"Fille i przejścia: {struct_metrics.transition_fill_count}")
 print(f"Forma: {struct_metrics.form.compact_form}")
 
-# 3. Kompilacja do samodzielnego pliku Atari XEX z graficznym timerem
+# 4. Kompilacja do samodzielnego pliku Atari XEX z graficznym timerem
 xex_path = build_xex_from_composition(
     comp,
     output_path="dungeon_full.xex",
@@ -582,6 +608,17 @@ xex_path = build_xex_from_composition(
 print(f"Gotowy plik Atari XEX -> {xex_path}")
 ```
 
+### 11. Kompaktowy Music DSL i Wyniki Benchmarku LLM
+
+Projekt oferuje kompaktowy, tekstowy format **Music DSL** jako alternatywny frontend dla modeli LLM. Kanonicznym źródłem prawdy (SSOT) pozostaje `AICompositionDoc` / schemat JSON.
+
+Szczegółowa specyfikacja składni znajduje się w [docs/music_dsl.md](docs/music_dsl.md).
+
+Kontrolowany eksperyment empiryczny (100 prób: 5 kategorii $\times$ 2 formaty $\times$ 10 powtórzeń na modelu `deepseek-flash`, raport w [benchmark_results/run_1790692314/report.md](benchmark_results/run_1790692314/report.md)) wykazał:
+* **49.4% redukcji tokenów API:** Średnio 13 913 tokenów na udany utwór w DSL vs 27 512 tokenów w JSON.
+* **100% finalnej skuteczności walidacji:** Oba formaty osiągnęły 100% poprawności sprzętowej i muzycznej.
+* **Pełną równoważność muzyczną:** Identyczna złożoność polifoniczna, różnorodność interwałowa i gęstość rytmiczna.
+
 ---
 
 ## 📁 Struktura Projektu
@@ -590,14 +627,15 @@ print(f"Gotowy plik Atari XEX -> {xex_path}")
 atari-music/
 ├── src/atari_music/            # Rdzenny pakiet Pythona
 │   ├── api.py                  # Publiczne API: generate_music(...)
-│   ├── ai/                     # Warstwa AI Composition, Structure & Arrangement (Etapy 12–17)
-│   │   ├── client.py           # Fasada: load_composition_json, build_xex (z timerem i VU)...
-│   │   ├── analysis.py         # Analiza muzyczna (rytm, melodia, harmonia) + SHA-256 fingerprint + ground-truth time
+│   ├── ai/                     # Warstwa AI Composition, Structure & Arrangement
+│   │   ├── client.py           # Fasada: load_composition_json, load_composition_dsl, build_xex...
+│   │   ├── dsl.py              # Music DSL: parser (parse_music_dsl) i serializer (export_music_dsl)
+│   │   ├── analysis.py         # Analiza muzyczna (rytm, melodia, harmonia) + SHA-256 fingerprint
 │   │   ├── structure_analysis.py# Analiza makrostruktury, wariacji, sekwencji, formy i powtarzalności
-│   │   ├── schema.py           # Pydantic schema (AICompositionDoc, AIFormPlanDef, AISectionPlanItem) + ValidationReport
-│   │   ├── validation.py       # 3-poziomowa walidacja (Schema, Music, Hardware) + spójność form_plan
-│   │   ├── composition.py      # Interpreter JSON -> Music IR -> POKEY IR
-│   │   ├── prompts.py          # Szablony promptów systemowych i użytkownika (z wytycznymi aranżacji)
+│   │   ├── schema.py           # Pydantic schema (AICompositionDoc) + ValidationReport
+│   │   ├── validation.py       # 3-poziomowa walidacja (Schema, Music, Hardware)
+│   │   ├── composition.py      # Interpreter JSON/DSL -> Music IR -> POKEY IR
+│   │   ├── prompts.py          # Szablony promptów systemowych i użytkownika (JSON & DSL)
 │   │   └── providers/          # Adaptery: MockAI, OpenAI / DeepSeek
 │   ├── serialization.py        # Bezstratna serializacja Music IR <-> JSON
 │   ├── composer_v4.py          # Silnik proceduralny Composer v4
@@ -611,23 +649,23 @@ atari-music/
 │   ├── ir.py                   # POKEY Intermediate Representation (IR)
 │   ├── music_ir.py             # Symbolic Music IR
 │   └── cli.py                  # Interfejs wiersza poleceń (CLI)
+├── docs/
+│   └── music_dsl.md            # Specyfikacja i gramatyka Music DSL
+├── benchmark_results/          # Wyniki kontrolowanych eksperymentów LLM (JSON vs DSL)
+│   └── run_1790692314/         # Raport 100 prób (report.md, summary.json, raw_trials.json)
+├── scripts/
+│   ├── benchmark_dsl_vs_json.py# Statyczny benchmark tokenizacji i kompresji DSL
+│   └── benchmark_llm_formats.py# Runner 100-próbowego eksperymentu LLM
 ├── config.py                   # Zarządzanie konfiguracją (.env, env vars, CLI overrides)
 ├── player.asm                  # Odtwarzacz muzyczny 6502 (MADS, obsługa pełnych sekwencji)
 ├── hardware.asm                # Ekwipacje sprzętowe POKEY, ANTIC, GTIA, PIA
 ├── examples/ai/                # Gotowe przykłady AI
-│   ├── dungeon_dark.json       # Przykłady wzorcowe offline
-│   └── live/                   # Rzeczywiste utwory z produkcyjnego LLM (DeepSeek)
-│       ├── stage15/            # 37 artefaktów (8 stylów, testy powtarzalności, repair loop)
-│       ├── stage15_1/          # 8 pełnometrażowych utworów 60–120s z timerem XEX
-│       └── stage17/            # 8 zaawansowanych utworów z wariacjami, fillami i breakdownami
-├── stage16_structure_report.md # Raport analityczny makrostruktury i powtarzalności (Etap 16)
-├── stage16_structure_metrics.json # Dane metryk struktury zbioru Stage 15.1
-├── stage17_arrangement_report.md # Raport i porównanie Stage 15.1 vs Stage 17 (Etap 17)
-├── stage17_structure_metrics.json # Dane metryk struktury zbioru Stage 17
 ├── stage11_xex/                # Gotowy pakiet 6 samodzielnych plików XEX (Composer v4)
 ├── tools/
 │   └── mads/mads.exe           # Asembler MADS v1.9.6
 ├── tests/
+│   ├── test_cli.py                    # Testy interfejsu CLI (import-json, import-dsl, build-xex)
+│   ├── test_dsl.py                    # Testy parsera i serializera Music DSL
 │   ├── test_pokey_music.py            # Testy silnika kompozycyjnego, playera i API
 │   ├── test_ai_composition.py         # Testy warstwy AI, walidacji i serializacji
 │   ├── test_analysis.py               # Testy modułu analizy muzycznej i fingerprintingu
@@ -648,7 +686,7 @@ atari-music/
 Projekt posiada pełne pokrycie testami jednostkowymi, integracyjnymi oraz weryfikacją kompilacji asemblera:
 
 ```bash
-# 1. Uruchomienie pełnego zestawu testów offline (189 testów, ~4.5 s, 0 regresji)
+# 1. Uruchomienie pełnego zestawu testów offline (283 testy, ~4.5 s, 0 regresji)
 pytest -q
 
 # 2. Uruchomienie opcjonalnych testów live z produkcyjnym LLM (DeepSeek / OpenAI)
