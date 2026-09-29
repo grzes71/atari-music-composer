@@ -1,0 +1,118 @@
+[
+  {
+    "trial_id": "A_simple_json_r01",
+    "prompt_id": "A_simple",
+    "category": "A \u2014 Simple (2-3 Channel Piece)",
+    "condition": "json",
+    "run_idx": 1,
+    "provider": "openai",
+    "model": "deepseek-flash",
+    "temperature": 0.7,
+    "seed": null,
+    "timestamp": "2026-09-29T11:53:45.984998+00:00",
+    "initial_success": true,
+    "final_success": true,
+    "repair_attempts": 0,
+    "total_attempts": 1,
+    "primary_failure_category": null,
+    "initial_generation_wall_time_ms": 23471.42,
+    "generation_wall_time_ms": 23471.42,
+    "repair_wall_time_ms": 0.0,
+    "total_wall_time_ms": 23472.49,
+    "prompt_tokens": 2069,
+    "completion_tokens": 5475,
+    "total_tokens": 7544,
+    "usage_is_estimated": false,
+    "input_chars": 7917,
+    "output_chars": 5835,
+    "hardware_validation_passed": true,
+    "complexity": {
+      "duration_seconds": 9.6,
+      "pattern_count": 2,
+      "sequence_length": 120,
+      "active_channels": 2,
+      "note_count": 81,
+      "rest_count": 0,
+      "unique_instruments": 2,
+      "unique_pitches": 17,
+      "lead_note_count": 51
+    },
+    "attempt_traces": [
+      {
+        "attempt_number": 1,
+        "format": "json",
+        "wall_time_ms": 23471.42,
+        "input_chars": 7917,
+        "output_chars": 5835,
+        "usage": {
+          "prompt_tokens": 2069,
+          "completion_tokens": 5475,
+          "total_tokens": 7544
+        },
+        "success": true,
+        "error_category": null,
+        "error_code": null,
+        "error_message": null,
+        "raw_content": "{\"format\": \"atari-music-composition\", \"version\": 1, \"metadata\": {\"title\": \"Sunny POKEY Walk\", \"author\": \"AI Composer\", \"key\": \"C\", \"mode\": \"major\", \"bpm\": 120, \"duration_seconds\": 15.0}, \"hardware\": {\"channels\": 4, \"use_16bit_bass\": false}, \"instruments\": [{\"id\": \"lead\", \"name\": \"Bright Lead\", \"character\": \"bright_lead\"}, {\"id\": \"bass\", \"name\": \"Walking Bass\", \"character\": \"bass\"}], \"patterns\": [{\"id\": \"patA\", \"length_steps\": 40, \"role\": \"theme\", \"channels\": {\"0\": [{\"step\": 0, \"note\": \"C5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 2, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 4, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 6, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 8, \"note\": \"F5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 10, \"note\": \"A5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 12, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 16, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 18, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 20, \"note\": \"C6\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 22, \"note\": \"A5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 24, \"note\": \"F5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 26, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 28, \"note\": \"D5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 32, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 34, \"note\": \"D5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 36, \"note\": \"C5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}], \"1\": [{\"step\": 0, \"note\": \"C2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 4, \"note\": \"E2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 8, \"note\": \"G2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 12, \"note\": \"A2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 16, \"note\": \"F2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 20, \"note\": \"A2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 24, \"note\": \"G2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 28, \"note\": \"E2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 32, \"note\": \"D2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 36, \"note\": \"G2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}], \"2\": [], \"3\": []}}, {\"id\": \"patB\", \"length_steps\": 40, \"role\": \"bridge\", \"channels\": {\"0\": [{\"step\": 0, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 2, \"note\": \"A5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 4, \"note\": \"B5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 6, \"note\": \"A5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 8, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 10, \"note\": \"F5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 12, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 16, \"note\": \"D5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 18, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 20, \"note\": \"F5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 22, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 24, \"note\": \"A5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 26, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 28, \"note\": \"F5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 32, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 34, \"note\": \"D5\", \"instrument\": \"lead\", \"duration\": 2, \"volume\": 14}, {\"step\": 36, \"note\": \"C5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}], \"1\": [{\"step\": 0, \"note\": \"F2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 4, \"note\": \"A2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 8, \"note\": \"C3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 12, \"note\": \"B2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 16, \"note\": \"G2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 20, \"note\": \"B2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 24, \"note\": \"D3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 28, \"note\": \"C3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 32, \"note\": \"G2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 36, \"note\": \"C2\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}], \"2\": [], \"3\": []}}], \"sequence\": [\"patA\", \"patB\", \"patA\"], \"loop_point\": 0, \"form_plan\": {\"form_type\": \"A-B-A\", \"primary_theme_description\": \"Cheerful C major melody over a straightforward walking bass.\", \"sections\": [{\"section_id\": \"A1\", \"pattern_id\": \"patA\", \"role\": \"theme\", \"description\": \"Main playful hook with bright lead and walking bass.\"}, {\"section_id\": \"B\", \"pattern_id\": \"patB\", \"role\": \"bridge\", \"description\": \"Contrasting bridge with higher melodic motion and harmonic shift.\"}, {\"section_id\": \"A2\", \"pattern_id\": \"patA\", \"role\": \"theme\", \"description\": \"Return of the main theme to close the A-B-A form.\"}]}, \"intent\": {\"style\": \"chiptune\", \"mood\": [\"playful\", \"bright\"], \"structure\": \"A-B-A\", \"composition_notes\": \"Two active voices only: a clear memorable bright lead and a simple walking bass. Transparent texture with rests implied by note spacing.\"}, \"provenance\": {\"source\": \"ai\", \"provider\": \"openai\", \"model\": \"deepseek-flash\", \"request_id\": \"102b35e7-f34a-4127-aba5-5c29f25a89ca\"}}"
+      }
+    ]
+  },
+  {
+    "trial_id": "A_simple_dsl_r01",
+    "prompt_id": "A_simple",
+    "category": "A \u2014 Simple (2-3 Channel Piece)",
+    "condition": "dsl",
+    "run_idx": 1,
+    "provider": "openai",
+    "model": "deepseek-flash",
+    "temperature": 0.7,
+    "seed": null,
+    "timestamp": "2026-09-29T11:54:02.934410+00:00",
+    "initial_success": true,
+    "final_success": true,
+    "repair_attempts": 0,
+    "total_attempts": 1,
+    "primary_failure_category": null,
+    "initial_generation_wall_time_ms": 16538.22,
+    "generation_wall_time_ms": 16538.22,
+    "repair_wall_time_ms": 0.0,
+    "total_wall_time_ms": 16538.62,
+    "prompt_tokens": 1211,
+    "completion_tokens": 4151,
+    "total_tokens": 5362,
+    "usage_is_estimated": false,
+    "input_chars": 3941,
+    "output_chars": 5542,
+    "hardware_validation_passed": true,
+    "complexity": {
+      "duration_seconds": 15.36,
+      "pattern_count": 2,
+      "sequence_length": 192,
+      "active_channels": 2,
+      "note_count": 87,
+      "rest_count": 0,
+      "unique_instruments": 2,
+      "unique_pitches": 15,
+      "lead_note_count": 42
+    },
+    "attempt_traces": [
+      {
+        "attempt_number": 1,
+        "format": "dsl",
+        "wall_time_ms": 16538.22,
+        "input_chars": 3941,
+        "output_chars": 5542,
+        "usage": {
+          "prompt_tokens": 1211,
+          "completion_tokens": 4151,
+          "total_tokens": 5362
+        },
+        "success": true,
+        "error_category": null,
+        "error_code": null,
+        "error_message": null,
+        "raw_content": "{\"format\": \"atari-music-composition\", \"version\": 1, \"metadata\": {\"title\": \"Cheerful Atari Theme\", \"author\": \"Composer\", \"description\": null, \"key\": \"C\", \"mode\": \"major\", \"bpm\": 120, \"duration_seconds\": null}, \"form_plan\": null, \"hardware\": {\"channels\": 2, \"use_16bit_bass\": false}, \"instruments\": [{\"id\": \"lead\", \"name\": \"Lead\", \"character\": \"bright_lead\", \"distortion\": null, \"attack_frames\": null, \"decay_frames\": null, \"sustain_vol\": null, \"release_frames\": null}, {\"id\": \"bass\", \"name\": \"Bass\", \"character\": \"bass\", \"distortion\": null, \"attack_frames\": null, \"decay_frames\": null, \"sustain_vol\": null, \"release_frames\": null}], \"patterns\": [{\"id\": \"A1\", \"length_steps\": 64, \"channels\": {\"1\": [{\"step\": 0, \"note\": \"C5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 4, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 8, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 12, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 16, \"note\": \"F5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 20, \"note\": \"A5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 24, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 8, \"volume\": 14}, {\"step\": 32, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 36, \"note\": \"C5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 40, \"note\": \"D5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 44, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 48, \"note\": \"F5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 52, \"note\": \"D5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 56, \"note\": \"C5\", \"instrument\": \"lead\", \"duration\": 8, \"volume\": 14}], \"2\": [{\"step\": 0, \"note\": \"C3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 4, \"note\": \"E3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 8, \"note\": \"G3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 12, \"note\": \"E3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 16, \"note\": \"F3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 20, \"note\": \"A3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 24, \"note\": \"C4\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 28, \"note\": \"A3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 32, \"note\": \"C3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 36, \"note\": \"E3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 40, \"note\": \"G3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 44, \"note\": \"E3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 48, \"note\": \"G3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 52, \"note\": \"B3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 56, \"note\": \"C3\", \"instrument\": \"bass\", \"duration\": 8, \"volume\": 12}]}, \"role\": null, \"variation_of\": null, \"texture_notes\": null}, {\"id\": \"B1\", \"length_steps\": 64, \"channels\": {\"1\": [{\"step\": 0, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 4, \"note\": \"A5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 8, \"note\": \"B5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 12, \"note\": \"A5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 16, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 20, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 24, \"note\": \"C5\", \"instrument\": \"lead\", \"duration\": 8, \"volume\": 14}, {\"step\": 32, \"note\": \"F5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 36, \"note\": \"A5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 40, \"note\": \"G5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 44, \"note\": \"F5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 48, \"note\": \"E5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 52, \"note\": \"D5\", \"instrument\": \"lead\", \"duration\": 4, \"volume\": 14}, {\"step\": 56, \"note\": \"C5\", \"instrument\": \"lead\", \"duration\": 8, \"volume\": 14}], \"2\": [{\"step\": 0, \"note\": \"G3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 4, \"note\": \"B3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 8, \"note\": \"D4\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 12, \"note\": \"B3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 16, \"note\": \"C3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 20, \"note\": \"E3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 24, \"note\": \"G3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 28, \"note\": \"E3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 32, \"note\": \"F3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 36, \"note\": \"A3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 40, \"note\": \"C4\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 44, \"note\": \"A3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 48, \"note\": \"C3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 52, \"note\": \"G3\", \"instrument\": \"bass\", \"duration\": 4, \"volume\": 12}, {\"step\": 56, \"note\": \"C3\", \"instrument\": \"bass\", \"duration\": 8, \"volume\": 12}]}, \"role\": null, \"variation_of\": null, \"texture_notes\": null}], \"sequence\": [\"A1\", \"B1\", \"A1\"], \"loop_point\": 0, \"intent\": null, \"provenance\": null}"
+      }
+    ]
+  }
+]

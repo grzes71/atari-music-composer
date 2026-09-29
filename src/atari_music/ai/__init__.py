@@ -31,11 +31,19 @@ from atari_music.ai.structure_analysis import (
     deduce_musical_form,
     find_repeated_subsequences,
 )
+from atari_music.ai.dsl import (
+    DSLSyntaxError,
+    export_music_dsl,
+    parse_music_dsl,
+)
 from atari_music.ai.client import (
     build_xex_from_composition,
     generate_composition_with_retry,
     generate_music_from_composition,
+    generate_music_from_dsl,
     generate_music_from_json,
+    load_composition,
+    load_composition_dsl,
     load_composition_json,
     request_ai_composition,
 )
@@ -135,7 +143,13 @@ __all__ = [
     "interpret_composition_to_music_ir",
     "compile_composition_to_pokey_ir",
     "map_instrument_character",
+    # Music DSL (Optional frontend)
+    "parse_music_dsl",
+    "export_music_dsl",
+    "DSLSyntaxError",
     # High-level client API
+    "load_composition",
+    "load_composition_dsl",
     "load_composition_json",
     "generate_music_from_composition",
     "generate_music_from_json",

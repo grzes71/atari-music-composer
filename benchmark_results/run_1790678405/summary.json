@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "date": "2026-09-29T10:40:05.956491+00:00",
+    "trial_count": 30
+  },
+  "conditions": {
+    "json": {
+      "total_trials": 15,
+      "initial_success_count": 12,
+      "initial_success_rate": 0.8,
+      "final_success_count": 12,
+      "final_success_rate": 0.8,
+      "median_repair_attempts": 0,
+      "total_tokens_consumed": 0,
+      "total_prompt_tokens": 0,
+      "total_completion_tokens": 0,
+      "tokens_per_successful_composition": 0.0,
+      "avg_wall_time_ms": 1.4,
+      "median_wall_time_ms": 1.1,
+      "complexity_medians": {
+        "median_note_count": 88.0,
+        "median_pattern_count": 2.0,
+        "median_sequence_length": 64.0,
+        "median_duration_seconds": 5.76,
+        "median_active_channels": 4.0
+      },
+      "failure_distribution": {}
+    },
+    "dsl": {
+      "total_trials": 15,
+      "initial_success_count": 12,
+      "initial_success_rate": 0.8,
+      "final_success_count": 12,
+      "final_success_rate": 0.8,
+      "median_repair_attempts": 0,
+      "total_tokens_consumed": 0,
+      "total_prompt_tokens": 0,
+      "total_completion_tokens": 0,
+      "tokens_per_successful_composition": 0.0,
+      "avg_wall_time_ms": 3.7,
+      "median_wall_time_ms": 1.6,
+      "complexity_medians": {
+        "median_note_count": 88.0,
+        "median_pattern_count": 2.0,
+        "median_sequence_length": 64.0,
+        "median_duration_seconds": 5.76,
+        "median_active_channels": 4.0
+      },
+      "failure_distribution": {}
+    }
+  }
+}

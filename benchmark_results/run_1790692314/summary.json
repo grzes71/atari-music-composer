@@ -1,0 +1,1373 @@
+{
+  "metadata": {
+    "date": "2026-09-29T14:31:54.957413+00:00",
+    "trial_count": 100,
+    "provider": "openai",
+    "model": "deepseek-flash",
+    "temperature": 0.7
+  },
+  "conditions": {
+    "json": {
+      "total_trials": 50,
+      "initial_success_count": 48,
+      "initial_success_rate": 0.96,
+      "final_success_count": 50,
+      "final_success_rate": 1.0,
+      "hardware_validation_pass_count": 50,
+      "hardware_validation_rate": 1.0,
+      "mean_repair_attempts": 0.04,
+      "median_repair_attempts": 0.0,
+      "p95_repair_attempts": 0,
+      "repair_attempts_distribution": {
+        "success_after_0_repairs": 48,
+        "success_after_1_repair": 2,
+        "success_after_2_repairs": 0,
+        "success_after_3_repairs": 0,
+        "failed_after_repairs": 0
+      },
+      "usage_status": "real_api_tokens",
+      "total_tokens_consumed": 1375618,
+      "total_prompt_tokens": 175916,
+      "total_completion_tokens": 1199702,
+      "tokens_per_successful_composition": 27512.4,
+      "completion_tokens_per_successful_composition": 23994.0,
+      "total_input_chars": 477240,
+      "total_output_chars": 1109637,
+      "latency_seconds": {
+        "mean_total": 80.89,
+        "median_total": 66.97,
+        "p95_total": 154.88,
+        "mean_initial_gen": 79.19,
+        "median_initial_gen": 66.97,
+        "mean_repair": 1.69
+      },
+      "complexity_distributions": {
+        "duration_seconds": {
+          "mean": 27.88,
+          "median": 28.8,
+          "min": 8.96,
+          "max": 46.08,
+          "q25": 19.2,
+          "q75": 35.2
+        },
+        "pattern_count": {
+          "mean": 4.84,
+          "median": 4.0,
+          "min": 2,
+          "max": 24,
+          "q25": 2,
+          "q75": 6
+        },
+        "sequence_length": {
+          "mean": 318.32,
+          "median": 288.0,
+          "min": 112,
+          "max": 576,
+          "q25": 208,
+          "q75": 384
+        },
+        "active_channels": {
+          "mean": 3.4,
+          "median": 4.0,
+          "min": 2,
+          "max": 4,
+          "q25": 3,
+          "q75": 4
+        },
+        "note_count": {
+          "mean": 295.76,
+          "median": 289.0,
+          "min": 60,
+          "max": 782,
+          "q25": 134,
+          "q75": 386
+        },
+        "rest_count": {
+          "mean": 0,
+          "median": 0.0,
+          "min": 0,
+          "max": 0,
+          "q25": 0,
+          "q75": 0
+        },
+        "unique_instruments": {
+          "mean": 3.4,
+          "median": 4.0,
+          "min": 2,
+          "max": 4,
+          "q25": 3,
+          "q75": 4
+        },
+        "unique_pitches": {
+          "mean": 24.32,
+          "median": 24.5,
+          "min": 13,
+          "max": 35,
+          "q25": 20,
+          "q75": 29
+        },
+        "lead_note_count": {
+          "mean": 97.76,
+          "median": 108.0,
+          "min": 17,
+          "max": 209,
+          "q25": 59,
+          "q75": 126
+        }
+      },
+      "failure_distribution": {}
+    },
+    "dsl": {
+      "total_trials": 50,
+      "initial_success_count": 45,
+      "initial_success_rate": 0.9,
+      "final_success_count": 50,
+      "final_success_rate": 1.0,
+      "hardware_validation_pass_count": 50,
+      "hardware_validation_rate": 1.0,
+      "mean_repair_attempts": 0.1,
+      "median_repair_attempts": 0.0,
+      "p95_repair_attempts": 1,
+      "repair_attempts_distribution": {
+        "success_after_0_repairs": 45,
+        "success_after_1_repair": 5,
+        "success_after_2_repairs": 0,
+        "success_after_3_repairs": 0,
+        "failed_after_repairs": 0
+      },
+      "usage_status": "real_api_tokens",
+      "total_tokens_consumed": 695673,
+      "total_prompt_tokens": 87256,
+      "total_completion_tokens": 608417,
+      "tokens_per_successful_composition": 13913.5,
+      "completion_tokens_per_successful_composition": 12168.3,
+      "total_input_chars": 402415,
+      "total_output_chars": 1079247,
+      "latency_seconds": {
+        "mean_total": 105.36,
+        "median_total": 41.86,
+        "p95_total": 98.74,
+        "mean_initial_gen": 103.72,
+        "median_initial_gen": 40.98,
+        "mean_repair": 1.63
+      },
+      "complexity_distributions": {
+        "duration_seconds": {
+          "mean": 29.17,
+          "median": 29.4,
+          "min": 8.96,
+          "max": 46.08,
+          "q25": 19.2,
+          "q75": 40.0
+        },
+        "pattern_count": {
+          "mean": 4.66,
+          "median": 4.0,
+          "min": 2,
+          "max": 9,
+          "q25": 2,
+          "q75": 6
+        },
+        "sequence_length": {
+          "mean": 332.56,
+          "median": 300.0,
+          "min": 112,
+          "max": 576,
+          "q25": 228,
+          "q75": 400
+        },
+        "active_channels": {
+          "mean": 3.4,
+          "median": 4.0,
+          "min": 2,
+          "max": 4,
+          "q25": 3,
+          "q75": 4
+        },
+        "note_count": {
+          "mean": 273.12,
+          "median": 305.0,
+          "min": 60,
+          "max": 658,
+          "q25": 95,
+          "q75": 387
+        },
+        "rest_count": {
+          "mean": 38.28,
+          "median": 36.0,
+          "min": 0,
+          "max": 156,
+          "q25": 10,
+          "q75": 55
+        },
+        "unique_instruments": {
+          "mean": 3.42,
+          "median": 4.0,
+          "min": 2,
+          "max": 5,
+          "q25": 3,
+          "q75": 4
+        },
+        "unique_pitches": {
+          "mean": 23.82,
+          "median": 25.0,
+          "min": 13,
+          "max": 33,
+          "q25": 18,
+          "q75": 29
+        },
+        "lead_note_count": {
+          "mean": 84.76,
+          "median": 77.0,
+          "min": 20,
+          "max": 173,
+          "q25": 47,
+          "q75": 116
+        }
+      },
+      "failure_distribution": {}
+    }
+  },
+  "bootstrap_95_ci": {
+    "total_tokens_mean_diff": {
+      "diff": -13598.9,
+      "ci_95": [
+        -20132.22,
+        -8200.0
+      ]
+    },
+    "completion_tokens_mean_diff": {
+      "diff": -11825.7,
+      "ci_95": [
+        -16282.32,
+        -7533.14
+      ]
+    },
+    "median_wall_time_seconds_diff": {
+      "diff": -25.11,
+      "ci_95": [
+        -44.65,
+        -7.2
+      ]
+    },
+    "note_count_mean_diff": {
+      "diff": -22.64,
+      "ci_95": [
+        -88.72,
+        42.1
+      ]
+    }
+  },
+  "category_breakdown": {
+    "A_simple": {
+      "json": {
+        "total_trials": 10,
+        "initial_success_count": 9,
+        "initial_success_rate": 0.9,
+        "final_success_count": 10,
+        "final_success_rate": 1.0,
+        "hardware_validation_pass_count": 10,
+        "hardware_validation_rate": 1.0,
+        "mean_repair_attempts": 0.1,
+        "median_repair_attempts": 0.0,
+        "p95_repair_attempts": 0,
+        "repair_attempts_distribution": {
+          "success_after_0_repairs": 9,
+          "success_after_1_repair": 1,
+          "success_after_2_repairs": 0,
+          "success_after_3_repairs": 0,
+          "failed_after_repairs": 0
+        },
+        "usage_status": "real_api_tokens",
+        "total_tokens_consumed": 143670,
+        "total_prompt_tokens": 32132,
+        "total_completion_tokens": 111538,
+        "tokens_per_successful_composition": 14367.0,
+        "completion_tokens_per_successful_composition": 11153.8,
+        "total_input_chars": 96367,
+        "total_output_chars": 83682,
+        "latency_seconds": {
+          "mean_total": 40.49,
+          "median_total": 37.24,
+          "p95_total": 50.33,
+          "mean_initial_gen": 39.16,
+          "median_initial_gen": 36.15,
+          "mean_repair": 1.32
+        },
+        "complexity_distributions": {
+          "duration_seconds": {
+            "mean": 14.59,
+            "median": 15.36,
+            "min": 8.96,
+            "max": 15.36,
+            "q25": 15.04,
+            "q75": 15.36
+          },
+          "pattern_count": {
+            "mean": 2.4,
+            "median": 2.0,
+            "min": 2,
+            "max": 4,
+            "q25": 2,
+            "q75": 2
+          },
+          "sequence_length": {
+            "mean": 182.4,
+            "median": 192.0,
+            "min": 112,
+            "max": 192,
+            "q25": 188,
+            "q75": 192
+          },
+          "active_channels": {
+            "mean": 2,
+            "median": 2.0,
+            "min": 2,
+            "max": 2,
+            "q25": 2,
+            "q75": 2
+          },
+          "note_count": {
+            "mean": 116.2,
+            "median": 114.0,
+            "min": 60,
+            "max": 222,
+            "q25": 79,
+            "q75": 136
+          },
+          "rest_count": {
+            "mean": 0,
+            "median": 0.0,
+            "min": 0,
+            "max": 0,
+            "q25": 0,
+            "q75": 0
+          },
+          "unique_instruments": {
+            "mean": 2,
+            "median": 2.0,
+            "min": 2,
+            "max": 2,
+            "q25": 2,
+            "q75": 2
+          },
+          "unique_pitches": {
+            "mean": 18.2,
+            "median": 18.5,
+            "min": 13,
+            "max": 25,
+            "q25": 14,
+            "q75": 21
+          },
+          "lead_note_count": {
+            "mean": 69.7,
+            "median": 66.5,
+            "min": 36,
+            "max": 126,
+            "q25": 48,
+            "q75": 88
+          }
+        },
+        "failure_distribution": {}
+      },
+      "dsl": {
+        "total_trials": 10,
+        "initial_success_count": 10,
+        "initial_success_rate": 1.0,
+        "final_success_count": 10,
+        "final_success_rate": 1.0,
+        "hardware_validation_pass_count": 10,
+        "hardware_validation_rate": 1.0,
+        "mean_repair_attempts": 0,
+        "median_repair_attempts": 0.0,
+        "p95_repair_attempts": 0,
+        "repair_attempts_distribution": {
+          "success_after_0_repairs": 10,
+          "success_after_1_repair": 0,
+          "success_after_2_repairs": 0,
+          "success_after_3_repairs": 0,
+          "failed_after_repairs": 0
+        },
+        "usage_status": "real_api_tokens",
+        "total_tokens_consumed": 68927,
+        "total_prompt_tokens": 12110,
+        "total_completion_tokens": 56817,
+        "tokens_per_successful_composition": 6892.7,
+        "completion_tokens_per_successful_composition": 5681.7,
+        "total_input_chars": 39410,
+        "total_output_chars": 66183,
+        "latency_seconds": {
+          "mean_total": 23.26,
+          "median_total": 22.72,
+          "p95_total": 29.97,
+          "mean_initial_gen": 23.26,
+          "median_initial_gen": 22.72,
+          "mean_repair": 0.0
+        },
+        "complexity_distributions": {
+          "duration_seconds": {
+            "mean": 14.5,
+            "median": 15.04,
+            "min": 8.96,
+            "max": 15.36,
+            "q25": 15.04,
+            "q75": 15.04
+          },
+          "pattern_count": {
+            "mean": 3.1,
+            "median": 2.0,
+            "min": 2,
+            "max": 8,
+            "q25": 2,
+            "q75": 3
+          },
+          "sequence_length": {
+            "mean": 181.2,
+            "median": 188.0,
+            "min": 112,
+            "max": 192,
+            "q25": 188,
+            "q75": 188
+          },
+          "active_channels": {
+            "mean": 2,
+            "median": 2.0,
+            "min": 2,
+            "max": 2,
+            "q25": 2,
+            "q75": 2
+          },
+          "note_count": {
+            "mean": 94.3,
+            "median": 94.0,
+            "min": 76,
+            "max": 130,
+            "q25": 88,
+            "q75": 94
+          },
+          "rest_count": {
+            "mean": 1,
+            "median": 0.0,
+            "min": 0,
+            "max": 4,
+            "q25": 0,
+            "q75": 2
+          },
+          "unique_instruments": {
+            "mean": 2,
+            "median": 2.0,
+            "min": 2,
+            "max": 2,
+            "q25": 2,
+            "q75": 2
+          },
+          "unique_pitches": {
+            "mean": 17.7,
+            "median": 17.0,
+            "min": 14,
+            "max": 23,
+            "q25": 16,
+            "q75": 18
+          },
+          "lead_note_count": {
+            "mean": 48.4,
+            "median": 47.0,
+            "min": 42,
+            "max": 73,
+            "q25": 44,
+            "q75": 48
+          }
+        },
+        "failure_distribution": {}
+      }
+    },
+    "B_typical": {
+      "json": {
+        "total_trials": 10,
+        "initial_success_count": 10,
+        "initial_success_rate": 1.0,
+        "final_success_count": 10,
+        "final_success_rate": 1.0,
+        "hardware_validation_pass_count": 10,
+        "hardware_validation_rate": 1.0,
+        "mean_repair_attempts": 0,
+        "median_repair_attempts": 0.0,
+        "p95_repair_attempts": 0,
+        "repair_attempts_distribution": {
+          "success_after_0_repairs": 10,
+          "success_after_1_repair": 0,
+          "success_after_2_repairs": 0,
+          "success_after_3_repairs": 0,
+          "failed_after_repairs": 0
+        },
+        "usage_status": "real_api_tokens",
+        "total_tokens_consumed": 220179,
+        "total_prompt_tokens": 20830,
+        "total_completion_tokens": 199349,
+        "tokens_per_successful_composition": 22017.9,
+        "completion_tokens_per_successful_composition": 19934.9,
+        "total_input_chars": 79620,
+        "total_output_chars": 164314,
+        "latency_seconds": {
+          "mean_total": 65.32,
+          "median_total": 65.54,
+          "p95_total": 76.02,
+          "mean_initial_gen": 65.32,
+          "median_initial_gen": 65.54,
+          "mean_repair": 0.0
+        },
+        "complexity_distributions": {
+          "duration_seconds": {
+            "mean": 22.18,
+            "median": 23.04,
+            "min": 16.64,
+            "max": 25.6,
+            "q25": 20.48,
+            "q75": 24.0
+          },
+          "pattern_count": {
+            "mean": 2.6,
+            "median": 2.0,
+            "min": 2,
+            "max": 5,
+            "q25": 2,
+            "q75": 3
+          },
+          "sequence_length": {
+            "mean": 277.2,
+            "median": 288.0,
+            "min": 208,
+            "max": 320,
+            "q25": 256,
+            "q75": 300
+          },
+          "active_channels": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "note_count": {
+            "mean": 328.6,
+            "median": 330.5,
+            "min": 231,
+            "max": 403,
+            "q25": 282,
+            "q75": 386
+          },
+          "rest_count": {
+            "mean": 0,
+            "median": 0.0,
+            "min": 0,
+            "max": 0,
+            "q25": 0,
+            "q75": 0
+          },
+          "unique_instruments": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "unique_pitches": {
+            "mean": 26.6,
+            "median": 26.5,
+            "min": 21,
+            "max": 32,
+            "q25": 24,
+            "q75": 29
+          },
+          "lead_note_count": {
+            "mean": 125.1,
+            "median": 128.0,
+            "min": 83,
+            "max": 160,
+            "q25": 112,
+            "q75": 138
+          }
+        },
+        "failure_distribution": {}
+      },
+      "dsl": {
+        "total_trials": 10,
+        "initial_success_count": 10,
+        "initial_success_rate": 1.0,
+        "final_success_count": 10,
+        "final_success_rate": 1.0,
+        "hardware_validation_pass_count": 10,
+        "hardware_validation_rate": 1.0,
+        "mean_repair_attempts": 0,
+        "median_repair_attempts": 0.0,
+        "p95_repair_attempts": 0,
+        "repair_attempts_distribution": {
+          "success_after_0_repairs": 10,
+          "success_after_1_repair": 0,
+          "success_after_2_repairs": 0,
+          "success_after_3_repairs": 0,
+          "failed_after_repairs": 0
+        },
+        "usage_status": "real_api_tokens",
+        "total_tokens_consumed": 125961,
+        "total_prompt_tokens": 12250,
+        "total_completion_tokens": 113711,
+        "tokens_per_successful_composition": 12596.1,
+        "completion_tokens_per_successful_composition": 11371.1,
+        "total_input_chars": 39860,
+        "total_output_chars": 184806,
+        "latency_seconds": {
+          "mean_total": 43.26,
+          "median_total": 43.35,
+          "p95_total": 50.34,
+          "mean_initial_gen": 43.25,
+          "median_initial_gen": 43.34,
+          "mean_repair": 0.0
+        },
+        "complexity_distributions": {
+          "duration_seconds": {
+            "mean": 22.4,
+            "median": 24.0,
+            "min": 16.64,
+            "max": 24.32,
+            "q25": 20.48,
+            "q75": 24.0
+          },
+          "pattern_count": {
+            "mean": 3,
+            "median": 2.0,
+            "min": 2,
+            "max": 7,
+            "q25": 2,
+            "q75": 4
+          },
+          "sequence_length": {
+            "mean": 280,
+            "median": 300.0,
+            "min": 208,
+            "max": 304,
+            "q25": 256,
+            "q75": 300
+          },
+          "active_channels": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "note_count": {
+            "mean": 331,
+            "median": 341.5,
+            "min": 239,
+            "max": 402,
+            "q25": 316,
+            "q75": 362
+          },
+          "rest_count": {
+            "mean": 37.5,
+            "median": 37.5,
+            "min": 24,
+            "max": 57,
+            "q25": 30,
+            "q75": 44
+          },
+          "unique_instruments": {
+            "mean": 3.9,
+            "median": 4.0,
+            "min": 3,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "unique_pitches": {
+            "mean": 28.2,
+            "median": 28.5,
+            "min": 24,
+            "max": 33,
+            "q25": 26,
+            "q75": 29
+          },
+          "lead_note_count": {
+            "mean": 129.8,
+            "median": 139.0,
+            "min": 100,
+            "max": 152,
+            "q25": 104,
+            "q75": 150
+          }
+        },
+        "failure_distribution": {}
+      }
+    },
+    "C_complex": {
+      "json": {
+        "total_trials": 10,
+        "initial_success_count": 10,
+        "initial_success_rate": 1.0,
+        "final_success_count": 10,
+        "final_success_rate": 1.0,
+        "hardware_validation_pass_count": 10,
+        "hardware_validation_rate": 1.0,
+        "mean_repair_attempts": 0,
+        "median_repair_attempts": 0.0,
+        "p95_repair_attempts": 0,
+        "repair_attempts_distribution": {
+          "success_after_0_repairs": 10,
+          "success_after_1_repair": 0,
+          "success_after_2_repairs": 0,
+          "success_after_3_repairs": 0,
+          "failed_after_repairs": 0
+        },
+        "usage_status": "real_api_tokens",
+        "total_tokens_consumed": 314232,
+        "total_prompt_tokens": 20850,
+        "total_completion_tokens": 293382,
+        "tokens_per_successful_composition": 31423.2,
+        "completion_tokens_per_successful_composition": 29338.2,
+        "total_input_chars": 79810,
+        "total_output_chars": 262007,
+        "latency_seconds": {
+          "mean_total": 101.54,
+          "median_total": 105.63,
+          "p95_total": 142.87,
+          "mean_initial_gen": 101.54,
+          "median_initial_gen": 105.62,
+          "mean_repair": 0.0
+        },
+        "complexity_distributions": {
+          "duration_seconds": {
+            "mean": 32.96,
+            "median": 30.4,
+            "min": 28.8,
+            "max": 40.0,
+            "q25": 28.8,
+            "q75": 38.4
+          },
+          "pattern_count": {
+            "mean": 6.4,
+            "median": 5.0,
+            "min": 4,
+            "max": 14,
+            "q25": 5,
+            "q75": 7
+          },
+          "sequence_length": {
+            "mean": 329.6,
+            "median": 304.0,
+            "min": 288,
+            "max": 400,
+            "q25": 288,
+            "q75": 384
+          },
+          "active_channels": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "note_count": {
+            "mean": 340.3,
+            "median": 345.0,
+            "min": 205,
+            "max": 469,
+            "q25": 308,
+            "q75": 378
+          },
+          "rest_count": {
+            "mean": 0,
+            "median": 0.0,
+            "min": 0,
+            "max": 0,
+            "q25": 0,
+            "q75": 0
+          },
+          "unique_instruments": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "unique_pitches": {
+            "mean": 28,
+            "median": 29.5,
+            "min": 23,
+            "max": 32,
+            "q25": 25,
+            "q75": 30
+          },
+          "lead_note_count": {
+            "mean": 102.9,
+            "median": 103.5,
+            "min": 59,
+            "max": 152,
+            "q25": 92,
+            "q75": 118
+          }
+        },
+        "failure_distribution": {}
+      },
+      "dsl": {
+        "total_trials": 10,
+        "initial_success_count": 9,
+        "initial_success_rate": 0.9,
+        "final_success_count": 10,
+        "final_success_rate": 1.0,
+        "hardware_validation_pass_count": 10,
+        "hardware_validation_rate": 1.0,
+        "mean_repair_attempts": 0.1,
+        "median_repair_attempts": 0.0,
+        "p95_repair_attempts": 0,
+        "repair_attempts_distribution": {
+          "success_after_0_repairs": 9,
+          "success_after_1_repair": 1,
+          "success_after_2_repairs": 0,
+          "success_after_3_repairs": 0,
+          "failed_after_repairs": 0
+        },
+        "usage_status": "real_api_tokens",
+        "total_tokens_consumed": 184993,
+        "total_prompt_tokens": 15392,
+        "total_completion_tokens": 169601,
+        "tokens_per_successful_composition": 18499.3,
+        "completion_tokens_per_successful_composition": 16960.1,
+        "total_input_chars": 73981,
+        "total_output_chars": 268575,
+        "latency_seconds": {
+          "mean_total": 362.02,
+          "median_total": 72.81,
+          "p95_total": 657.21,
+          "mean_initial_gen": 360.95,
+          "median_initial_gen": 72.81,
+          "mean_repair": 1.07
+        },
+        "complexity_distributions": {
+          "duration_seconds": {
+            "mean": 35.2,
+            "median": 36.8,
+            "min": 28.8,
+            "max": 40.0,
+            "q25": 28.8,
+            "q75": 40.0
+          },
+          "pattern_count": {
+            "mean": 7,
+            "median": 7.5,
+            "min": 4,
+            "max": 9,
+            "q25": 5,
+            "q75": 9
+          },
+          "sequence_length": {
+            "mean": 352,
+            "median": 368.0,
+            "min": 288,
+            "max": 400,
+            "q25": 288,
+            "q75": 400
+          },
+          "active_channels": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "note_count": {
+            "mean": 365.2,
+            "median": 318.5,
+            "min": 258,
+            "max": 658,
+            "q25": 296,
+            "q75": 406
+          },
+          "rest_count": {
+            "mean": 44.3,
+            "median": 49.5,
+            "min": 1,
+            "max": 70,
+            "q25": 25,
+            "q75": 68
+          },
+          "unique_instruments": {
+            "mean": 4.1,
+            "median": 4.0,
+            "min": 4,
+            "max": 5,
+            "q25": 4,
+            "q75": 4
+          },
+          "unique_pitches": {
+            "mean": 27.2,
+            "median": 27.5,
+            "min": 23,
+            "max": 32,
+            "q25": 24,
+            "q75": 29
+          },
+          "lead_note_count": {
+            "mean": 83.9,
+            "median": 71.5,
+            "min": 47,
+            "max": 166,
+            "q25": 67,
+            "q75": 90
+          }
+        },
+        "failure_distribution": {}
+      }
+    },
+    "D_16bit_bass": {
+      "json": {
+        "total_trials": 10,
+        "initial_success_count": 10,
+        "initial_success_rate": 1.0,
+        "final_success_count": 10,
+        "final_success_rate": 1.0,
+        "hardware_validation_pass_count": 10,
+        "hardware_validation_rate": 1.0,
+        "mean_repair_attempts": 0,
+        "median_repair_attempts": 0.0,
+        "p95_repair_attempts": 0,
+        "repair_attempts_distribution": {
+          "success_after_0_repairs": 10,
+          "success_after_1_repair": 0,
+          "success_after_2_repairs": 0,
+          "success_after_3_repairs": 0,
+          "failed_after_repairs": 0
+        },
+        "usage_status": "real_api_tokens",
+        "total_tokens_consumed": 165210,
+        "total_prompt_tokens": 20980,
+        "total_completion_tokens": 144230,
+        "tokens_per_successful_composition": 16521.0,
+        "completion_tokens_per_successful_composition": 14423.0,
+        "total_input_chars": 79770,
+        "total_output_chars": 102041,
+        "latency_seconds": {
+          "mean_total": 52.52,
+          "median_total": 45.26,
+          "p95_total": 71.23,
+          "mean_initial_gen": 52.52,
+          "median_initial_gen": 45.26,
+          "mean_repair": 0.0
+        },
+        "complexity_distributions": {
+          "duration_seconds": {
+            "mean": 27.52,
+            "median": 28.8,
+            "min": 19.2,
+            "max": 38.4,
+            "q25": 25.6,
+            "q75": 28.8
+          },
+          "pattern_count": {
+            "mean": 4.8,
+            "median": 4.0,
+            "min": 4,
+            "max": 12,
+            "q25": 4,
+            "q75": 4
+          },
+          "sequence_length": {
+            "mean": 275.2,
+            "median": 288.0,
+            "min": 192,
+            "max": 384,
+            "q25": 256,
+            "q75": 288
+          },
+          "active_channels": {
+            "mean": 3,
+            "median": 3.0,
+            "min": 3,
+            "max": 3,
+            "q25": 3,
+            "q75": 3
+          },
+          "note_count": {
+            "mean": 145.3,
+            "median": 132.5,
+            "min": 74,
+            "max": 257,
+            "q25": 86,
+            "q75": 156
+          },
+          "rest_count": {
+            "mean": 0,
+            "median": 0.0,
+            "min": 0,
+            "max": 0,
+            "q25": 0,
+            "q75": 0
+          },
+          "unique_instruments": {
+            "mean": 3,
+            "median": 3.0,
+            "min": 3,
+            "max": 3,
+            "q25": 3,
+            "q75": 3
+          },
+          "unique_pitches": {
+            "mean": 19.2,
+            "median": 18.5,
+            "min": 15,
+            "max": 24,
+            "q25": 17,
+            "q75": 21
+          },
+          "lead_note_count": {
+            "mean": 46.9,
+            "median": 36.0,
+            "min": 17,
+            "max": 122,
+            "q25": 26,
+            "q75": 36
+          }
+        },
+        "failure_distribution": {}
+      },
+      "dsl": {
+        "total_trials": 10,
+        "initial_success_count": 9,
+        "initial_success_rate": 0.9,
+        "final_success_count": 10,
+        "final_success_rate": 1.0,
+        "hardware_validation_pass_count": 10,
+        "hardware_validation_rate": 1.0,
+        "mean_repair_attempts": 0.1,
+        "median_repair_attempts": 0.0,
+        "p95_repair_attempts": 0,
+        "repair_attempts_distribution": {
+          "success_after_0_repairs": 9,
+          "success_after_1_repair": 1,
+          "success_after_2_repairs": 0,
+          "success_after_3_repairs": 0,
+          "failed_after_repairs": 0
+        },
+        "usage_status": "real_api_tokens",
+        "total_tokens_consumed": 88348,
+        "total_prompt_tokens": 15294,
+        "total_completion_tokens": 73054,
+        "tokens_per_successful_composition": 8834.8,
+        "completion_tokens_per_successful_composition": 7305.4,
+        "total_input_chars": 56102,
+        "total_output_chars": 100524,
+        "latency_seconds": {
+          "mean_total": 29.83,
+          "median_total": 28.45,
+          "p95_total": 42.07,
+          "mean_initial_gen": 28.62,
+          "median_initial_gen": 28.45,
+          "mean_repair": 1.21
+        },
+        "complexity_distributions": {
+          "duration_seconds": {
+            "mean": 29.04,
+            "median": 30.0,
+            "min": 19.2,
+            "max": 32.0,
+            "q25": 30.0,
+            "q75": 30.0
+          },
+          "pattern_count": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "sequence_length": {
+            "mean": 290.4,
+            "median": 300.0,
+            "min": 192,
+            "max": 320,
+            "q25": 300,
+            "q75": 300
+          },
+          "active_channels": {
+            "mean": 3,
+            "median": 3.0,
+            "min": 3,
+            "max": 3,
+            "q25": 3,
+            "q75": 3
+          },
+          "note_count": {
+            "mean": 113.3,
+            "median": 99.0,
+            "min": 60,
+            "max": 204,
+            "q25": 78,
+            "q75": 140
+          },
+          "rest_count": {
+            "mean": 30.2,
+            "median": 32.5,
+            "min": 10,
+            "max": 51,
+            "q25": 17,
+            "q75": 40
+          },
+          "unique_instruments": {
+            "mean": 3.1,
+            "median": 3.0,
+            "min": 3,
+            "max": 4,
+            "q25": 3,
+            "q75": 3
+          },
+          "unique_pitches": {
+            "mean": 18.8,
+            "median": 18.0,
+            "min": 13,
+            "max": 29,
+            "q25": 17,
+            "q75": 19
+          },
+          "lead_note_count": {
+            "mean": 43.6,
+            "median": 36.0,
+            "min": 20,
+            "max": 96,
+            "q25": 22,
+            "q75": 60
+          }
+        },
+        "failure_distribution": {}
+      }
+    },
+    "E_formal": {
+      "json": {
+        "total_trials": 10,
+        "initial_success_count": 9,
+        "initial_success_rate": 0.9,
+        "final_success_count": 10,
+        "final_success_rate": 1.0,
+        "hardware_validation_pass_count": 10,
+        "hardware_validation_rate": 1.0,
+        "mean_repair_attempts": 0.1,
+        "median_repair_attempts": 0.0,
+        "p95_repair_attempts": 0,
+        "repair_attempts_distribution": {
+          "success_after_0_repairs": 9,
+          "success_after_1_repair": 1,
+          "success_after_2_repairs": 0,
+          "success_after_3_repairs": 0,
+          "failed_after_repairs": 0
+        },
+        "usage_status": "real_api_tokens",
+        "total_tokens_consumed": 532327,
+        "total_prompt_tokens": 81124,
+        "total_completion_tokens": 451203,
+        "tokens_per_successful_composition": 53232.7,
+        "completion_tokens_per_successful_composition": 45120.3,
+        "total_input_chars": 141673,
+        "total_output_chars": 497593,
+        "latency_seconds": {
+          "mean_total": 144.57,
+          "median_total": 140.74,
+          "p95_total": 191.24,
+          "mean_initial_gen": 137.4,
+          "median_initial_gen": 127.93,
+          "mean_repair": 7.15
+        },
+        "complexity_distributions": {
+          "duration_seconds": {
+            "mean": 42.18,
+            "median": 44.8,
+            "min": 30.72,
+            "max": 46.08,
+            "q25": 43.52,
+            "q75": 46.08
+          },
+          "pattern_count": {
+            "mean": 8,
+            "median": 6.0,
+            "min": 6,
+            "max": 24,
+            "q25": 6,
+            "q75": 6
+          },
+          "sequence_length": {
+            "mean": 527.2,
+            "median": 560.0,
+            "min": 384,
+            "max": 576,
+            "q25": 544,
+            "q75": 576
+          },
+          "active_channels": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "note_count": {
+            "mean": 548.4,
+            "median": 510.5,
+            "min": 387,
+            "max": 782,
+            "q25": 447,
+            "q75": 639
+          },
+          "rest_count": {
+            "mean": 0,
+            "median": 0.0,
+            "min": 0,
+            "max": 0,
+            "q25": 0,
+            "q75": 0
+          },
+          "unique_instruments": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "unique_pitches": {
+            "mean": 29.6,
+            "median": 29.5,
+            "min": 23,
+            "max": 35,
+            "q25": 27,
+            "q75": 33
+          },
+          "lead_note_count": {
+            "mean": 144.2,
+            "median": 135.0,
+            "min": 113,
+            "max": 209,
+            "q25": 117,
+            "q75": 155
+          }
+        },
+        "failure_distribution": {}
+      },
+      "dsl": {
+        "total_trials": 10,
+        "initial_success_count": 7,
+        "initial_success_rate": 0.7,
+        "final_success_count": 10,
+        "final_success_rate": 1.0,
+        "hardware_validation_pass_count": 10,
+        "hardware_validation_rate": 1.0,
+        "mean_repair_attempts": 0.3,
+        "median_repair_attempts": 0.0,
+        "p95_repair_attempts": 1,
+        "repair_attempts_distribution": {
+          "success_after_0_repairs": 7,
+          "success_after_1_repair": 3,
+          "success_after_2_repairs": 0,
+          "success_after_3_repairs": 0,
+          "failed_after_repairs": 0
+        },
+        "usage_status": "real_api_tokens",
+        "total_tokens_consumed": 227444,
+        "total_prompt_tokens": 32210,
+        "total_completion_tokens": 195234,
+        "tokens_per_successful_composition": 22744.4,
+        "completion_tokens_per_successful_composition": 19523.4,
+        "total_input_chars": 193062,
+        "total_output_chars": 459159,
+        "latency_seconds": {
+          "mean_total": 68.42,
+          "median_total": 67.82,
+          "p95_total": 82.77,
+          "mean_initial_gen": 62.53,
+          "median_initial_gen": 63.43,
+          "mean_repair": 5.88
+        },
+        "complexity_distributions": {
+          "duration_seconds": {
+            "mean": 44.74,
+            "median": 44.96,
+            "min": 43.2,
+            "max": 46.08,
+            "q25": 44.16,
+            "q75": 45.12
+          },
+          "pattern_count": {
+            "mean": 6.2,
+            "median": 6.0,
+            "min": 6,
+            "max": 7,
+            "q25": 6,
+            "q75": 6
+          },
+          "sequence_length": {
+            "mean": 559.2,
+            "median": 562.0,
+            "min": 540,
+            "max": 576,
+            "q25": 552,
+            "q75": 564
+          },
+          "active_channels": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "note_count": {
+            "mean": 461.8,
+            "median": 467.0,
+            "min": 345,
+            "max": 583,
+            "q25": 402,
+            "q75": 514
+          },
+          "rest_count": {
+            "mean": 78.4,
+            "median": 74.0,
+            "min": 7,
+            "max": 156,
+            "q25": 45,
+            "q75": 99
+          },
+          "unique_instruments": {
+            "mean": 4,
+            "median": 4.0,
+            "min": 4,
+            "max": 4,
+            "q25": 4,
+            "q75": 4
+          },
+          "unique_pitches": {
+            "mean": 27.2,
+            "median": 27.0,
+            "min": 19,
+            "max": 33,
+            "q25": 26,
+            "q75": 30
+          },
+          "lead_note_count": {
+            "mean": 118.1,
+            "median": 115.0,
+            "min": 66,
+            "max": 173,
+            "q25": 97,
+            "q75": 130
+          }
+        },
+        "failure_distribution": {}
+      }
+    }
+  }
+}

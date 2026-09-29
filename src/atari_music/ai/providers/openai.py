@@ -6,7 +6,12 @@ import time
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
-from atari_music.ai.prompts import build_system_prompt, build_user_prompt
+from atari_music.ai.prompts import (
+    build_dsl_system_prompt,
+    build_dsl_user_prompt,
+    build_system_prompt,
+    build_user_prompt,
+)
 from atari_music.ai.providers.base import AICompositionProvider, CompositionRequest
 from atari_music.ai.schema import (
     AICompositionDoc,
@@ -206,6 +211,8 @@ class OpenAICompositionProvider(AICompositionProvider):
         self.backoff_factor = float(os.environ.get("AI_BACKOFF_FACTOR", backoff_factor))
         self.max_backoff = float(os.environ.get("AI_MAX_BACKOFF", max_backoff))
         self.max_server_wait = float(os.environ.get("AI_MAX_SERVER_WAIT", max_server_wait))
+        self.last_usage: Optional[Dict[str, int]] = None
+        self.usage_history: list[Dict[str, int]] = []
 
         if self.api_key:
             register_secret(self.api_key)
@@ -225,12 +232,8 @@ class OpenAICompositionProvider(AICompositionProvider):
             return err_text.replace(self.api_key, "******")
         return err_text
 
-    def generate_composition(
-        self,
-        request: CompositionRequest,
-        feedback: Optional[str] = None,
-        previous_composition: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+    def _get_client(self):
+        """Instantiate configured OpenAI client instance."""
         if not self.api_key or self.api_key.strip() == "your_api_key_here":
             raise AIProviderMissingKeyError(
                 "API key is not configured. Provide AI_API_KEY (or DEEPSEEK_API_KEY / OPENAI_API_KEY) in .env or environment."
@@ -246,7 +249,15 @@ class OpenAICompositionProvider(AICompositionProvider):
         client_kwargs: Dict[str, Any] = {"api_key": self.api_key}
         if self.base_url:
             client_kwargs["base_url"] = self.base_url
-        client = openai.OpenAI(**client_kwargs)
+        return openai.OpenAI(**client_kwargs)
+
+    def generate_composition(
+        self,
+        request: CompositionRequest,
+        feedback: Optional[str] = None,
+        previous_composition: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        client = self._get_client()
 
         system_prompt = build_system_prompt()
         user_prompt = build_user_prompt(request)
@@ -328,6 +339,16 @@ class OpenAICompositionProvider(AICompositionProvider):
                             response_size,
                         )
 
+                        usage_obj = getattr(completion, "usage", None)
+                        if usage_obj is not None:
+                            u_dict = {
+                                "prompt_tokens": getattr(usage_obj, "prompt_tokens", 0),
+                                "completion_tokens": getattr(usage_obj, "completion_tokens", 0),
+                                "total_tokens": getattr(usage_obj, "total_tokens", 0),
+                            }
+                            self.last_usage = u_dict
+                            self.usage_history.append(u_dict)
+
                         if getattr(choice.message, "refusal", None):
                             raise AIProviderAPIError(f"Model refused request: {choice.message.refusal}")
 
@@ -368,6 +389,16 @@ class OpenAICompositionProvider(AICompositionProvider):
                             temperature=0.7,
                         )
                         response_id = getattr(response, "id", None)
+                        usage_obj = getattr(response, "usage", None)
+                        if usage_obj is not None:
+                            u_dict = {
+                                "prompt_tokens": getattr(usage_obj, "prompt_tokens", 0),
+                                "completion_tokens": getattr(usage_obj, "completion_tokens", 0),
+                                "total_tokens": getattr(usage_obj, "total_tokens", 0),
+                            }
+                            self.last_usage = u_dict
+                            self.usage_history.append(u_dict)
+
                         choice = response.choices[0]
                         raw_content = choice.message.content or "{}"
                         logger.debug(
@@ -461,3 +492,74 @@ class OpenAICompositionProvider(AICompositionProvider):
             raise AIProviderStructuredOutputError(
                 f"Failed to parse JSON response from OpenAI: {err}\nResponse snippet:\n{raw_content[:400]}"
             ) from err
+
+    def generate_composition_dsl(
+        self,
+        request: CompositionRequest,
+        feedback: Optional[str] = None,
+        previous_dsl: Optional[str] = None,
+    ) -> str:
+        """Generate raw Music DSL text from OpenAI provider."""
+        client = self._get_client()
+
+        system_prompt = build_dsl_system_prompt()
+        user_prompt = build_dsl_user_prompt(request)
+
+        if feedback:
+            repair_content = (
+                f"{feedback}\n\n"
+                f"Previous Music DSL to repair:\n"
+                f"{previous_dsl or ''}\n\n"
+                f"Remember: Preserve all valid parts of the existing composition. "
+                f"Modify ONLY what is necessary to resolve the reported errors. "
+                f"Return ONLY the complete corrected Music DSL plain text without markdown fences."
+            )
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+                {"role": "assistant", "content": previous_dsl or ""},
+                {"role": "user", "content": repair_content},
+            ]
+        else:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+
+        for transient_attempt in range(1, self.max_transient_retries + 1):
+            try:
+                response = client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=0.7,
+                )
+                usage_obj = getattr(response, "usage", None)
+                if usage_obj is not None:
+                    u_dict = {
+                        "prompt_tokens": getattr(usage_obj, "prompt_tokens", 0),
+                        "completion_tokens": getattr(usage_obj, "completion_tokens", 0),
+                        "total_tokens": getattr(usage_obj, "total_tokens", 0),
+                    }
+                    self.last_usage = u_dict
+                    self.usage_history.append(u_dict)
+
+                choice = response.choices[0]
+                raw_content = choice.message.content or ""
+                cleaned = raw_content.strip()
+                if cleaned.startswith("```"):
+                    lines = cleaned.splitlines()
+                    if len(lines) >= 2 and lines[-1].strip().startswith("```"):
+                        cleaned = "\n".join(lines[1:-1]).strip()
+                return cleaned
+            except Exception as err:
+                is_trans, code, desc = _is_transient_http_error(err)
+                if is_trans and transient_attempt < self.max_transient_retries:
+                    base_delay = 5.0 * (2 ** (transient_attempt - 1))
+                    delay = extract_retry_delay(err, default_backoff=base_delay)
+                    time.sleep(delay)
+                    continue
+                err_msg = self._sanitize_error_message(str(err))
+                raise AIProviderAPIError(f"API request failed: {err_msg}") from err
+
+        raise AIProviderAPIError("Failed to obtain DSL completion.")
+

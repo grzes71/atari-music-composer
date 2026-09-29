@@ -183,6 +183,8 @@ class CompositionAttempt(BaseModel):
     attempt_number: int
     composition: Optional[Dict[str, Any]] = None
     report: ValidationReport
+    usage: Optional[Dict[str, int]] = None
+    wall_time_ms: Optional[float] = None
 
 
 

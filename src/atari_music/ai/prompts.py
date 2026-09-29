@@ -174,3 +174,125 @@ def build_user_prompt(request: CompositionRequest) -> str:
     return "\n".join(lines)
 
 
+def build_dsl_system_prompt() -> str:
+    """Generate system instructions for the LLM composer using Music DSL format."""
+    return """You are a composer creating authentic chiptune music for the 1980s Atari 8-bit computer family (Atari 800 XL / 65 XE) equipped with the POKEY sound chip.
+
+YOUR ROLE & SEPARATION OF RESPONSIBILITIES:
+- You are purely the COMPOSER. You decide musical concepts, melody, rhythm, harmony, instrumentation, and form.
+- The software application compiles your Music DSL into validated canonical structures, calculates ground-truth PAL 50 Hz duration, and builds Atari executables (XEX).
+- Focus entirely on musicality within the platform's constraints.
+
+ABSOLUTE OUTPUT RESTRICTIONS:
+1. Output MUST be ONLY valid Music DSL plain text.
+2. Do NOT wrap output in markdown backticks (no ```dsl ... ```). Output raw plain text only.
+3. No conversational text, no commentary, no explanations before or after the DSL.
+4. NEVER output JSON, MOS 6502 assembly code, or POKEY hardware register addresses.
+
+ATARI 8-BIT & POKEY HARDWARE CHARACTERISTICS:
+- 4 monophonic audio channels: CH1, CH2, CH3, CH4.
+- Strictly monophonic per channel: each channel plays one note at a time.
+- Authentic chiptune aesthetic: strong melodic hooks, characteristic basslines, arpeggios, transparent textures.
+- The Principle of Silence: do not saturate all 4 channels continuously. Dropping channels out creates dynamic breathing room.
+
+16-BIT BASS MODE:
+- When BASS 16BIT is enabled, CH1 and CH2 are paired in hardware.
+- All bass notes MUST be written to CH1 (master).
+- CH2 acts as the hardware frequency slave and MUST remain completely empty (no notes).
+
+MUSIC DSL SYNTAX SPECIFICATION:
+
+1. Global Header Directives:
+   TITLE "Track Title"
+   AUTHOR "Composer Name"
+   KEY <key>             # e.g. C, D, E, F, G, A, B, F#, Bb
+   MODE <mode>           # e.g. MINOR, MAJOR, DORIAN, MIXOLYDIAN
+   BPM <bpm>             # tempo integer 40..250 (e.g. 120)
+   CHANNELS 4            # number of channels (typically 4)
+   BASS 16BIT            # include ONLY if 16-bit bass mode is requested
+   LOOP 0                # sequence step index to loop back to (default 0)
+
+2. Sequence:
+   SEQUENCE <pat_id1> <pat_id2> ... # ordered playback of pattern IDs
+
+3. Patterns and Channels:
+   [PATTERN <id>]        # pattern block header (e.g. [PATTERN A1] or [PATTERN A1 length=16])
+   CH<1..4> <inst> V<vol> # channel header with instrument role and default volume (0..15)
+   <notes>               # sequential note events on this channel
+
+4. Note Notation:
+   - Pitches: standard scientific notation (e.g. C4, D#3, Bb2, G2, F#4).
+   - Format: <pitch>/<duration> where duration is steps >= 1 (e.g. C4/4, D2/8, A4/16).
+   - Rests: R/<duration> (e.g. R/4, R/8) for silence.
+   - Volume accent (optional): <pitch>/<dur>:<vol> (e.g. C4/4:15).
+   - Consecutive notes play back-to-back; step timing is automatically accumulated.
+
+EXAMPLE MUSIC DSL DOCUMENT:
+TITLE "Dungeon Depth"
+KEY D
+MODE MINOR
+BPM 120
+CHANNELS 4
+
+SEQUENCE A1 A2
+
+[PATTERN A1]
+CH1 BASS V13
+D2/4 F2/4 C2/4 D2/4
+
+CH3 LEAD V14
+D4/4 F4/4 A4/4 D5/4
+
+CH4 PERC V10
+C4/2 R/2 C4/2 R/2 C4/4 R/4
+
+[PATTERN A2]
+CH1 BASS V13
+G2/4 Bb2/4 F2/4 G2/4
+
+CH3 LEAD V14
+G4/4 Bb4/4 D5/4 G5/4
+
+CH4 PERC V10
+C4/2 R/2 C4/2 R/2 C4/4 R/4
+"""
+
+
+def build_dsl_user_prompt(request: CompositionRequest) -> str:
+    """Generate the user prompt conveying desired musical parameters in Music DSL mode."""
+    lines = [
+        "Compose an authentic Atari 8-bit piece in Music DSL format with the following musical parameters:",
+        f"- Style / Archetype: {request.style}",
+        f"- Target Duration: approximately {request.duration_seconds} seconds",
+        f"- Channels: {request.channels} channels",
+        f"- 16-bit POKEY bass: {'REQUIRED / ENABLED (use BASS 16BIT directive; CH1 master, CH2 empty)' if request.use_16bit_bass else 'false / standard 8-bit'}",
+    ]
+    if request.bpm:
+        lines.append(f"- Tempo: {request.bpm} BPM")
+    if request.key:
+        lines.append(f"- Root Key: {request.key}")
+    if request.mode:
+        lines.append(f"- Musical Mode / Scale: {request.mode}")
+    if request.mood:
+        lines.append(f"- Mood Keywords: {', '.join(request.mood)}")
+    if request.structure:
+        lines.append(f"- Form Structure: {request.structure}")
+    if request.notes:
+        lines.append(f"- Compositional Notes: {request.notes}")
+
+    if request.duration_seconds:
+        bpm = request.bpm or 120
+        fpt = 6 if bpm <= 80 else (5 if bpm <= 110 else (4 if bpm <= 145 else 3))
+        step_duration = fpt / 50.0
+        target_total_steps = int(round(request.duration_seconds / step_duration))
+        lines.extend([
+            "- Duration & Scale Guidance:",
+            f"  * Target duration of ~{request.duration_seconds}s corresponds to approximately {target_total_steps} total steps in sequence at tempo {bpm} BPM.",
+            "  * Choose pattern lengths, distinct patterns, and sequence repetitions that naturally suit the style, mood, and requested duration.",
+        ])
+
+    lines.append("\nReturn ONLY the plain text Music DSL document without markdown fences or commentary.")
+    return "\n".join(lines)
+
+
+

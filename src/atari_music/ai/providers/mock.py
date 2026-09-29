@@ -33,6 +33,8 @@ class MockAICompositionProvider(AICompositionProvider):
         self.call_count: int = 0
         self.received_feedbacks: List[Optional[str]] = []
         self.received_previous_compositions: List[Optional[Dict[str, Any]]] = []
+        self.last_usage: Optional[Dict[str, int]] = None
+        self.usage_history: list[Dict[str, int]] = []
 
     @property
     def provider_name(self) -> str:
@@ -106,6 +108,36 @@ class MockAICompositionProvider(AICompositionProvider):
             return doc
 
         return self._generate_base_valid(request)
+
+    def generate_composition_dsl(
+        self,
+        request: CompositionRequest,
+        feedback: Optional[str] = None,
+        previous_dsl: Optional[str] = None,
+    ) -> str:
+        """Generate deterministic Music DSL string for testing."""
+        self.call_count += 1
+        self.received_feedbacks.append(feedback)
+        self.received_previous_compositions.append({"raw_dsl": previous_dsl} if previous_dsl else None)
+
+        if self.scenario == "dsl_syntax_error_then_valid":
+            if self.call_count == 1:
+                return 'TITLE "Broken"\nSEQUENCE A\n[PATTERN A]\nCH1 LEAD V14\nC4/0\n'
+            return 'TITLE "Fixed"\nKEY C\nMODE MINOR\nBPM 120\nSEQUENCE A\n[PATTERN A]\nCH1 LEAD V14\nC4/4\n'
+
+        if self.scenario == "invalid_then_valid":
+            if self.call_count == 1:
+                return 'TITLE "Test"\nKEY C\nMODE MINOR\nBPM 120\nSEQUENCE A B\n[PATTERN A]\nCH1 LEAD V14\nC4/4\n'
+            return 'TITLE "Test"\nKEY C\nMODE MINOR\nBPM 120\nSEQUENCE A\n[PATTERN A]\nCH1 LEAD V14\nC4/4\n'
+
+        if self.scenario == "always_invalid":
+            return 'TITLE "Always Bad"\nSEQUENCE A B\n[PATTERN A]\nCH1 LEAD V14\nC4/4\n'
+
+        from atari_music.ai.schema import AICompositionDoc
+        from atari_music.ai.dsl import export_music_dsl
+        doc_dict = self._generate_base_valid(request)
+        doc = AICompositionDoc.model_validate(doc_dict)
+        return export_music_dsl(doc)
 
     def _generate_base_valid(self, request: CompositionRequest) -> Dict[str, Any]:
 
@@ -306,6 +338,14 @@ class MockAICompositionProvider(AICompositionProvider):
                 },
             }
             sequence = ["A", "A", "B", "A"]
+
+        req_ch = request.channels or 4
+        if req_ch < 4:
+            for pat in (pat_a, pat_b):
+                pat["channels"] = {
+                    k: v for k, v in pat["channels"].items()
+                    if int(k) < req_ch
+                }
 
         return {
             "format": "atari-music-composition",
