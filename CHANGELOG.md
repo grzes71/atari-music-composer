@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.8.0 (2026-09-29)
+
+### Features
+
+- **logging**: Add debug logging for Music DSL prompts, payloads, and responses
+  ([`8b5e214`](https://github.com/grzes71/atari-music-composer/commit/8b5e214d5c4ec9149e7c5fe6d2e42738e6c25890))
+
+
 ## v0.7.0 (2026-09-29)
 
 ### Bug Fixes
