@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.7.0 (2026-09-29)
+
+### Bug Fixes
+
+- **test**: Use require_local_artifact for gitignored examples and add embedded equivalence test
+  ([`e5bf009`](https://github.com/grzes71/atari-music-composer/commit/e5bf0098e9a8abad7d0001c89468b5db27cea5b6))
+
+### Features
+
+- **dsl**: Implement Music DSL v1.1 with inferred pattern length and regression benchmark
+  ([`dc4b016`](https://github.com/grzes71/atari-music-composer/commit/dc4b016dcb27c41c7e88c685e6c6484f231de147))
+
+
 ## v0.6.0 (2026-09-29)
 
 ### Features
