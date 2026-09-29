@@ -21,6 +21,7 @@ class CompositionRequest:
     notes: Optional[str] = None
     seed: Optional[int] = None
     format: str = "json"  # "json" or "dsl"
+    dsl_version: str = "v1.1"  # "v1" or "v1.1"
 
 
 @dataclass

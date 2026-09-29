@@ -21,9 +21,10 @@
 | **MADS ASM Exporter** | Production | `atari-music export-mads` / `export_mads_asm()` | No | None | Relocatable MADS assembly `.asm` |
 | **6502 Relocatable Player** | Production | `player.asm` (included in root) | No | MADS (for assembly) | 6502 object code / `.xex` |
 | **Standalone XEX Builder** | Production | `atari-music build-xex` / `build_xex_from_composition()` | No | `tools/mads/mads.exe` or `mads` in PATH | Standalone bootable Atari `.xex` |
-| **AI Composition (OpenAI/DeepSeek)** | Production | `atari-music ai-compose --provider openai` / `request_ai_composition()` | **Yes** | None (requires network / API key) | `AICompositionDoc` JSON |
-| **Mock AI Composition** | Production | `atari-music ai-compose --provider mock` | No | None | Deterministic `AICompositionDoc` JSON |
-| **3-Tier Music Validator** | Production | `atari-music import-json` / `validate_composition()` | No | None | `ValidationReport` & validated doc |
+| **AI Composition (OpenAI/DeepSeek)** | Production | `atari-music ai-compose` / `request_ai_composition()` | **Yes** | None (requires network / API key) | `AICompositionDoc` JSON or Music DSL |
+| **Music DSL Parser & Serializer** | Production | `atari-music import-dsl` / `parse_music_dsl()`, `export_music_dsl()` | No | None | Validated `AICompositionDoc` / `.dsl` text |
+| **Mock AI Composition** | Production | `atari-music ai-compose --provider mock` | No | None | Deterministic `AICompositionDoc` / DSL |
+| **3-Tier Music Validator** | Production | `atari-music import-json`, `import-dsl` / `validate_composition()` | No | None | `ValidationReport` & validated doc |
 | **Composition Repair Loop** | Production | `generate_composition_with_retry()` | If using AI | None | Self-corrected `AICompositionDoc` |
 | **Musical Property Analysis** | Production | `atari-music analyze` / `analyze_composition()` | No | None | Rhythm/Melody/Harmony metrics + SHA-256 |
 | **Macro-Structure & Form Analysis** | Production | `atari-music analyze --structure` / `analyze_composition_structure()` | No | None | `DetailedStructureMetrics` (repetition, form) |
@@ -52,32 +53,36 @@ Use this skill when:
 ```text
                USER INTENT / SPECIFICATION
                            │
-         ┌─────────────────┴─────────────────┐
-         ▼                                   ▼
- [Procedural Path: Non-AI]           [Generative Path: AI LLM]
-  Composer v4 Engine (Python)         OpenAI / DeepSeek Provider
-  - 6 Canonical Profiles              - Structured Outputs (Pydantic)
-  - Algorithmic Counterpoint          - Form Planning & Variations
-  - Bass & Percussion Engines                        │
-         │                                           ▼
-         │                                   AICompositionDoc (JSON)
-         │                                           │
-         │                                           ▼
-         │                                3-Tier Validation Engine
-         │                                - Tier 1: Schema
-         │                                - Tier 2: Musical Grammar
-         │                                - Tier 3: Hardware Monophony
-         │                                           │
-         │                         [Failure] ────────┴──────── [Valid]
-         │                             │                          │
-         │                             ▼                          │
-         │                    Composition Repair Loop             │
-         │                    - Formatted Error Feedback          │
-         │                    - Re-prompt Model (max 2-3 retries) │
-         │                             │                          │
-         │                             └───────────┬──────────────┘
-         │                                         ▼
-         └─────────────────┬───────────────────────┘
+         ┌─────────────────┴─────────────────────────────┐
+         ▼                                               ▼
+ [Procedural Path: Non-AI]                   [Generative Path: AI LLM]
+  Composer v4 Engine (Python)                 OpenAI / DeepSeek Provider
+  - 6 Canonical Profiles                      - JSON or Music DSL (--format)
+  - Algorithmic Counterpoint                  - Form Planning & Variations
+  - Bass & Percussion Engines                    │                     │
+         │                                       │ JSON                │ Music DSL
+         │                                       ▼                     ▼
+         │                               ┌──────────────┐      ┌──────────────┐
+         │                               │AIComposition │      │  DSL Parser  │
+         │                               │     Doc      │◄─────┤  (lossless)  │
+         │                               └───────┬──────┘      └──────────────┘
+         │                                       │
+         │                                       ▼
+         │                               3-Tier Validation Engine
+         │                               - Tier 1: Schema
+         │                               - Tier 2: Musical Grammar
+         │                               - Tier 3: Hardware Monophony
+         │                                          │
+         │                        [Failure] ────────┴──────── [Valid]
+         │                            │                          │
+         │                            ▼                          │
+         │                   Composition Repair Loop             │
+         │                   - Formatted Error Feedback          │
+         │                   - Re-prompt Model (max 2-3 retries) │
+         │                            │                          │
+         │                            └───────────┬──────────────┘
+         │                                        ▼
+         └─────────────────┬──────────────────────┘
                            │
                            ▼
                   Symbolic Music IR (MusicSong)
@@ -130,7 +135,10 @@ In Non-AI mode, music is synthesized algorithmically via **Composer v4** without
 
 ### B. AI Mode (LLM Directed)
 In AI mode, an LLM acts strictly as a **symbolic composer and arranger**. The model does **NOT** generate 6502 opcodes or direct hardware register values.
-- **Model Role:** Generates an `AICompositionDoc` JSON structure specifying instruments, multi-channel pattern events, and sequencing.
+- **Model Role:** Generates a structured composition in either **canonical JSON** (`AICompositionDoc`) or compact **Music DSL** (`.dsl`).
+- **Input Formats (`--format`):**
+  - `json` (default): Schema-constrained JSON representation.
+  - `dsl`: Ultra-compact, line-oriented Music DSL (~49.4% token reduction in empirical benchmarks), parsed directly and losslessly into `AICompositionDoc`.
 - **Providers:**
   - `openai`: Connects to DeepSeek (`api.deepseek.com`) or OpenAI endpoints using standard API keys and Structured Outputs (`beta.chat.completions.parse` or JSON object fallback).
   - `mock`: Offline deterministic mock provider supporting canned success and repair scenarios.
@@ -144,7 +152,7 @@ In AI mode, an LLM acts strictly as a **symbolic composer and arranger**. The mo
 
 ## 6. Composition Data Model (`AICompositionDoc` v1)
 
-All AI and import workflows operate on the versioned `atari-music-composition` schema defined in `src/atari_music/ai/schema.py`:
+All AI and import workflows operate on the versioned `atari-music-composition` schema defined in `src/atari_music/ai/schema.py` (serving as the Single Source of Truth, regardless of whether input was JSON or Music DSL):
 
 ```json
 {
@@ -347,6 +355,7 @@ atari-music compose \
 
 #### 2. `ai-compose` (LLM Composition Generator)
 ```bash
+# Generate canonical JSON composition:
 atari-music ai-compose \
     --style "dark dungeon exploration" \
     --mood mysterious --mood tense \
@@ -356,8 +365,15 @@ atari-music ai-compose \
     --use-16bit-bass \
     --provider openai \
     --model deepseek-flash \
+    --format json \
     --max-retries 3 \
     --output dungeon.json
+
+# Generate compact Music DSL composition (--format dsl):
+atari-music ai-compose \
+    --style "dark dungeon exploration" \
+    --format dsl \
+    --output dungeon.dsl
 ```
 
 #### 3. `import-json` (Validate, Render & Export Composition JSON)
@@ -384,6 +400,7 @@ atari-music export-mads dungeon_pokey.json -o dungeon_data.asm
 
 #### 6. `build-xex` (Directly Compile Composition JSON or DSL to Atari XEX)
 ```bash
+# From JSON:
 atari-music build-xex dungeon.json \
     --format json \
     --output dungeon.xex \
@@ -392,11 +409,18 @@ atari-music build-xex dungeon.json \
     --zp-base 0x80 \
     --player-asm player.asm \
     --mads tools/mads/mads.exe
+
+# From Music DSL:
+atari-music build-xex dungeon.dsl \
+    --format dsl \
+    --output dungeon.xex \
+    --player-address 0x4000 \
+    --zp-base 0x80
 ```
 > Note: `player.asm` is resolved automatically by checking (1) current working directory, (2) repository root, and (3) packaged asm directory, or can be specified explicitly via `--player-asm`.
 
 
-#### 6. `analyze` (Analyze Musical & Hardware Properties of Composition JSON)
+#### 7. `analyze` (Analyze Musical & Hardware Properties of Composition JSON)
 ```bash
 # Human-readable terminal report (rhythm, melody, harmony, POKEY hardware, SHA-256 fingerprint):
 atari-music analyze dungeon.json
@@ -545,6 +569,32 @@ atari-music --log-level DEBUG ai-compose \
     --model deepseek-flash \
     --style "complex jazz fusion" \
     --output debug_out.json
+```
+
+### Workflow G: Working with Music DSL (Import, Export, Compilation)
+```bash
+# 1. Generate Music DSL via LLM:
+atari-music ai-compose --provider openai --format dsl --style "fast arcade" -o arcade.dsl
+
+# 2. Import DSL and export both audio WAV and canonical JSON:
+atari-music import-dsl arcade.dsl --output-wav arcade.wav --output-json arcade.json
+
+# 3. Direct compilation of DSL to Atari XEX executable:
+atari-music build-xex arcade.dsl --format dsl -o arcade.xex
+```
+
+```python
+# Python API:
+from atari_music.ai import load_composition_dsl, export_music_dsl, build_xex_from_composition
+
+# Load and validate DSL file:
+doc = load_composition_dsl("arcade.dsl")
+
+# Export to canonical DSL string:
+dsl_text = export_music_dsl(doc)
+
+# Compile to XEX directly from DSL file:
+build_xex_from_composition("arcade.dsl", output_path="arcade.xex", format="dsl")
 ```
 
 ---
