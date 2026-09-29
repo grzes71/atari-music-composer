@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.6.0 (2026-09-29)
+
+### Features
+
+- **dsl**: Implement compact music dsl, split import commands, and add benchmark suite
+  ([`08719c8`](https://github.com/grzes71/atari-music-composer/commit/08719c86d2ef50c5b119c7507e56f4deaf852726))
+
+
 ## v0.5.5 (2026-09-29)
 
 ### Bug Fixes
