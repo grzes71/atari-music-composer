@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.5.5 (2026-09-29)
+
+### Bug Fixes
+
+- **xex**: Correct keyboard scancodes for channel muting keys 1-4
+  ([`fc86707`](https://github.com/grzes71/atari-music-composer/commit/fc86707579eecb1b153e4fe135b32f35c7cb4463))
+
+
 ## v0.5.4 (2026-09-28)
 
 ### Bug Fixes
