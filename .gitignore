@@ -57,6 +57,14 @@ wheels/
 .installed.cfg
 *.egg
 
+# --- Rust & Maturin Build Artifacts ---
+target/
+**/target/
+*.pyd
+*.pdb
+*.dll
+*.dylib
+
 # --- Pytest & Coverage ---
 .pytest_cache/
 .coverage

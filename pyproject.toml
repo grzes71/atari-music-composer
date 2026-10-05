@@ -25,6 +25,8 @@ atari-music = "atari_music.cli:cli"
 dev = [
     "build>=1.0.0",
     "python-semantic-release>=9.15.0",
+    "pytest-xdist>=3.5.0",
+    "maturin>=1.15.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -28,6 +28,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+try:
+    import _core
+    _batch_inspect_wavs_rs = _core.batch_inspect_wavs
+except (ImportError, AttributeError):
+    try:
+        from atari_music import _core
+        _batch_inspect_wavs_rs = _core.batch_inspect_wavs
+    except (ImportError, AttributeError):
+        _batch_inspect_wavs_rs = None
+
 
 @dataclass
 class SampleMetadata:
@@ -59,9 +69,14 @@ def _read_wav_stats(wav_path: Path) -> Tuple[float, float, float, int, int]:
         data = wf.readframes(n_frames)
 
     duration_sec = round(n_frames / framerate, 2)
-    audio = np.frombuffer(data, dtype=np.int16).astype(np.float64) / 32767.0
-    peak = float(np.max(np.abs(audio))) if len(audio) > 0 else 0.0
-    rms = float(np.sqrt(np.mean(audio ** 2))) if len(audio) > 0 else 0.0
+    if n_frames > 0:
+        audio_i16 = np.frombuffer(data, dtype=np.int16)
+        peak = float(np.max(np.abs(audio_i16.astype(np.int32)))) / 32767.0
+        audio_f32 = audio_i16.astype(np.float32)
+        rms = float(np.sqrt(np.mean(audio_f32 ** 2))) / 32767.0
+    else:
+        peak = 0.0
+        rms = 0.0
     return duration_sec, peak, rms, framerate, n_channels
 
 
@@ -469,35 +484,55 @@ def validate_listening_test_v2(test_dir: Path = Path("listening_test_v2")) -> Di
     # 5. Format check for every WAV file (44.1 kHz, 16-bit mono, uncorrupted, playable)
     rms_values: List[float] = []
     peak_values: List[float] = []
-    for w in wav_files:
-        try:
-            with wave.open(str(w), "rb") as wf:
-                ch = wf.getnchannels()
-                sw = wf.getsampwidth()
-                fr = wf.getframerate()
-                nframes = wf.getnframes()
-                if ch != 1:
-                    raise RuntimeError(f"EXPERIMENT INVALID: {w.name} has {ch} channels (expected mono).")
-                if sw != 2:
-                    raise RuntimeError(f"EXPERIMENT INVALID: {w.name} has sample width {sw} (expected 2 bytes / 16-bit).")
-                if fr != 44100:
-                    raise RuntimeError(f"EXPERIMENT INVALID: {w.name} has sample rate {fr} (expected 44100 Hz).")
-                if nframes < 44100 * 5:  # At least 5 seconds
-                    raise RuntimeError(f"EXPERIMENT INVALID: {w.name} is too short ({nframes} frames).")
 
-                data = wf.readframes(nframes)
-                audio = np.frombuffer(data, dtype=np.int16).astype(np.float64) / 32767.0
-                peak = float(np.max(np.abs(audio)))
-                rms = float(np.sqrt(np.mean(audio ** 2)))
-                peak_values.append(peak)
-                rms_values.append(rms)
+    if _batch_inspect_wavs_rs is not None:
+        batch_results = _batch_inspect_wavs_rs([str(w) for w in wav_files])
+        for stat, w in zip(batch_results, wav_files):
+            if stat.get("error"):
+                raise RuntimeError(f"EXPERIMENT INVALID: Failed reading {w.name}: {stat['error']}")
+            if stat["channels"] != 1:
+                raise RuntimeError(f"EXPERIMENT INVALID: {w.name} has {stat['channels']} channels (expected mono).")
+            if stat["sample_width"] != 2:
+                raise RuntimeError(f"EXPERIMENT INVALID: {w.name} has sample width {stat['sample_width']} (expected 2 bytes / 16-bit).")
+            if stat["framerate"] != 44100:
+                raise RuntimeError(f"EXPERIMENT INVALID: {w.name} has sample rate {stat['framerate']} (expected 44100 Hz).")
+            if stat["n_frames"] < 44100 * 5:
+                raise RuntimeError(f"EXPERIMENT INVALID: {w.name} is too short ({stat['n_frames']} frames).")
+            if stat["peak"] > 0.95:
+                raise RuntimeError(f"EXPERIMENT INVALID: {w.name} shows digital clipping (peak={stat['peak']:.3f}).")
+            peak_values.append(stat["peak"])
+            rms_values.append(stat["rms"])
+    else:
+        for w in wav_files:
+            try:
+                with wave.open(str(w), "rb") as wf:
+                    ch = wf.getnchannels()
+                    sw = wf.getsampwidth()
+                    fr = wf.getframerate()
+                    nframes = wf.getnframes()
+                    if ch != 1:
+                        raise RuntimeError(f"EXPERIMENT INVALID: {w.name} has {ch} channels (expected mono).")
+                    if sw != 2:
+                        raise RuntimeError(f"EXPERIMENT INVALID: {w.name} has sample width {sw} (expected 2 bytes / 16-bit).")
+                    if fr != 44100:
+                        raise RuntimeError(f"EXPERIMENT INVALID: {w.name} has sample rate {fr} (expected 44100 Hz).")
+                    if nframes < 44100 * 5:  # At least 5 seconds
+                        raise RuntimeError(f"EXPERIMENT INVALID: {w.name} is too short ({nframes} frames).")
 
-                # Check clipping: peak must not exceed 1.0
-                if peak > 0.95:
-                    raise RuntimeError(f"EXPERIMENT INVALID: {w.name} shows digital clipping (peak={peak:.3f}).")
+                    data = wf.readframes(nframes)
+                    audio_i16 = np.frombuffer(data, dtype=np.int16)
+                    peak = float(np.max(np.abs(audio_i16.astype(np.int32)))) / 32767.0
+                    audio_f32 = audio_i16.astype(np.float32)
+                    rms = float(np.sqrt(np.mean(audio_f32 ** 2))) / 32767.0
+                    peak_values.append(peak)
+                    rms_values.append(rms)
 
-        except Exception as e:
-            raise RuntimeError(f"EXPERIMENT INVALID: Failed reading {w.name}: {e}")
+                    # Check clipping: peak must not exceed 1.0
+                    if peak > 0.95:
+                        raise RuntimeError(f"EXPERIMENT INVALID: {w.name} shows digital clipping (peak={peak:.3f}).")
+
+            except Exception as e:
+                raise RuntimeError(f"EXPERIMENT INVALID: Failed reading {w.name}: {e}")
 
     # 6. Check loudness bounds consistency
     min_peak, max_peak = min(peak_values), max(peak_values)

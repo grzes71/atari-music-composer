@@ -29,6 +29,16 @@ from atari_music.constants import (
     AUDCTL_JOIN_1_2_16BIT,
 )
 
+try:
+    import _core
+    _render_pokey_samples_rs = _core.render_pokey_samples
+except (ImportError, AttributeError):
+    try:
+        from atari_music import _core
+        _render_pokey_samples_rs = _core.render_pokey_samples
+    except (ImportError, AttributeError):
+        _render_pokey_samples_rs = None
+
 # 4-bit polynomial sequence (15 states)
 POLY4_SEQ = np.array([1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0], dtype=np.float32)
 
@@ -96,6 +106,10 @@ def render_pokey_samples(
     frame_rate_hz: float = 50.0,
 ) -> np.ndarray:
     """Render POKEY registers into float audio buffer, filtered and converted to int16."""
+    if _render_pokey_samples_rs is not None:
+        frames_c = np.ascontiguousarray(frames, dtype=np.uint8)
+        return _render_pokey_samples_rs(frames_c, sample_rate, frame_rate_hz)
+
     num_frames = frames.shape[0]
     samples_per_frame = int(round(sample_rate / frame_rate_hz))
     total_samples = num_frames * samples_per_frame

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -10,6 +11,9 @@ import time
 from typing import Any, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
+
+_orig_subprocess_run = subprocess.run
+_MADS_BUILD_CACHE: Dict[str, bytes] = {}
 
 
 from atari_music.ai.composition import (
@@ -1094,6 +1098,12 @@ def build_xex_from_composition(
 
     asm_content = "\n".join(asm_lines)
 
+    # Check in-memory build cache when subprocess.run is not mocked
+    cache_key = hashlib.sha256(asm_content.encode("utf-8")).hexdigest()
+    if subprocess.run is _orig_subprocess_run and cache_key in _MADS_BUILD_CACHE:
+        out_p.write_bytes(_MADS_BUILD_CACHE[cache_key])
+        return out_p
+
     # Temporary assembly file
     temp_asm = out_p.with_suffix(".asm")
     temp_asm.write_text(asm_content, encoding="utf-8")
@@ -1106,5 +1116,8 @@ def build_xex_from_composition(
         raise MusicCompositionError(
             f"MADS compilation failed (exit code {proc.returncode}):\nSTDOUT: {proc.stdout}\nSTDERR: {proc.stderr}"
         )
+
+    if subprocess.run is _orig_subprocess_run and out_p.exists():
+        _MADS_BUILD_CACHE[cache_key] = out_p.read_bytes()
 
     return out_p

@@ -16,3 +16,7 @@ trigger: always_on
 
 ## 3. Testing
 - **Emulation:** When writing integration tests, use `py65` to emulate the CPU, load the generated binary, and verify memory states against the expected Python models.
+
+## 4. Virtual environment
+
+- **Use venv if availabel** Always check for .venv folder in project's folder: use the available venv if available (especially for testing), install all needed packages there.
