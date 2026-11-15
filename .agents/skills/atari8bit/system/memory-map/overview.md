@@ -15,19 +15,18 @@ This file covers the memory map and system architecture for the Atari 8-bit in f
 
 **Tip:** browse the Quick-lookup table below first; the § labels are clickable in most markdown viewers.
 
-Only low 4 address bits decoded at $D300–$D3FF; PIA address bits 0-1 select each 4-register bank. Writes to ROM addresses are silently ignored.
+Only low address bits are decoded across much of the hardware page. In particular, the PIA mirrors through `$D300-$D3FF`, and writes to addresses currently mapped to ROM are ignored.
 
 ## Quick-lookup
 
 | Need | See § |
 |---|---|
 | 64 K memory map | §2.1 |
-| Zero-page zone maps | §2.1 |
-| PIA 6520 register table | §2.2 |
-| PORTB OS/BASIC/self-test ROM bits | §2.3 |
-| Extended RAM 130XE/RAMBO/COMPY and ANTIC bank-enable | §2.3 |
-| Spurious IRQ PBCTL CB2 hazard | §2.2 |
-| Zero-page idioms (INC/DEC, negative-index loop, ISR scratch) | §2.4 |
-| Inline-parameter JSR trick | §2.5 |
+| Zero-page and OS variable examples | §2.1 |
+| PIA 6520 register table | §2.1 |
+| PORTB OS/BASIC/self-test and 130XE banking bits | §2.3 |
+| 130XE / larger XL/XE expansion caveats | §2.3 |
+| Zero-page idioms | §2.4 |
+| Stack and inline-parameter rules | §2.5 |
 
 ---

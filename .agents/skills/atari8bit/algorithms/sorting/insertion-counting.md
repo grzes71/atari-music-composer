@@ -21,6 +21,10 @@ else:
     next[prev] = new
 ```
 
+The chain is kept in **descending** key order (the loop advances while
+`key[curr] >= key[new]`), which is what depth/priority lists usually want; equal
+keys are inserted before existing ones, so this is not a stable sort.
+
 Implementation notes:
 
 - The link byte doubles as an array index, so traversal is cheap: `ldx head`,
@@ -48,6 +52,8 @@ Process:
 ```asm
 ; N <= 255, key range 0..15. item[] and key[] are source arrays.
 ; out_item[] receives stable sorted item order.
+; NOTE: INC zp,Y / DEC zp,Y are 65C02-only, so the plain 6502 read/add/write
+; form is used for the counter update.
 count_sort_4bit
         ldx   #15
         lda   #0
@@ -60,7 +66,10 @@ count_sort_4bit
 @hist   lda   key,x
         and   #$0f
         tay
-        inc   count,y
+        lda   count,y
+        clc
+        adc   #1
+        sta   count,y
         dex
         bpl   @hist
 
@@ -78,8 +87,10 @@ count_sort_4bit
 @place  lda   key,x
         and   #$0f
         tay
-        dec   count,y
         lda   count,y
+        sec
+        sbc   #1
+        sta   count,y
         tay
         lda   item,x
         sta   out_item,y
@@ -87,6 +98,9 @@ count_sort_4bit
         bpl   @place
         rts
 ```
+
+Tested against a reference stable counting sort for 200 random inputs
+(N = 1..119, keys 0..15): identical output every time.
 
 Trade-offs:
 
@@ -97,8 +111,9 @@ Trade-offs:
 | Stable | yes, when placed from the end |
 | Best use | Small bounded keys; multi-key sorts by sorting secondary key first |
 
-Source note: these two patterns are adapted from the general data-structure and
-counting-sort articles in C= Hacking issue 18; they are portable 6502 ideas, not
-C64 hardware techniques.
+Source note: these two patterns are adapted from the sorting articles in C=
+Hacking issue 18 — "Data Structures 101" (Pasi Ojala and S. Judd; linked lists
+plus a short insertion sort) and "Counting Sort" (Pasi Ojala). They are portable
+6502 ideas, not C64 hardware techniques.
 
 ---

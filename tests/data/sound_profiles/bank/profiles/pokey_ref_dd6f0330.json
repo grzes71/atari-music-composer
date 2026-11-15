@@ -1,0 +1,199 @@
+{
+  "envelope": {
+    "attack_ms": null,
+    "confidence": 0.0,
+    "decay_ms": null,
+    "frames": {
+      "attack": null,
+      "decay": null,
+      "release": null
+    },
+    "release_ms": null,
+    "shape": "unknown",
+    "sustain_level": null,
+    "sustain_ms": null
+  },
+  "gesture": {
+    "control_state": {
+      "base_code": "$8",
+      "changes": 0,
+      "codes": [
+        "$8"
+      ],
+      "frames_without_active_volume": 11,
+      "present": false,
+      "runs": [],
+      "unit": "audc_distortion_code"
+    },
+    "modulation": {
+      "definition": "repetition of the pitch and/or volume contour at a measurable rate",
+      "period_frames": null,
+      "periodic": false,
+      "pitch_change_rate_hz": 0.0,
+      "volume_change_rate_hz": 0.0
+    },
+    "pitch": {
+      "audible_channel": 2,
+      "base_divider": null,
+      "base_hz": 126674.7857,
+      "change_rate_hz": 0.0,
+      "companion_channel": null,
+      "direction": "static",
+      "divider_bits": 8,
+      "divider_source": "channel_divider",
+      "mode": "semitones_from_base",
+      "present": false,
+      "quantization": 0.01,
+      "quantization_semitones": 0.01,
+      "quantization_unit": "semitones_relative_to_base_hz",
+      "range_semitones": 0.0,
+      "register_round_trip": {
+        "exact": 0,
+        "frames": 11,
+        "max_divider_miss": 0
+      },
+      "runs": [],
+      "static": true,
+      "unit": "semitones_relative_to_base_hz"
+    },
+    "provenance": {
+      "channel": 2,
+      "end_frame": 2087,
+      "frames": 11,
+      "is_representative_segment": true,
+      "role": "single_channel",
+      "segment_index": 33,
+      "song": "Blinkys_Scary_School.sap",
+      "start_frame": 2077,
+      "subsong": 0
+    },
+    "resolution": {
+      "audctl_varied_in_span": false,
+      "cannot_express": [
+        "one sample per VBL frame: register writes between two frames are invisible",
+        "AUDCTL is not a gesture series; a span whose AUDCTL changes is flagged, not averaged",
+        "high-pass clocking is not modelled by the generator (existing replay limitation)",
+        "only the profile's own voice is described; other sounding channels are not",
+        "timbre (waveform, distortion family) stays in synthesis; the gesture only carries when it changes"
+      ],
+      "derived_from": "vbl_frame_trace",
+      "duration_ms": 220.6144,
+      "frame_period_ms": 20.0559,
+      "frames": 11,
+      "one_sample_per_frame": true,
+      "samples_per_second": 49.8607
+    },
+    "schema": "pokey-sound-archaeology/gesture/1",
+    "volume": {
+      "change_rate_hz": 0.0,
+      "changes": 0,
+      "levels": 15,
+      "min_level": 0,
+      "peak_level": 0,
+      "present": false,
+      "runs": [],
+      "silent_frames": 11,
+      "static": true,
+      "unit": "audc_volume_level_0_15"
+    }
+  },
+  "metadata": {
+    "note": "no instrument or role name is assigned here: the archaeology stages established that an observed POKEY sound does not map one-to-one onto a conventional instrument",
+    "producer": {
+      "schema": "2.0",
+      "tool": "pokey-sound-archaeology",
+      "version": "0.1.0"
+    },
+    "source_label": "$8 / joined16 / coupled / divider_msb / volume_off / pitch_static / envelope_unknown"
+  },
+  "pitch": {
+    "audf_range": {
+      "max": 0.0,
+      "min": 0.0
+    },
+    "base_divider": null,
+    "base_hz": 126674.7857,
+    "behavior": "static",
+    "change_rate_hz": 0.0,
+    "direction_ratio": null,
+    "divider_bits": 8,
+    "frequency_change_rate_hz": 0.0,
+    "frequency_hz": {
+      "center": null,
+      "max": null,
+      "min": null
+    },
+    "range_semitones": null,
+    "reference_source": "gesture_base_hz",
+    "slope_semitones_per_second": null
+  },
+  "playability": {
+    "gesture": {
+      "control_state": {
+        "available": false,
+        "enabled": false
+      },
+      "pitch": {
+        "available": false,
+        "enabled": false
+      },
+      "volume": {
+        "available": false,
+        "enabled": false
+      }
+    },
+    "note": "available means the profile carries that series; enabled is this artefact's default for a consumer that accepts it, not a requirement",
+    "note_relative_pitch": true,
+    "pitch_mode": "semitones_from_base"
+  },
+  "playable_fingerprint": "15c5ce5a6973aa6661d6f634a0d5e71f952a57d41d0f13a3c3d9d1f6391f4ee6",
+  "pokey": {
+    "channels": {
+      "audible_channel": 2,
+      "audible_channel_role": "divider_msb",
+      "companion_channel": null,
+      "companion_channel_role": null,
+      "divider_bits": 8,
+      "mode": "single",
+      "pair": null,
+      "requires_simultaneous_channels": false
+    },
+    "hardware": {
+      "audctl_mode": "$50",
+      "channel_role": "divider_msb",
+      "clock_base": "1.79MHz",
+      "clock_family": "joined16",
+      "clock_mode": "joined16:1+2:divider_msb:1.79MHz",
+      "coupling": "coupled:1+2",
+      "distortion": "$8",
+      "distortion_name": "poly9/17 direct (ungated noise)",
+      "uses_channel_coupling": true,
+      "waveform": "poly9_17_direct"
+    }
+  },
+  "profile_id": "pokey_ref_dd6f0330",
+  "schema": "pokey-playable-sound-profile-1.0",
+  "scope": "VOICE",
+  "source_profile": {
+    "kind": "single",
+    "profile_fingerprint": "08568567b78773c5ba086a0e0d1743344b216f4922de3323025ed1e4606c38fb",
+    "profile_id": "pokey_ref_dd6f0330",
+    "schema_version": "2.0"
+  },
+  "timing": {
+    "frame_period_ms": 20.055858,
+    "frame_rate_hz": 49.8607
+  },
+  "volume": {
+    "active_ratio": 0.0,
+    "audc_change_rate_hz": 0.0,
+    "behavior": "silent",
+    "change_rate_hz": 0.0,
+    "dynamic_range": 0.0,
+    "level_distribution": {
+      "0": 1.0
+    },
+    "mean_level": 0.0,
+    "peak_level": 0
+  }
+}

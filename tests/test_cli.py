@@ -222,7 +222,9 @@ def test_cli_build_xex_help_shows_player_asm():
     assert result.exit_code == 0
     assert "--player-asm" in result.output
     assert "Path to player.asm" in result.output
-    assert "defaults to current directory" in result.output
+    # Whitespace-normalised: the help wraps at a column width set by the longest option name, which
+    # an unrelated new option can change without altering what the help says.
+    assert "defaults to current directory" in " ".join(result.output.split())
 
 
 def test_client_build_xex_explicit_player_asm_not_found(tmp_path: Path):
@@ -260,6 +262,8 @@ def test_cli_build_xex_subprocess_execution(tmp_path: Path, monkeypatch):
     import subprocess
     from unittest.mock import MagicMock
 
+    from conftest import fake_xex_bytes
+
     runner = CliRunner()
     comp_file = tmp_path / "track.json"
     doc = _create_minimal_composition()
@@ -269,9 +273,11 @@ def test_cli_build_xex_subprocess_execution(tmp_path: Path, monkeypatch):
     dummy_mads.write_text("dummy binary", encoding="utf-8")
     out_xex = tmp_path / "track.xex"
 
-    # Mock subprocess.run to simulate successful MADS compilation
-    def fake_subprocess_run(cmd, capture_output=True, text=True):
-        out_xex.write_bytes(b"\xff\xff\x00\x40\x10\x40")
+    # Mock subprocess.run to simulate successful MADS compilation. The stub must produce a
+    # well-formed container, because the build now validates the layout it was handed; it
+    # must also accept the real signature, since the build measures the player with it too.
+    def fake_subprocess_run(cmd, capture_output=True, text=True, **kwargs):
+        out_xex.write_bytes(fake_xex_bytes())
         mock_proc = MagicMock()
         mock_proc.returncode = 0
         mock_proc.stdout = "Compiled 100 bytes"
@@ -371,6 +377,7 @@ def test_cli_build_xex_with_explicit_format(tmp_path: Path, monkeypatch):
     import subprocess
     from unittest.mock import MagicMock
     from atari_music.ai.dsl import export_music_dsl
+    from conftest import fake_xex_bytes
 
     runner = CliRunner()
     doc = _create_minimal_composition()
@@ -383,13 +390,13 @@ def test_cli_build_xex_with_explicit_format(tmp_path: Path, monkeypatch):
     dummy_mads = tmp_path / "mads.exe"
     dummy_mads.write_text("dummy binary", encoding="utf-8")
 
-    def fake_subprocess_run(cmd, capture_output=True, text=True):
+    def fake_subprocess_run(cmd, capture_output=True, text=True, **kwargs):
         out_p = None
         for arg in cmd:
             if arg.startswith("-o:"):
                 out_p = Path(arg[3:])
         if out_p:
-            out_p.write_bytes(b"\xff\xff\x00\x40\x10\x40")
+            out_p.write_bytes(fake_xex_bytes())
         mock_proc = MagicMock()
         mock_proc.returncode = 0
         mock_proc.stdout = "OK"

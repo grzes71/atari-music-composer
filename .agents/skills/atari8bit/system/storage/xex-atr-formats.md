@@ -17,9 +17,11 @@ Assembler/source implications:
   the first emitted segment should use the full six-byte header.
 - Later segments may use start/end pairs directly, though many tools still emit
   `$ff $ff` before each segment for tolerance.
-- Every `ORG`/`.org` can become a separate segment. A file may be a valid
+- Every `ORG` can become a separate segment. A file may be a valid
   display setup with no executable opcodes if it only loads display memory,
   display-list bytes, and OS shadow-register values.
+- DOS 2.x refuses segments that load below `$0700` (the DOS/MEMLO area), so a
+  normal executable's first segment starts at `$0700` or above.
 - For reverse engineering, do not assume the first loaded address is code.
   Identify the actual entry from `INITAD`, `RUNAD`, or a boot loader jump.
 
@@ -29,14 +31,14 @@ Assembler/source implications:
 
 | Field | Value |
 |---|---|
-| ATR magic | `$96 $02` (little-endian: `$0296`); Header size = 16 bytes (`0x10`) |
-| Sector size | 128 bytes (SD), 256 bytes (DD), or 512 bytes |
-| Sector count | SD/512B: `(file size − 16) / sector_size`<br>DD Short layout: `(file size − 384 − 16) / 256 + 3`<br>DD Full/Even/Packed: `(file size − 16) / 256` |
-| Double-sided (1050) | 180K → 720 KB (360 Tracks × 16 Sectors × 256 × 2 sides) |
+| ATR magic | `$96 $02` (little-endian: `$0296`); header size = 16 bytes (`0x10`) |
+| Paragraph count | Word at +2: image size in 16-byte paragraphs, excluding the 16-byte header (high word at +6) |
+| Sector size | Word at +4: 128 bytes (SD) or 256 bytes (DD); `0` = unknown |
+| Sector count | SD: `(file size − 16) / sector_size`<br>DD Short layout: `(file size − 384 − 16) / 256 + 3`<br>DD Full/Even/Packed: `(file size − 16) / 256` |
 
 Boot and loader notes:
 
-- The first three sectors are commonly 128-byte boot sectors even on enhanced-density images.
+- When the sector size is 256, the first three (boot) sectors are usually stored as 128 bytes each, as on enhanced-density images.
 - See [reversing.md](../../tooling/reversing.md#2-atr-and-disk-triage) for detailed 16-byte header layouts, offset calculations for Short/Even/Packed/Full DD layouts, and copy protection specs.
 - Boot disks may load code before any DOS filesystem is active.
 - Custom loaders often bypass CIO and call `SIOV` with direct sector commands.

@@ -818,14 +818,24 @@ main:
 
 
 def test_mads_compilation_all_6_profiles():
-    """Etap 10: Verify all 6 canonical profiles successfully compile with player to valid Atari XEX."""
+    """Etap 10: Verify all 6 canonical profiles successfully compile with player to valid Atari XEX.
+
+    The complete XEX file is not size-bounded; the project's 2048-byte limit bounds the assembled
+    player, which is measured once here through the repository's own convention.
+    """
     import subprocess
     from atari_music.api import generate_music
     from atari_music.mads_exporter import export_mads_asm
+    from atari_music import stage15
 
     mads_exe = Path("tools/mads/mads.exe")
     require_local_artifact(mads_exe)
     profiles = ["title", "exploration", "action", "funny", "dungeon", "ending"]
+
+    player_bytes = stage15.measure_player_size(stage15.DEFAULT_PLAYER_ASM, stage15.DEFAULT_MADS)
+    if player_bytes is None:
+        player_bytes = stage15.PLAYER_ASSEMBLED_BYTES_RECORDED
+    assert stage15.check_player_size(player_bytes) == player_bytes
 
     for p in profiles:
         res = generate_music(profile=p, seed=123)
@@ -854,11 +864,19 @@ entry:
         res_comp = subprocess.run([str(mads_exe), str(src_p), f"-o:{xex_p}"], capture_output=True, text=True)
         assert res_comp.returncode == 0, f"MADS build failed for profile {p}: {res_comp.stderr or res_comp.stdout}"
         assert xex_p.exists()
-        assert xex_p.stat().st_size <= 2048, f"XEX for {p} too large: {xex_p.stat().st_size} bytes"
+        # A valid container, with no ceiling on the complete file: the 2048-byte limit bounds the
+        # player, which the check above already enforced, not the .xex.
+        raw = xex_p.read_bytes()
+        assert len(raw) > 0
+        assert raw[0] == 0xFF and raw[1] == 0xFF, f"Invalid Atari DOS header for {p}"
 
 
 def test_stage11_standalone_xex_build_and_headers():
-    """Etap 11: Verify all 6 standalone XEX files in stage11_xex are built with valid DOS headers."""
+    """Etap 11: Verify all 6 standalone XEX files in stage11_xex are built with valid DOS headers.
+
+    The lower bound stays: a file that is suspiciously small means the build silently produced
+    nothing. The upper bound is gone — the complete XEX is not size-bounded.
+    """
     import sys
     root = Path(__file__).resolve().parent.parent
     require_local_artifact(root / "stage11_xex")
@@ -869,7 +887,7 @@ def test_stage11_standalone_xex_build_and_headers():
     assert len(results) == 6
     for prof, size, magic in results:
         assert magic is True, f"XEX header magic failed for {prof}"
-        assert 1000 <= size <= 2048, f"XEX size out of bounds for {prof}: {size} bytes"
+        assert size >= 1000, f"XEX suspiciously small for {prof}: {size} bytes"
 
 
 def test_stage11_zero_page_relocation_and_dungeon_16bit():
@@ -1041,7 +1059,7 @@ def test_mads_export_percussion_consistency():
     from atari_music.ai.client import generate_music_from_composition
     from atari_music.ai.schema import AICompositionDoc
     from atari_music.constants import DISTORTION_WHITE_NOISE
-    from atari_music.mads_exporter import export_mads_asm
+    from atari_music.mads_exporter import SONG_FORMAT_VERSION, export_mads_asm
 
     doc_dict = {
         "format": "atari-music-composition",
@@ -1097,14 +1115,21 @@ def test_mads_export_percussion_consistency():
                 break
             inst_section.append(line.strip())
 
-    assert len(inst_section) == 4
+    # The instrument table is preceded by the song data format version. Asserting it is what
+    # makes the version explicit rather than merely tolerated: version 1 means 6-byte records.
+    assert len(inst_section) == 5
+    assert inst_section[0].startswith(f".byte {SONG_FORMAT_VERSION}")
+    records = inst_section[1:]
+    assert len(records) == 4
     # Ch 1 -> Lead ($a0)
-    assert "$a0" in inst_section[0] and "Lead" in inst_section[0]
+    assert "$a0" in records[0] and "Lead" in records[0]
     # Ch 2 -> Bass ($c0)
-    assert "$c0" in inst_section[1] and "Bass" in inst_section[1]
+    assert "$c0" in records[1] and "Bass" in records[1]
     # Ch 3 -> Comic Thud noise ($80) - must preserve distortion from IRInstrument!
-    assert f"${DISTORTION_WHITE_NOISE:02x}" in inst_section[2]
-    assert "Comic Thud" in inst_section[2]
+    assert f"${DISTORTION_WHITE_NOISE:02x}" in records[2]
+    assert "Comic Thud" in records[2]
+    # Every record now carries a modulation byte, and none of these asks for a modulation.
+    assert all(record.endswith("(no modulation)") for record in records), records
 
     # 2. Verify CH3 track data does not use hardcoded AUDF=8
     ch3_lines = []

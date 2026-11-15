@@ -23,7 +23,7 @@ Prefer the smallest reference file that answers the question.
   [references/usage.md](references/usage.md).
 - For comments, line joining, mnemonic chaining, numbers, strings, expressions,
   and operator precedence, read [references/syntax.md](references/syntax.md).
-- For ordinary assembler directives such as `.ORG`, `.BYTE`, `.WORD`, `.DS`,
+- For ordinary assembler directives such as `.BYTE`, `.WORD`, `.DS`,
   `.VAR`, `.ZPVAR`, `.IFDEF`, `.REPT`, `.PRINT`, `.ERROR`, `.LEN`, `.SIZEOF`,
   `.DEFINE`, and `.UNDEF`, read [references/directives.md](references/directives.md).
 - For XASM-style pseudo-commands such as `OPT`, `ORG`, `INS`, `ICL`, `DTA`,
@@ -38,8 +38,8 @@ Prefer the smallest reference file that answers the question.
   relates to XASM, compilation notes, and MADS vs XASM differences.
 - [references/mnemonics.md](references/mnemonics.md): supported 6502, illegal
   6502, 65816, and mnemonic-extension notes.
-- [references/cpu-detection.md](references/cpu-detection.md): compile-time CPU
-  detection symbols.
+- [references/cpu-detection.md](references/cpu-detection.md): example programs
+  that detect a 6502, 65C02, or 65816 at runtime.
 
 ### Assembly Control and Syntax
 
@@ -74,7 +74,7 @@ Prefer the smallest reference file that answers the question.
 
 ### Linking and Output Formats
 
-- [references/relocatable-code.md](references/relocatable-code.md): router for `.RELOC`, external and public symbols, `.LONGA`, `.LONGI`, and `.LINK`.
+- [references/relocatable-code.md](references/relocatable-code.md): router for `.RELOC`, external and public symbols, `.LONGA`/`.LONGI` (`ON|OFF` 65816 register width), and `.LINK`.
 - [references/spartadosx.md](references/spartadosx.md): SpartaDOS X executable
   file blocks, relocation/update/definition blocks, and SDX programming notes.
 

@@ -1,5 +1,7 @@
 # Segments
 
+<a name="align"></a>
+
 ### .ALIGN N [,fill]
 The `.ALIGN` directive allows aligning the assembly address to a specified value `N`, and potentially filling memory with a specified `FILL` value. It is possible to align the assembly address for relocatable code provided a memory fill value `FILL` is given.
 
@@ -13,7 +15,7 @@ Default values are: `N=$0100`, `FILL=0`.
  .align $100,$ff
 ```
 
-<a name="rept"></a>
+<a name="pages"></a>
 
 ### .PAGES [expression]
 The `.PAGES` directive allows specifying the number of memory pages that our code snippet, bounded by `<.PAGES .. .ENDPG>`, should fit into (default is 1). If the program code exceeds the declared number of memory pages, a *Page error at ????* error message will be generated.

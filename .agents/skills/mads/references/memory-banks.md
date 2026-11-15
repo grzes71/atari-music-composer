@@ -7,9 +7,9 @@ Probably everyone who has dealt with the small **Atari** architecture associates
 The following pseudo-commands apply to banks:
 
 ```
-LMB #value
-NMB
-RMB
+ LMB #value
+ NMB
+ RMB
 ```
 
 * `LMB #` Load Memory Bank
@@ -17,9 +17,9 @@ RMB
 We set the MADS bank counter to a specific value from the range <$00..$FF> (BANK = value), e.g.
 
 ```
-lmb #0
-lmb #bank
-lmb #5 , $6500      ; only when OPT B+
+ lmb #0
+ lmb #bank
+ lmb #5 , $6500      ; only when OPT B+
 ```
 
 * `NMB` Next Memory Bank
@@ -27,8 +27,8 @@ lmb #5 , $6500      ; only when OPT B+
 We increase the **MADS** bank counter by 1 (BANK = BANK + 1).
 
 ```
-nmb
-nmb  $6500          ; only when OPT B+
+ nmb
+ nmb  $6500          ; only when OPT B+
 ```
 
 * `RMB` Reset Memory Bank
@@ -36,9 +36,9 @@ nmb  $6500          ; only when OPT B+
 We zero the **MADS** bank counter (BANK = 0).
 
 ```
-rmb
-rmb $3500           ; only when OPT B+
-rmb $8500           ; only when OPT B+
+ rmb
+ rmb $3500           ; only when OPT B+
+ rmb $8500           ; only when OPT B+
 ```
 
 ---

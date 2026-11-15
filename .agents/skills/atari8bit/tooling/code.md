@@ -1,13 +1,13 @@
 ---
 name: atari8bit-code-examples
 description: >-
-  Atari 8-bit code catalog — sieve, Tetris engine, RLE depacker, GTIA9++ boilerplate, 40x40 CHBASE, demoscene index.
+  Atari 8-bit code catalog — sieve, Tetris (1065-line GETRIS engine), RLE depacker, GTIA9++ boilerplate, 40x40 CHBASE, demoscene index.
 ---
 
 # 14 — Code Examples & Demoscene Catalog
 
 > **Scope:** Working code examples + Atari demoscene catalog: 128B, 256B, 1024B productions; graphics, sound, math, and data-format examples
-> **Key items:** sieve, Tetris (1065bIPS engine), RLE depacker, GTIA9++ boilerplate, 40x40 CHBASE, demoscene index
+> **Key items:** sieve, Tetris (1065-line GETRIS engine), RLE depacker, GTIA9++ boilerplate, 40x40 CHBASE, demoscene index
 > **Scope:** Ready-to-read Atari 8-bit code patterns: small programs, RLE, display-list tricks, demoscene techniques, VBXE production patterns, and MADS idioms.
 
 ## Quick-lookup
@@ -15,111 +15,135 @@ description: >-
 | Need | See § |
 |---|---|
 | Sieve of Eratosthenes | §14.1 |
-| Tetris engine (drive-declared LUTs + DLI HUD) | §14.1 |
+| Tetris engine (LUT-driven pieces + NMI HUD) | §14.1 |
 | RLE encode/decode + Pascal Tebe encoder | §14.2 |
-| GTIA mode 9++ display list + DLI color patch | §14.2 |
-| 40\u00d740 character-mode CHBASE (TMC v2.00) | §14.2 |
+| GTIA mode 9++ display list + DLI VSCROL patch | §14.2 |
+| 40x40 character-mode CHBASE (TMC v2.00) | §14.2 |
 | 128B productions (BeatTheStars, greenmil, rand_walker, waveanim) | §14.3 |
-| 256B productions (fire, sintro, water, galactic_bearing, quatari, deform\u2026) | §14.3 |
+| 256B productions (fire, sintro, water, galactic_bearing, quatari, deform, ...) | §14.3 |
 | 1024B algorytm_v08i (Agenda/svoy, 4 FX sections) | §14.3 |
 | Candle/Electron VBXE production file index | §14.4 |
 | MADS example corpus map | §14.6 |
+| MADS .STRUCT/.PROC/65816 snippet | §14.7 |
 
 ## 14.1 Math and Algorithm Examples
 
 ### Sieve of Eratosthenes (sieve.asm)
 
 ```asm
-; AX timing-sync trial prime self-assertive BI
-; uses ATAS-style macros; splits timing via wait() VBL
-; Breadboard: 2,3,5,7,11.
-; fits in 48K; splits timing via delay over 10 iterations of >64
+; C-port benchmark run 10 times; flags = 255 bytes at $8000
+; .var i,prime,k,count,iter .word  - zero-page words via .VAR
+; #while .word i <= #size ... #end - code-generation loops
+; adw/inw macros index the flags table, wait() syncs on RTCLOK (lda:cmp:req 20)
+; printf comes from .link 'libraries/stdio/lib/printf.obx'; run main
 ```
 
-### Tetris (tetris.asm, TeBe/Madteam v1.1, 1065 lines)
+### Tetris (tetris.asm — GETRIS engine v1.1 by TeBe/Madteam, 1065 lines)
 
-Complete playable Tetris engine:
-- Back-reference: 9-tetromino types with 1–4 rotation states via self-modifying code using `l_klocek/h_klocek/l_test/h_test`
-- NMI-driven joypad reader with debounce and edge-latch
-- Collision detection via `test_posX/Y/faza` jumping to embedded subroutines
-- Color text screen with DLI chopping per scanline
-- Repeated draws via `mvs` (move n words) macros
+Playfield engine, `buf = $a000`, 32 × 128 cells:
+- 9 tetrominoes (`klocek1`…`klocek9`) with up to 4 rotation states, addressed through the low/high byte
+  LUTs `l_klocek`/`h_klocek` and `l_test`/`h_test` (each rotation has a `.test` label).
+- Self-modifying `.macro sta_kloc` / `.macro lda_kloc` patch the draw/erase operands; `.proc put_klocek`,
+  `.proc test_posX` and `.proc test_posY` place and test a piece.
+- Display list: `dta $4f,a(buf)` (LMS + mode line) + `:height-1 dta $f` + `dta $41,a(ant)`.
+- No DLI colour split — a custom NMI handler (vector written to `$FFFA/$FFFB`, enabled with NMIEN `$40`)
+  switches the display-list pointer (`mwa #ant $d402`) and reads the stick with a delay-based latch
+  (`read_joy`, `delay_joy`, `old_joy`).
 
 ---
 
 ## 14.2 Graphics Code Examples
 
-### RLE Encode/Decode (rle.asm + rle.pas)
+### RLE Encode/Decode (compression/rle/rle.asm + pc/rle.pas)
 
-Standard Tebe/MadTeam RLE:
-- `getByte` reads from ZP `$ff00,x` auto-increment source pointer
-- flag byte LSB=1: literal run; LSB=0: repeat run
-- Pascal-side encoder (rle.pas): reads binary, tests each byte odd/even, streams runs
+RLE depacker credited to "Konop, Magnus, Probe, Seban, Tebe":
+- `getByte` reads through `lda $ff00,x` / `inputPointer equ *-2`, i.e. the source pointer's
+  low byte must be `$00`; `inx` + `sne` + `inc inputPointer+1` walks the stream.
+- Control byte: `0` = end of stream, LSB set = literal run, LSB clear = repeat run;
+  the following count byte is the run length minus one.
 
 ```pascal
-procedure save_rle(count, value: byte);
+// RLE_ENCODER V1.2 by Tebe/Madteam (Free Pascal: fpc -Mdelphi -O3 rle.pas)
+procedure save_rle(const a, ile: byte);      // repeat run, flag LSB = 0
 begin
-  fout^.write_byte((count-1) shl 1);  // even flag = repeat run
-  fout^.write_byte(value);
+  tmp[0]:=(ile-1) shl 1;  tmp[1]:=a;  blockwrite(f,tmp,2);
 end;
+// literal run: a:=(i shl 1) or 1; then i+1 bytes
+// the encoder ends the file with a single 0 byte and rejects input > 64 KB
 ```
 
-### GTIA Mode 9++ (mode_9++.asm)
+### GTIA Mode 9++ (mode 9++.asm)
 
-Display list: 2 blank lines, then 58× `$8f/$2f` lines (GTIA 9 active at `$2f80`):
-
+Real display list (Jaskier's TMC 2.00 intro, `graphics/mode 9++/mode_9++.asm`):
 ```
-     .byte $02    ; 2 blank lines
-     REPT 58
-     .byte $8f, $2f
-     ENDR
-     .byte $41    ; JVB → display list loop
-     .word display_list
+dl  dta $90,$6f,a($f000)   ; DLI+HSCROL blank line, then LMS+VSCROL mode-F line at $f000
+    :29 dta a($2f8f)       ; 29 x {8f,2f} = 58 mode-F lines, DLI on every line
+    dta $41,a(dl)          ; JVB back to dl
 ```
-
-DLI at scan-line boundary: colour 13 → colour 3 via `sta COLPF0` patching.
+`$22` is written to SDMCTL ($22F), `$40` to PRIOR ($26F, enabling GTIA modes), DLI vector $200 and
+NMIEN `$C0`. The DLI only patches VSCROL: `sta $d40a` (WSYNC) then `lda #13 / sta $d405` followed by
+`lda #3 / sta $d405` — those two VSCROL values are what turn one ANTIC mode-F line into a 9++ line pair
+(this is not a COLPF colour patch).
 
 ### 40×40 Character Mode (40x40.asm)
 
-Copies font from `$8000` to `$8400` on init, then on every scanline: sets `CHBASE = $8000` for even lines, `CHBASE = $8400` for odd lines. Outputs TMC Music Composer v2.00 version string in 40×40 character cells.
+Fonts at `$8000` (`font1`, loaded with `ins 'tmcprog.fnt'`) and `$8400` (`font2`, produced by
+`fontcopy` at init, 6 bytes per character). The DLI alternates both the fine scroll and the
+character base, so CHBASE gets the *high byte* of the font address ($80 / $84):
 
 ```asm
-DI   lda   #$00           ; even line: CHBASE = $8000
-       sta   CHBASE
-       ; wait/fill to the next scanline boundary
-       lda   #$00+$80       ; odd line: CHBASE = $8400
-DU   sta   CHBASE
+; VBI resets the working values each frame: mva >font2 fontwsk / mva #2 linewsk
+dli      pha
+         sta $d40a           ; WSYNC
+         lda #0
+linewsk  equ *-1             ; VSCROL, toggled 2 <-> 5 after every use
+         sta $d405
+         eor #7
+         sta linewsk
+         lda #0
+fontwsk  equ *-1             ; CHBASE = $84 ($8400), toggled $84 <-> $80
+         sta $d409
+         eor #4
+         sta fontwsk
+         lda $d20a           ; RANDOM
+         sta $d01a
+         pla
+         rti
 ```
 
-### RLE Encode / Pack (`rle_pack`, Tebe/MadTeam)
+Display list: `dta $a0,$e2,a(screen)` + `:19 dta $82,$a2` + `dta b($41),a(dlist)`, with the
+"THETA MUSIC COMPOSER VER 2.00 BY JASKIER" screen text at `$5000`. The VBI (`$222`) resets the
+working font/line values each frame; `wait_vbl` polls RTCLOK `$21c`.
+
+### RLE depacker skeleton (`compression/rle/rle.asm`)
 
 ```asm
-; Tebe/MadTeam RLE encoder skeleton
-; Walks input bytes, accumulates runs, writes (flag, byte) pairs
-; Entry: src = input end; dst = output start
-; Exit:  src cleaned: input pointer advanced through end
+rle_depacker
+        sta inputPointer+1
 
-rle_pack
-@read  lda    (src),y
-        cmp    last_byte
-        bne    @flush_run       ; new byte: flush previous run
-        iny
-        bne    @read
-        inc    src+1            ; cross-page source
-        jmp    @read
+loop    jsr getByte          ; 0 = end of stream
+        beq stop
+        lsr @                ; LSB -> carry: 1 = literal run, 0 = repeat run
+        tay                  ; count-1
+lp0     jsr getByte          ; literal run: fetch a new byte each pass
+lp1     sta $ffff
+outputPointer equ *-2
+        inw outputPointer
+        dey
+_bpl    bmi loop             ; Y underflowed -> next control byte
+        bcs lp0
+        bcc lp1              ; repeat run: re-store the same byte
 
-@new_run
-        sty    run_count
-        lda    #$00
-        clc
-        adc    #$02             ; flag = (run_count - 1) << 1 | 0  (repeat flag)
-        sta    (dst),y
-        lda    last_byte
-        sta    (dst),y
-        lda    (src),y
-        sta    last_byte
-        jmp    rle_pack
+getByte inx
+        sne
+        inc inputPointer+1
+        lda $ff00,x          ; low byte of the source pointer must be $00
+inputPointer equ *-2
+stop    rts
 ```
+
+The encoder is the PC-side tool, not an assembler routine: `compression/rle/pc/rle.pas`
+(`rle input rle_file`, max 64 KB) emits `(flag, byte)` pairs and terminates with a single `0`.
 
 ---
 
@@ -129,10 +153,10 @@ rle_pack
 
 | Production | Author | Year | Technique |
 |------------|--------|------|-----------|
-| **BeatTheStars** | Ivo van Poorten | 2018 | OST (oscillator stack trace) + PMG0 star cluster |
-| **greenmil** | goblinish | — | Colour bar decay from stacked `$0C→$00→$0E` luma ramp |
-| **rand_walker** | — | — | OS/9 16-shade random walker (X=stride, Y=stride mod) |
-| **waveanim** | — | — | ATASCII character sine wave via OS CIO `PUTBT` on `$D012` |
+| **BeatTheStars** | Ivo van Poorten | 2018 | POKEY beat from envelope/frequency tables; star field = random stack bytes pulled with `txs`/`pla` into PMG0 (`$d000`); NMI disabled so the stack can be used |
+| **greenmil** | goblinish | — | Writes COLBK (`$d01a`) after every `WSYNC` from a mirrored luma table; wide playfield via SDMCTL `$22f` |
+| **rand_walker** | — | — | OS graphics call `$ef9c` selects mode 9 (16 shades), then OS locate `$f18f` / plot `$f1d8` random walk from RANDOM (`$d20a`) with a coordinate-mask table; colour shadow `$2fb` |
+| **waveanim** | — | — | `waveanim.asx`: wave glyph built at assembly time, drawn through CIO put-byte (`$0b`) via `$e456`, setting ICBUFA/ICBUFL, CHBAS `$2f4`, LOGMAP `$2b2`, CRSINH `$2f0` |
 
 ### 256-Byte Productions (demoscene/256B/ (see §14.3 table))
 
@@ -140,23 +164,23 @@ rle_pack
 
 | Production | Author | Year | Technique |
 |------------|--------|------|-----------|
-| **fire** | — | — | GTIA 9 mode buffer, 4-neighbour thermal |
-| **galactic_bearing** | Agenda/svoy | 2019 | Fractal turbo; chaos-game superposition |
-| **sintro** | MadTeam | 1997 | Cosine generator, `tcos` table (256-point inverse), mirror quads |
-| **water** | SeBan/Slight | 2021 | Buffer A/B double-buffer; 4-neighbour averaging; `ADC <rnd` to bottom |
-| **quatari** | Ilmenit | 2020 | 4 FX (maze/sierpinski/lights/landscape) share one screen buffer |
-| **porazka** | taquart | — | Dual effect: plasma + kefrens propagation, 256-entry LUT, XOR interlace |
-| **deform** | pr0be/laresistance | 2004 | Double-buffered DLI at `$2800/$2c00`; raw texture DMA |
-| **glenches** | pr0be | — | 3D wireframe using precomputed `xtab`, `bitmask`, `sqrtab` lookup tables |
-| **LANDSCAPE** | tr1x/Agenda | 2021 | Procedural mountains via `f=(f-1)*x` product; stars as PMG0 clusters |
+| **fire** | — | — | ANTIC mode 0 screen (`$9c40`) with a 16-step grey charset at `$4000` + PRIOR `$40`; 4-neighbour average written through self-modified absolute operands; screen cleared with OS put-char `$f1a4` |
+| **galactic_bearing** | Ilmenit (Jakub Dębski), music stRing | — | `FRACTALS=3`, `VERTEXES=8` chaos-game fractal (`fractal_number`, `vertex_x/y`); needs OS Rev 2 |
+| **sintro** | MadTeam | 1997 | `tcos` table built by quarter-mirroring (`mva`, `eor #$ff`), PMG0-3 positions `$d000-$d003` animated per line; `.zpvar` variables; signature `Sintro 256B MADTEAM '97` |
+| **water** | SeBan/Slight | 2021 | `buf1`/`buf2` double buffer; 4-neighbour averaging then `lsr`; random value added to the second buffer's high byte |
+| **quatari** | Ilmenit | 2020 | 4 FX in `.local` scopes (maze/sierpinski/lights/landscape) share one screen buffer |
+| **porazka** | taquart | — | Plasma and "kefrenki" sections selected with `bit timer`; sine table built from `dta b(sin(32,19,128,0,31))` and mirrored with `eor #$3f` into four quadrants; per-line COLBK (`$d01a`) + HSCROL (`$d404`) patches |
+| **deform** | pr0be/laresistance | 2004 | ANTIC buffers at `$2800`/`$2c00`, `texture.dat` + `tabu.dat`, texture generated per frame |
+| **glenches** | pr0be | — | 3D wireframe using precomputed `xtab`, `ztab`, `bitmask`, `sqrtab` lookup tables |
+| **LANDSCAPE** | tr1x/Agenda | 2021 | Terrain edges via `f=(f-1)*x`; stars are PMG0 (`hposp0`/`sizep0`/`grafp0`) driven by a `starpos` table; PRIOR pushes PMG behind the mountains |
 
-**Kefrens interlace subdir (`kefrens/`):**
+**Kefrens interlaced bars (`kefrens/`)** — these three sources are **xasm** files (`.xsm`), not MADS:
 
 | File | Technique |
 |------|-----------|
-| `kefrens_1st_twt.xsm` | Blank every 2nd line; LIFO sine-start offsets (stack `PLA/ADC` pairs) |
-| `kefrens_interlaced.xsm` | Dual LUT `$600/$680`; fixed offset `+$11` per pixel; XOR interlace via `eor #1` |
-| `kefrens_final.xsm` | Solid lines; `make_dl` build-time DLI at `$2000`; `inc $d500,x` for scanline sync |
+| `kefrens_1st_twt.xsm` | Blank every 2nd line; sine start offsets pushed/popped LIFO with the stack (`pha` … `pla / adc #+1` / `pla / adc #-2`) |
+| `kefrens_interlaced.xsm` | Dual sine LUT `$600`/`$680`; `+$11` added per pixel to the shade buffer; interlace by `eor #$03` on the display-list low byte (`$d402`) |
+| `kefrens_final.xsm` | Solid lines; `make_dl`/`put_line` build the display list at `$bc20` (no DLI); `inc $d500,x` is the 7-cycle delay that replaces `sta $d40a` (`WSYNC`) |
 
 ### 1024-Byte Productions (demoscene/1024B/ (see §14.3 table))
 
@@ -164,12 +188,14 @@ rle_pack
 
 | FX | Mechanism |
 |----|-----------|
-| fx1_vbl | GTIA mode cycling; PMG0 bar copy; square logo |
-| fx2_vbl | Full-mode picture; charset swap + mirror raster |
-| fx3_vbl | Randomized DLI + rapid BG colour cycling |
-| fx4_vbl | Character-set scrambling; PMG0 rotation |
+| fx1_vbl | Random GTIA/graphics-mode changes, central logo, background PMG bars |
+| fx2_vbl | Full-screen text-mode pictures with charset swapping, interleaved with pseudorandom sound-synced sections |
+| fx3_vbl | Randomized display list + title text over a rapidly cycling background colour, PMG logo blinking to the sound |
+| fx4_vbl | Randomized charset changes as fast as possible |
 
-All sections driven by `<RUN_L / EXIT_L>` and `<RUN_H / EXIT_H>` address tables. Full RMT music engine with 4 channels (kickbas/sndkick5/sndkick6 + seclead + leadnotes).
+Sections are dispatched through the `RUN_L`/`RUN_H` (frame work) and `EXIT_L` (prep) tables indexed by
+a `SECTION` counter. The sound is hand-coded from the tables `kickbas`, `sndkick5`/`sndkick6`,
+`seclead` and `leadnotes` — there is no RMT player in this file.
 
 ---
 
@@ -194,7 +220,7 @@ runnable idioms rather than isolated algorithms.
 | Syntax and scoping | `if_else.asm`, `while.asm`, `rept.asm`, `local*.asm`, `macro_proc_local.asm`, `struct_enum.asm` | Compile-time control, local namespaces, macro-local labels, typed structures. |
 | Loaders and file I/O | `Boot.asm`, `file_loader.asm`, `file_header.asm`, I/O and stdio library examples | Boot sectors, dual-address relocation, CIO-style library calls, command-line parsing. |
 | Banking and detection | `xms_banks.asm`, `detect_memory.asm`, `detect_cpu.asm`, `detect_sdx.asm`, `stereo_detect.asm` | 130XE/RAMBO bank setup, CPU and SDX capability probes, stereo POKEY detection. |
-| Raster graphics | MCP DLI/IRQ, MAX viewer, mode 9++, and 40x40 examples | DLI/IRQ colour splits, interlace modes, VSCROL/CHBASE timing. |
+| Raster graphics | MCP DLI/IRQ, mode 9++, 40x40 and lepix examples | DLI/IRQ colour splits, interlace modes, VSCROL/CHBASE timing. |
 | Compression | RLE, LZ4, Exomizer, and NuCrunch examples | Depacker loop structure and workspace trade-offs. |
 | Music players | Tracker relocator and ProTracker examples | Relocatable RMT/MPT/CMC/TMC players and module-data inclusion. |
 
@@ -208,7 +234,7 @@ Treat `.obx`, `.lst`, and `.lab` beside source files as verification artifacts: 
 ; Demo skeleton: init -> deferred VBI + DLI -> main loop
 ; Target machine type: Atari XL/XE, MADS assembler
 
-        .org   $2000            ; standard XEX load address
+        org    $2000            ; standard XEX load address
 
 ; ============================================================
 ; INIT
@@ -289,25 +315,19 @@ my_dli
 ; Data
 ; ============================================================
 display_list
-        .byte  $70,$70,$70       ; 3 blank lines (top border)
-        .byte  $4C               ; JVB -> loop
+        .byte  $70,$70,$70       ; 3 x 8 blank scanlines (top border)
+        .byte  $41               ; JVB -> jump and wait for VBI
         .word  display_list
 ```
 
 ---
 
-## 14.6 MADS `.STRUCT` / `.PROC` / `.RELOC` / 65816 `.A8` Example
+## 14.7 MADS `.STRUCT` / `.PROC` / 65816 Example
 
 ```asm
-; MADS structures and procedures
-; .STRUCT: packed memory layout
-; .PROC: typed parameters + @CALL/@PUSH/@PULL/@EXIT
-; 65816: .A8 / .A16 accumulator modes
-
-        .proc  InitDisplayList args(display_list_addr)
-@call   mwa    #display_list display_list_addr
-@exit   rts
-        .endp
+; MADS structures and procedures (checked against MADS 2.1.6)
+; .STRUCT: field names are byte offsets; the struct label equals its total size
+; .PROC with .REG/.VAR parameters, or the @CALL/@PUSH/@PULL/@EXIT software stack
 
         .struct Vert3d
 x       .byte
@@ -315,8 +335,29 @@ y       .byte
 z       .byte
         .ends
 
-        .a8                    ; 8-bit accumulator
-        lda    #$4C
-        .a16                   ; 16-bit accumulator
-        lda    #$1234
+verts   dta Vert3d [2]           ; 3 records — [count] is the maximum index
+
+; .REG: parameter names must be built from A/X/Y, at most 3 bytes
+        .proc SetColors (.byte a,x) .reg
+        sta $d016
+        stx $d017
+        rts
+        .endp
+
+        SetColors #$0e,#$42      ; parameters land in A and X, then JSR
+
+; software stack (no .REG/.VAR): needs the @CALL/@PULL/@EXIT macros and the
+; @PROC_VARS_ADR/@STACK_ADDRESS/@STACK_POINTER labels (defaults $0500/$0600/$FE)
+        .proc SetDLPtr (.word addr)
+        mwa   #display_list addr
+        rts
+        .endp
+
+        SetDLPtr #display_list   ; '#value' = by value
+
+        opt   c+                 ; 65816 code must be enabled
+        .a8                      ; emits SEP #$20 (tracked A = 8 bit)
+        lda   #$4c
+        .a16                     ; emits REP #$20
+        lda   #$1234
 ```

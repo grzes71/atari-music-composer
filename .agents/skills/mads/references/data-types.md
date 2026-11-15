@@ -34,12 +34,12 @@ Example of a structure declaration:
 
   q :3 .byte   ; lda #name.q = 11
 
-.ENDS          ; lda #name   = 14 (length)
+.ENDS          ; .len name = 14 (length)
 ```
 
 Structure fields are defined by providing a name and a field type: `.BYTE`, `.WORD`, `.LONG`, `.DWORD`. The field name can be preceded by whitespace. In the area delimited by `.STRUCT` and `.ENDS` directives, it is not possible to use *CPU* mnemonics. If used, or if other disallowed characters are used, an error with the message **Improper syntax** or **Illegal instruction** will occur.
 
-In summary, the `name` label contains information about the total length of the structure (in bytes). The other labels describing the fields contain information about the offset from the beginning of the structure.
+In summary, `.len name` (`.sizeof name`) returns the total length of the structure in bytes; the structure name itself cannot be used as a value. The other labels describing the fields contain information about the offset from the beginning of the structure.
 Structure declarations cannot be nested, but previously declared structures can be nested (the order of occurrence in the program does not matter), e.g.:
 
 ```
@@ -115,7 +115,7 @@ The square brackets can optionally be followed by a list of initial values (deli
 
 Such a declaration will cause all fields to be initialized with the values `1, 20, 200, 32000`, not just the first `data[0]` field.
 
-If the list of initial values is larger or smaller than the number of structure fields, an error with the message **Constant expression violates subrange bounds** will occur.
+If the list of initial values is longer than the number of structure fields, MADS reports the error **Improper number of actual parameters**.
 
 To reference the fields of newly created data, you must provide their name, followed by an index in square brackets and the field name after a dot, e.g.:
 

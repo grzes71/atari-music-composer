@@ -33,16 +33,16 @@ _CLR16       .MACRO MEM
 
       .IFDEF __65SC02__
 _CLR24       .MACRO MEM
-       STZ MEM+0
-       STZ MEM+1
-       STZ MEM+2
+       STZ :MEM+0
+       STZ :MEM+1
+       STZ :MEM+2
        .ENDM
       .ELSE
 _CLR24       .MACRO MEM
        LDA #0
-       STA MEM+0
-       STA MEM+1
-       STA MEM+2
+       STA :MEM+0
+       STA :MEM+1
+       STA :MEM+2
        .ENDM
       .ENDIF
 
@@ -55,18 +55,18 @@ _CLR24       .MACRO MEM
 
       .IFDEF __65SC02__
 _CLR32       .MACRO MEM
-       STZ MEM+0
-       STZ MEM+1
-       STZ MEM+2
-       STZ MEM+3
+       STZ :MEM+0
+       STZ :MEM+1
+       STZ :MEM+2
+       STZ :MEM+3
        .ENDM
       .ELSE
 _CLR32       .MACRO MEM
        LDA #0
-       STA MEM+0
-       STA MEM+1
-       STA MEM+2
-       STA MEM+3
+       STA :MEM+0
+       STA :MEM+1
+       STA :MEM+2
+       STA :MEM+3
        .ENDM
       .ENDIF
 
@@ -80,17 +80,17 @@ _CLR32       .MACRO MEM
 ; On exit: A = ??, X & Y are unchanged.
 
 _XFR16      .MACRO SRC,DST
-      .IF SRC != DST
-       .IF SRC > DST
-        LDA SRC+0
-        STA DST+0
-        LDA SRC+1
-        STA DST+1
+      .IF :SRC != :DST
+       .IF :SRC > :DST
+        LDA :SRC+0
+        STA :DST+0
+        LDA :SRC+1
+        STA :DST+1
        .ELSE
-        LDA SRC+1
-        STA DST+1
-        LDA SRC+0
-        STA DST+0
+        LDA :SRC+1
+        STA :DST+1
+        LDA :SRC+0
+        STA :DST+0
        .ENDIF
       .ENDIF
       .ENDM
@@ -104,25 +104,25 @@ _XFR16      .MACRO SRC,DST
 ; On exit: A = ??, X & Y are unchanged.
 
 _XFR32      .MACRO SRC,DST
-      .IF SRC != DST
-       .IF SRC > DST
-        LDA SRC+0
-        STA DST+0
-        LDA SRC+1
-        STA DST+1
-        LDA SRC+2
-        STA DST+2
-        LDA SRC+3
-        STA DST+3
+      .IF :SRC != :DST
+       .IF :SRC > :DST
+        LDA :SRC+0
+        STA :DST+0
+        LDA :SRC+1
+        STA :DST+1
+        LDA :SRC+2
+        STA :DST+2
+        LDA :SRC+3
+        STA :DST+3
        .ELSE
-        LDA SRC+3
-        STA DST+3
-        LDA SRC+2
-        STA DST+2
-        LDA SRC+1
-        STA DST+1
-        LDA SRC+0
-        STA DST+0
+        LDA :SRC+3
+        STA :DST+3
+        LDA :SRC+2
+        STA :DST+2
+        LDA :SRC+1
+        STA :DST+1
+        LDA :SRC+0
+        STA :DST+0
        .ENDIF
       .ENDIF
       .ENDM
@@ -136,10 +136,10 @@ _XFR32      .MACRO SRC,DST
 ; On exit: A = ??, X = $FF, Y is unchanged.
 
 _XFR32C      .MACRO SRC,DST
-      .IF SRC != DST
+      .IF :SRC != :DST
        LDX #3
-_LOOP\?       LDA SRC,X
-       STA DST,X
+_LOOP\?       LDA :SRC,X
+       STA :DST,X
        DEX
        BPL _LOOP\?
       .ENDIF
@@ -151,13 +151,13 @@ _LOOP\?       LDA SRC,X
 ; On exit: A = ??, X & Y unchanged.
 
 _SET16I      .MACRO NUM,DST
-      .IF NUM != 0
-       LDA .LO NUM
-       STA DST+0
-       LDA .HI NUM
-       STA DST+1
+      .IF :NUM != 0
+       LDA #<:NUM
+       STA :DST+0
+       LDA #>:NUM
+       STA :DST+1
       .ELSE
-       _CLR16 DST
+       _CLR16 :DST
       .ENDIF
 .ENDM
 ;------------------------------------------------
@@ -170,12 +170,12 @@ _SET16I      .MACRO NUM,DST
 ; On exit: A = ??, X & Y are unchanged.
 
 _NOT16      .MACRO VLA,RES
-      LDA VLA+0
+      LDA :VLA+0
       EOR #$FF
-      STA RES+0
-      LDA VLA+1
+      STA :RES+0
+      LDA :VLA+1
       EOR #$FF
-      STA RES+1
+      STA :RES+1
       .ENDM
 
 ; Calculate the logical NOT of the 32 bit value
@@ -184,18 +184,18 @@ _NOT16      .MACRO VLA,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _NOT32      .MACRO VLA,RES
-      LDA VLA+0
+      LDA :VLA+0
       EOR #$FF
-      STA RES+0
-      LDA VLA+1
+      STA :RES+0
+      LDA :VLA+1
       EOR #$FF
-      STA RES+1
-      LDA VLA+2
+      STA :RES+1
+      LDA :VLA+2
       EOR #$FF
-      STA RES+2
-      LDA VLA+3
+      STA :RES+2
+      LDA :VLA+3
       EOR #$FF
-      STA RES+3
+      STA :RES+3
       .ENDM
 
 ; Calculate the logical NOT of the 32 bit value
@@ -206,9 +206,9 @@ _NOT32      .MACRO VLA,RES
 
 _NOT32C      .MACRO VLA,RES
       LDX #3
-_LOOP\?      LDA VLA,X
+_LOOP\?      LDA :VLA,X
       EOR #$FF
-      STA RES,X
+      STA :RES,X
       DEX
       BPL _LOOP\?
       .ENDM
@@ -221,15 +221,15 @@ _LOOP\?      LDA VLA,X
 ; On exit: A = ??, X & Y are unchanged.
 
 _ORA16      .MACRO VLA,VLB,RES
-      .IF VLA != VLB
-       LDA VLA+0
-       ORA VLB+0
-       STA RES+0
-       LDA VLA+1
-       ORA VLB+1
-       STA RES+1
+      .IF :VLA != :VLB
+       LDA :VLA+0
+       ORA :VLB+0
+       STA :RES+0
+       LDA :VLA+1
+       ORA :VLB+1
+       STA :RES+1
       .ELSE
-       _XFR16 VLA,RES
+       _XFR16 :VLA,:RES
       .ENDIF
       .ENDM
 
@@ -240,12 +240,12 @@ _ORA16      .MACRO VLA,VLB,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _ORA16I      .MACRO VLA,NUM,RES
-       LDA VLA+0
-       ORA .LO NUM
-       STA RES+0
-       LDA VLA+1
-       ORA .HI NUM
-       STA RES+1
+       LDA :VLA+0
+       ORA #<:NUM
+       STA :RES+0
+       LDA :VLA+1
+       ORA #>:NUM
+       STA :RES+1
       .ENDM
 
 ; Calculate the logical OR of the two 32 bit
@@ -256,21 +256,21 @@ _ORA16I      .MACRO VLA,NUM,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _ORA32      .MACRO VLA,VLB,RES
-      .IF VLA != VLB
-       LDA VLA+0
-       ORA VLB+0
-       STA RES+0
-       LDA VLA+1
-       ORA VLB+1
-       STA RES+1
-       LDA VLA+2
-       ORA VLB+2
-       STA RES+2
-       LDA VLA+3
-       ORA VLB+3
-       STA RES+3
+      .IF :VLA != :VLB
+       LDA :VLA+0
+       ORA :VLB+0
+       STA :RES+0
+       LDA :VLA+1
+       ORA :VLB+1
+       STA :RES+1
+       LDA :VLA+2
+       ORA :VLB+2
+       STA :RES+2
+       LDA :VLA+3
+       ORA :VLB+3
+       STA :RES+3
       .ELSE
-       _XFR32 VLA,RES
+       _XFR32 :VLA,:RES
       .ENDIF
       .ENDM
 
@@ -283,15 +283,15 @@ _ORA32      .MACRO VLA,VLB,RES
 ; On exit: A = ??, X = $FF, Y is unchanged.
 
 _ORA32C      .MACRO VLA,VLB,RES
-      .IF VLA != VLB
+      .IF :VLA != :VLB
        LDX #3
-_LOOP\?       LDA VLA,X
-       ORA VLB,X
-       STA RES,X
+_LOOP\?       LDA :VLA,X
+       ORA :VLB,X
+       STA :RES,X
        DEX
        BPL _LOOP\?
       .ELSE
-       _XFR32C VLA,RES
+       _XFR32C :VLA,:RES
       .ENDIF
       .ENDM
 
@@ -303,15 +303,15 @@ _LOOP\?       LDA VLA,X
 ; On exit: A = ??, X & Y are unchanged.
 
 _AND16      .MACRO VLA,VLB,RES
-      .IF VLA != VLB
-       LDA VLA+0
-       AND VLB+0
-       STA RES+0
-       LDA VLA+1
-       AND VLB+1
-       STA RES+1
+      .IF :VLA != :VLB
+       LDA :VLA+0
+       AND :VLB+0
+       STA :RES+0
+       LDA :VLA+1
+       AND :VLB+1
+       STA :RES+1
       .ELSE
-       _XFR16 VLA,RES
+       _XFR16 :VLA,:RES
       .ENDIF
       .ENDM
 
@@ -322,12 +322,12 @@ _AND16      .MACRO VLA,VLB,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _AND16I      .MACRO VLA,NUM,RES
-       LDA VLA+0
-       AND .LO NUM
-       STA RES+0
-       LDA VLA+1
-       AND .HI NUM
-       STA RES+1
+       LDA :VLA+0
+       AND #<:NUM
+       STA :RES+0
+       LDA :VLA+1
+       AND #>:NUM
+       STA :RES+1
       .ENDM
 
 ; Calculate the logical AND of the two 32 bit
@@ -338,21 +338,21 @@ _AND16I      .MACRO VLA,NUM,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _AND32      .MACRO VLA,VLB,RES
-      .IF VLA != VLB
-       LDA VLA+0
-       AND VLB+0
-       STA RES+0
-       LDA VLA+1
-       AND VLB+1
-       STA RES+1
-       LDA VLA+2
-       AND VLB+2
-       STA RES+2
-       LDA VLA+3
-       AND VLB+3
-       STA RES+3
+      .IF :VLA != :VLB
+       LDA :VLA+0
+       AND :VLB+0
+       STA :RES+0
+       LDA :VLA+1
+       AND :VLB+1
+       STA :RES+1
+       LDA :VLA+2
+       AND :VLB+2
+       STA :RES+2
+       LDA :VLA+3
+       AND :VLB+3
+       STA :RES+3
       .ELSE
-       _XFR32 VLA,RES
+       _XFR32 :VLA,:RES
       .ENDIF
       .ENDM
 
@@ -365,15 +365,15 @@ _AND32      .MACRO VLA,VLB,RES
 ; On exit: A = ??, X = $FF, Y is unchanged.
 
 _AND32C      .MACRO VLA,VLB,RES
-      .IF VLA != VLB
+      .IF :VLA != :VLB
        LDX #3
-_LOOP\?       LDA VLA,X
-       AND VLB,X
-       STA RES,X
+_LOOP\?       LDA :VLA,X
+       AND :VLB,X
+       STA :RES,X
        DEX
        BPL _LOOP\?
       .ELSE
-       _XFR32C VLA,RES
+       _XFR32C :VLA,:RES
       .ENDIF
       .ENDM
 
@@ -385,15 +385,15 @@ _LOOP\?       LDA VLA,X
 ; On exit: A = ??, X & Y are unchanged.
 
 _EOR16      .MACRO VLA,VLB,RES
-      .IF VLA != VLB
-       LDA VLA+0
-       EOR VLB+0
-       STA RES+0
-       LDA VLA+1
-       EOR VLB+1
-       STA RES+1
+      .IF :VLA != :VLB
+       LDA :VLA+0
+       EOR :VLB+0
+       STA :RES+0
+       LDA :VLA+1
+       EOR :VLB+1
+       STA :RES+1
       .ELSE
-       _CLR16 RES
+       _CLR16 :RES
       .ENDIF
       .ENDM
 
@@ -404,12 +404,12 @@ _EOR16      .MACRO VLA,VLB,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _EOR16I      .MACRO VLA,NUM,RES
-       LDA VLA+0
-       EOR .LO NUM
-       STA RES+0
-       LDA VLA+1
-       EOR .HI NUM
-       STA RES+1
+       LDA :VLA+0
+       EOR #<:NUM
+       STA :RES+0
+       LDA :VLA+1
+       EOR #>:NUM
+       STA :RES+1
       .ENDM
 
 ; Calculate the exclusive OR of the two 32 bit
@@ -420,21 +420,21 @@ _EOR16I      .MACRO VLA,NUM,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _EOR32      .MACRO VLA,VLB,RES
-      .IF VLA != VLB
-       LDA VLA+0
-       EOR VLB+0
-       STA RES+0
-       LDA VLA+1
-       EOR VLB+1
-       STA RES+1
-       LDA VLA+2
-       EOR VLB+2
-       STA RES+2
-       LDA VLA+3
-       EOR VLB+3
-       STA RES+3
+      .IF :VLA != :VLB
+       LDA :VLA+0
+       EOR :VLB+0
+       STA :RES+0
+       LDA :VLA+1
+       EOR :VLB+1
+       STA :RES+1
+       LDA :VLA+2
+       EOR :VLB+2
+       STA :RES+2
+       LDA :VLA+3
+       EOR :VLB+3
+       STA :RES+3
       .ELSE
-       _CLR32 RES
+       _CLR32 :RES
       .ENDIF
       .ENDM
 
@@ -442,20 +442,20 @@ _EOR32      .MACRO VLA,VLB,RES
 ; values at locations VLA and VLB iteratively.
 ; The result is stored in location RES. If VLA
 ; and VLB are the same the macro expands to a
-; _XFR32C.
+; _CLR32.
 ;
 ; On exit: A = ??, X = $FF, Y is unchanged.
 
 _EOR32C      .MACRO VLA,VLB,RES
-      .IF VLA != VLB
+      .IF :VLA != :VLB
        LDX #3
-_LOOP\?       LDA VLA,X
-       EOR VLB,X
-       STA RES,X
+_LOOP\?       LDA :VLA,X
+       EOR :VLB,X
+       STA :RES,X
        DEX
        BPL _LOOP\?
       .ELSE
-       _CLR32C RES
+       _CLR32 :RES
       .ENDIF
       .ENDM
 
@@ -489,24 +489,24 @@ _ASL16      .MACRO VLA,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _ASL32      .MACRO VLA,RES
-      .IF VLA != RES
-       LDA VLA+0
-       ASL A
-       STA RES+0
-       LDA VLA+1
-       ROL A
-       STA RES+1
-       LDA VLA+2
-       ROL A
-       STA RES+2
-       LDA VLA+3
-       ROL A
-       STA RES+3
+      .IF :VLA != :RES
+       LDA :VLA+0
+       ASL
+       STA :RES+0
+       LDA :VLA+1
+       ROL
+       STA :RES+1
+       LDA :VLA+2
+       ROL
+       STA :RES+2
+       LDA :VLA+3
+       ROL
+       STA :RES+3
       .ELSE
-       ASL VLA+0
-       ROL VLA+1
-       ROL VLA+2
-       ROL VLA+3
+       ASL :VLA+0
+       ROL :VLA+1
+       ROL :VLA+2
+       ROL :VLA+3
       .ENDIF
       .ENDM
 
@@ -519,16 +519,16 @@ _ASL32      .MACRO VLA,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _ROL16      .MACRO VLA,RES
-      .IF VLA != RES
-       LDA VLA+0
-       ROL A
-       STA RES+0
-       LDA VLA+1
-       ROL A
-       STA RES+1
+      .IF :VLA != :RES
+       LDA :VLA+0
+       ROL
+       STA :RES+0
+       LDA :VLA+1
+       ROL
+       STA :RES+1
       .ELSE
-       ROL VLA+0
-       ROL VLA+1
+       ROL :VLA+0
+       ROL :VLA+1
       .ENDIF
       .ENDM
 
@@ -541,24 +541,24 @@ _ROL16      .MACRO VLA,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _ROL32      .MACRO VLA,RES
-      .IF VLA != RES
-       LDA VLA+0
-       ROL A
-       STA RES+0
-       LDA VLA+1
-       ROL A
-       STA RES+1
-       LDA VLA+2
-       ROL A
-       STA RES+2
-       LDA VLA+3
-       ROL A
-       STA RES+3
+      .IF :VLA != :RES
+       LDA :VLA+0
+       ROL
+       STA :RES+0
+       LDA :VLA+1
+       ROL
+       STA :RES+1
+       LDA :VLA+2
+       ROL
+       STA :RES+2
+       LDA :VLA+3
+       ROL
+       STA :RES+3
       .ELSE
-       ROL VLA+0
-       ROL VLA+1
-       ROL VLA+2
-       ROL VLA+3
+       ROL :VLA+0
+       ROL :VLA+1
+       ROL :VLA+2
+       ROL :VLA+3
       .ENDIF
       .ENDM
 
@@ -571,16 +571,16 @@ _ROL32      .MACRO VLA,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _LSR16      .MACRO VLA,RES
-      .IF VLA != RES
-       LDA VLA+1
-       LSR A
-       STA RES+1
-       LDA VLA+0
-       ROR A
-       STA RES+0
+      .IF :VLA != :RES
+       LDA :VLA+1
+       LSR
+       STA :RES+1
+       LDA :VLA+0
+       ROR
+       STA :RES+0
       .ELSE
-       LSR VLA+1
-       ROR VLA+0
+       LSR :VLA+1
+       ROR :VLA+0
       .ENDIF
 .ENDM
       
@@ -622,24 +622,24 @@ ok:
 ; On exit: A = ??, X & Y are unchanged.
 
 _LSR32 .MACRO VLA,RES
-      .IF VLA != RES
-       LDA VLA+3
-       LSR A
-       STA RES+3
-       LDA VLA+2
-       ROR A
-       STA RES+2
-       LDA VLA+1
-       ROR A
-       STA RES+1
-       LDA VLA+0
-       ROR A
-       STA RES+0
+      .IF :VLA != :RES
+       LDA :VLA+3
+       LSR
+       STA :RES+3
+       LDA :VLA+2
+       ROR
+       STA :RES+2
+       LDA :VLA+1
+       ROR
+       STA :RES+1
+       LDA :VLA+0
+       ROR
+       STA :RES+0
       .ELSE
-       LSR VLA+3
-       ROR VLA+2
-       ROR VLA+1
-       ROR VLA+0
+       LSR :VLA+3
+       ROR :VLA+2
+       ROR :VLA+1
+       ROR :VLA+0
       .ENDIF
       .ENDM
 
@@ -652,16 +652,16 @@ _LSR32 .MACRO VLA,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _ROR16      .MACRO VLA,RES
-      .IF VLA != RES
-       LDA VLA+1
-       ROR A
-       STA RES+1
-       LDA VLA+0
-       ROR A
-       STA RES+0
+      .IF :VLA != :RES
+       LDA :VLA+1
+       ROR
+       STA :RES+1
+       LDA :VLA+0
+       ROR
+       STA :RES+0
       .ELSE
-       ROR VLA+1
-       ROR VLA+0
+       ROR :VLA+1
+       ROR :VLA+0
       .ENDIF
       .ENDM
 
@@ -674,24 +674,24 @@ _ROR16      .MACRO VLA,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _ROR32      .MACRO VLA,RES
-      .IF VLA != RES
-       LDA VLA+3
-       ROR A
-       STA RES+3
-       LDA VLA+2
-       ROR A
-       STA RES+2
-       LDA VLA+1
-       ROR A
-       STA RES+1
-       LDA VLA+0
-       ROR A
-       STA RES+0
+      .IF :VLA != :RES
+       LDA :VLA+3
+       ROR
+       STA :RES+3
+       LDA :VLA+2
+       ROR
+       STA :RES+2
+       LDA :VLA+1
+       ROR
+       STA :RES+1
+       LDA :VLA+0
+       ROR
+       STA :RES+0
       .ELSE
-       ROR VLA+3
-       ROR VLA+2
-       ROR VLA+1
-       ROR VLA+0
+       ROR :VLA+3
+       ROR :VLA+2
+       ROR :VLA+1
+       ROR :VLA+0
       .ENDIF
       .ENDM
 
@@ -705,9 +705,9 @@ _ROR32      .MACRO VLA,RES
 ; On exit: A, X & Y are unchanged.
 
 _INC16      .MACRO MEM
-      INC MEM+0
+      INC :MEM+0
       BNE _DONE\?
-      INC MEM+1
+      INC :MEM+1
 _DONE\?      EQU *
       .ENDM
 
@@ -717,13 +717,13 @@ _DONE\?      EQU *
 ; On exit: A, X & Y are unchanged.
 
 _INC32      .MACRO MEM
-      INC MEM+0
+      INC :MEM+0
       BNE _DONE\?
-      INC MEM+1
+      INC :MEM+1
       BNE _DONE\?
-      INC MEM+2
+      INC :MEM+2
       BNE _DONE\?
-      INC MEM+3
+      INC :MEM+3
 _DONE\?      EQU *
       .ENDM
 
@@ -733,10 +733,10 @@ _DONE\?      EQU *
 ; On exit: A = ??, X & Y are unchanged.
 
 _DEC16      .MACRO MEM
-      LDA MEM+0
+      LDA :MEM+0
       BNE _DONE\?
-      DEC MEM+1
-_DONE\?      DEC MEM+0
+      DEC :MEM+1
+_DONE\?      DEC :MEM+0
       .ENDM
 
 ; Decrement the 32 bit value at location MEM
@@ -745,16 +745,16 @@ _DONE\?      DEC MEM+0
 ; On exit: A = ??, X & Y are unchanged.
 
 _DEC32      .MACRO MEM
-      LDA MEM+0
+      LDA :MEM+0
       BNE _DEC0\?
-      LDA MEM+1
+      LDA :MEM+1
       BNE _DEC1\?
-      LDA MEM+2
+      LDA :MEM+2
       BNE _DEC2\?
-      DEC MEM+3
-_DEC2\?      DEC MEM+2
-_DEC1\?      DEC MEM+1
-_DEC0\?      DEC MEM+0
+      DEC :MEM+3
+_DEC2\?      DEC :MEM+2
+_DEC1\?      DEC :MEM+1
+_DEC0\?      DEC :MEM+0
       .ENDM
 
 ; Add two 16 bit numbers together and store the
@@ -780,22 +780,22 @@ _ADD16      .MACRO VLA,VLB,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _ADD32      .MACRO VLA,VLB,RES
-      .IF VLA != VLB
+      .IF :VLA != :VLB
        CLC
-       LDA VLA+0
-       ADC VLB+0
-       STA RES+0
-       LDA VLA+1
-       ADC VLB+1
-       STA RES+1
-       LDA VLA+2
-       ADC VLB+2
-       STA RES+2
-       LDA VLA+3
-       ADC VLB+3
-       STA RES+3
+       LDA :VLA+0
+       ADC :VLB+0
+       STA :RES+0
+       LDA :VLA+1
+       ADC :VLB+1
+       STA :RES+1
+       LDA :VLA+2
+       ADC :VLB+2
+       STA :RES+2
+       LDA :VLA+3
+       ADC :VLB+3
+       STA :RES+3
       .ELSE
-       _ASL32 VLA,RES
+       _ASL32 :VLA,:RES
       .ENDIF
       .ENDM
 
@@ -807,14 +807,14 @@ _ADD32      .MACRO VLA,VLB,RES
 
 _ADDu24_u16      .MACRO VLA,VLB
        CLC
-       LDA VLA+0
-       ADC VLB+0
-       STA ALA+0
-       LDA VLA+1
-       ADC VLB+1
-       STA VLA+1
+       LDA :VLA+0
+       ADC :VLB+0
+       STA :VLA+0
+       LDA :VLA+1
+       ADC :VLB+1
+       STA :VLA+1
        bcc ok          
-       inc VLA+2
+       inc :VLA+2
 ok:
       .ENDM
       
@@ -848,11 +848,11 @@ end:
 ; On exit: A = ??, X & Y are unchanged.
 _ADD16_8 .MACRO VLA,VLB
 	clc		
-	lda VLA+0
-	adc VLB+0
-	sta VLA+0
+	lda :VLA+0
+	adc :VLB+0
+	sta :VLA+0
         bcc ok          
-        inc VLA+1
+        inc :VLA+1
 ok:
 .ENDM
 
@@ -862,9 +862,9 @@ ok:
 ; On exit: A = ??, X & Y are unchanged.
 
 _ADD24_8  .MACRO VLA,VLB
-       _ADD16_8 VLA, VLB
+       _ADD16_8 :VLA, :VLB
         bcc ok          
-        inc VLA+2
+        inc :VLA+2
 ok:
       .ENDM
 
@@ -877,12 +877,12 @@ ok:
 
 _SUB16      .MACRO VLA,VLB,RES
       SEC
-      LDA VLA+0
-      SBC VLB+0
-      STA RES+0
-      LDA VLA+1
-      SBC VLB+1
-      STA RES+1
+      LDA :VLA+0
+      SBC :VLB+0
+      STA :RES+0
+      LDA :VLA+1
+      SBC :VLB+1
+      STA :RES+1
       .ENDM
 
 ; Subtract two 32 bit numbers and store the
@@ -893,18 +893,18 @@ _SUB16      .MACRO VLA,VLB,RES
 
 _SUB32      .MACRO VLA,VLB,RES
       SEC
-      LDA VLA+0
-      SBC VLB+0
-      STA RES+0
-      LDA VLA+1
-      SBC VLB+1
-      STA RES+1
-      LDA VLA+2
-      SBC VLB+2
-      STA RES+2
-      LDA VLA+3
-      SBC VLB+3
-      STA RES+3
+      LDA :VLA+0
+      SBC :VLB+0
+      STA :RES+0
+      LDA :VLA+1
+      SBC :VLB+1
+      STA :RES+1
+      LDA :VLA+2
+      SBC :VLB+2
+      STA :RES+2
+      LDA :VLA+3
+      SBC :VLB+3
+      STA :RES+3
       .ENDM
 
 ; Negate the signed 16 bit number at location VLA
@@ -932,17 +932,17 @@ _NEG16      .MACRO VLA,RES
 _NEG32      .MACRO VLA,RES
       SEC
       LDA #0
-      SBC VLA+0
-      STA RES+0
+      SBC :VLA+0
+      STA :RES+0
       LDA #0
-      SBC VLA+1
-      STA RES+1
+      SBC :VLA+1
+      STA :RES+1
       LDA #0
-      SBC VLA+2
-      STA RES+2
+      SBC :VLA+2
+      STA :RES+2
       LDA #0
-      SBC VLA+3
-      STA RES+3
+      SBC :VLA+3
+      STA :RES+3
       .ENDM
 
 ; Calculates the absolute value of signed 16 bit
@@ -955,20 +955,20 @@ _NEG32      .MACRO VLA,RES
 ; On exit: A = ??, X & Y are unchanged.
 
 _ABS16      .MACRO VLA,RES
-      BIT VLA+0
-      .IF VLA != RES
+      BIT :VLA+1
+      .IF :VLA != :RES
        BPL _MOVE\?
-       _NEG16 VLA,RES
-       .IF __65SC02__
+       _NEG16 :VLA,:RES
+       .IFDEF __65SC02__
         BRA _DONE\?
        .ELSE
         JMP _DONE\?
        .ENDIF
 _MOVE\?       EQU *
-       _XFR16 VLA,RES
+       _XFR16 :VLA,:RES
       .ELSE
        BPL _DONE\?
-       _NEG16 VLA,RES
+       _NEG16 :VLA,:RES
       .ENDIF
 _DONE\?      EQU *
       .ENDM
@@ -983,20 +983,20 @@ _DONE\?      EQU *
 ; On exit: A = ??, X & Y are unchanged.
 
 _ABS32      .MACRO VLA,RES
-      BIT VLA+0
-      .IF VLA != RES
+      BIT :VLA+3
+      .IF :VLA != :RES
        BPL _MOVE\?
-       _NEG32 VLA,RES
-       .IF __65SC02__
+       _NEG32 :VLA,:RES
+       .IFDEF __65SC02__
         BRA _DONE\?
        .ELSE
         JMP _DONE\?
        .ENDIF
 _MOVE\?       EQU *
-       _XFR32 VLA,RES
+       _XFR32 :VLA,:RES
       .ELSE
        BPL _DONE\?
-       _NEG32 VLA,RES
+       _NEG32 :VLA,:RES
       .ENDIF
 _DONE\?      EQU *
       .ENDM
@@ -1009,13 +1009,13 @@ _DONE\?      EQU *
 ; On exit: A = ??, X = $FF, Y is unchanged.
 
 _MUL16      .MACRO VLA,VLB,RES
-      _CLR16 RES
-      LDX #16
+      _CLR16 :RES
+      LDX #15
 _LOOP\?      EQU *
-      _ASL16 RES,RES
-      _ASL16 VLA,VLA
+      _ASL16 :RES,:RES
+      _ASL16 :VLA,:VLA
       BCC _NEXT\?
-      _ADD16 VLB,RES,RES
+      _ADD16 :VLB,:RES,:RES
 _NEXT\?      DEX
       BPL _LOOP\?
       .ENDM
@@ -1027,15 +1027,15 @@ _NEXT\?      DEX
 ; On exit: A = ??, X = $FF, Y is unchanged.
 
 _MUL16X      .MACRO VLA,VLB,RES
-      _CLR32 RES
-      LDX #16
+      _CLR32 :RES
+      LDX #15
 _LOOP\?      EQU *
-      _ASL32 RES,RES
-      _ASL16 VLA,VLA
+      _ASL32 :RES,:RES
+      _ASL16 :VLA,:VLA
       BCC _NEXT\?
-      _ADD16 VLB,RES,RES
+      _ADD16 :VLB,:RES,:RES
       BCC _NEXT\?
-      _INC16 RES+2
+      _INC16 :RES+2
 _NEXT\?      EQU *
       DEX
       BPL _LOOP\?
@@ -1049,13 +1049,13 @@ _NEXT\?      EQU *
 ; On exit: A = ??, X = $FF, Y is unchanged.
 
 _MUL32      .MACRO VLA,VLB,RES
-      _CLR32 RES
-      LDX #32
+      _CLR32 :RES
+      LDX #31
 _LOOP\?      EQU *
-      _ASL32 RES,RES
-      _ASL32 VLA,VLA
+      _ASL32 :RES,:RES
+      _ASL32 :VLA,:VLA
       BCC _NEXT\?
-      _ADD32 VLB,RES,RES
+      _ADD32 :VLB,:RES,:RES
 _NEXT\?      EQU *
       DEX
       BPL _LOOP\?
@@ -1069,21 +1069,21 @@ _NEXT\?      EQU *
 ; On exit: A = ??, X & Y unchanged.
 
 _MUL16I      .MACRO VLA,NUM,RES
-      .IF NUM = 1
-       _XFR16 VLA,RES
+      .IF :NUM = 1
+       _XFR16 :VLA,:RES
       .ELSE
-       _CLR16 RES
-       __MUL16I VLA,NUM,RES
+       _CLR16 :RES
+       __MUL16I :VLA,:NUM,:RES
       .ENDIF
       .ENDM
 
 __MUL16I   .MACRO VLA,NUM,RES
-       .IF NUM & $FFFE
-        __MUL16I VLA,(NUM/2),RES
-        _ASL16 RES,RES
+       .IF :NUM & $FFFE
+        __MUL16I :VLA,(:NUM/2),:RES
+        _ASL16 :RES,:RES
        .ENDIF
-       .IF NUM & $0001
-         _ADD16 VLA,RES,RES
+       .IF :NUM & $0001
+         _ADD16 :VLA,:RES,:RES
        .ENDIF
       .ENDM
 
@@ -1096,16 +1096,17 @@ __MUL16I   .MACRO VLA,NUM,RES
 ; On exit: A = ??, X = $FF, Y is unchanged.
 
 _DIV16      .MACRO VLA,VLB,QUO,REM
-      _CLR16 REM
-      LDX #16
+      _CLR16 :REM
+      LDX #15
 _LOOP\?      EQU *
-      _ASL16 VLA,VLA
-      _ROL16 REM,REM
-      _SUB16 REM,VLB,REM
+      _ASL16 :VLA,:VLA
+      _ROL16 :REM,:REM
+      _SUB16 :REM,:VLB,:REM
       BCS _NEXT\?
-      _ADD16 REM,VLB,REM
+      _ADD16 :REM,:VLB,:REM
+      CLC
 _NEXT\?      EQU *
-      _ROL16 QUO,QUO
+      _ROL16 :QUO,:QUO
       DEX
       BPL _LOOP\?
       .ENDM
@@ -1119,16 +1120,17 @@ _NEXT\?      EQU *
 ; On exit: A = ??, X = $FF, Y is unchanged.
 
 _DIV16X      .MACRO VLA,VLB,QUO,REM
-      _CLR16 REM
-      LDX #32
+      _CLR16 :REM
+      LDX #31
 _LOOP\?      EQU *
-      _ASL32 VLA,VLA
-      _ROL16 REM,REM
-      _SUB16 REM,VLB,REM
+      _ASL32 :VLA,:VLA
+      _ROL16 :REM,:REM
+      _SUB16 :REM,:VLB,:REM
       BCS _NEXT\?
-      _ADD16 REM,VLB,REM
+      _ADD16 :REM,:VLB,:REM
+      CLC
 _NEXT\?      EQU *
-      _ROL16 QUO,QUO
+      _ROL16 :QUO,:QUO
       DEX
       BPL _LOOP\?
       .ENDM
@@ -1142,16 +1144,17 @@ _NEXT\?      EQU *
 ; On exit: A = ??, X = $FF, Y is unchanged.
 
 _DIV32      .MACRO VLA,VLB,QUO,REM
-      _CLR32 REM
-      LDX #32
+      _CLR32 :REM
+      LDX #31
 _LOOP\?      EQU *
-      _ASL32 VLA,VLA
-      _ROL32 REM,REM
-      _SUB32 REM,VLB,REM
+      _ASL32 :VLA,:VLA
+      _ROL32 :REM,:REM
+      _SUB32 :REM,:VLB,:REM
       BCS _NEXT\?
-      _ADD32 REM,VLB,REM
+      _ADD32 :REM,:VLB,:REM
+      CLC
 _NEXT\?      EQU *
-      _ROL32 QUO,QUO
+      _ROL32 :QUO,:QUO
       DEX
       BPL _LOOP\?
       .ENDM
@@ -1168,11 +1171,11 @@ _NEXT\?      EQU *
 ; On exit: A = ??, X & Y are unchanged.
 
 _CMP16      .MACRO VLA,VLB
-      LDA VLA+1
-      CMP VLB+1
+      LDA :VLA+1
+      CMP :VLB+1
       BNE _DONE\?
-      LDA VLA+0
-      CMP VLB+0
+      LDA :VLA+0
+      CMP :VLB+0
 _DONE\?      EQU *
       .ENDM
 
@@ -1184,17 +1187,17 @@ _DONE\?      EQU *
 ; On exit: A = ??, X & Y are unchanged.
 
 _CMP32      .MACRO VLA,VLB
-      LDA VLA+3
-      CMP VLB+3
+      LDA :VLA+3
+      CMP :VLB+3
       BNE _DONE\?
-      LDA VLA+2
-      CMP VLB+2
+      LDA :VLA+2
+      CMP :VLB+2
       BNE _DONE\?
-      LDA VLA+1
-      CMP VLB+1
+      LDA :VLA+1
+      CMP :VLB+1
       BNE _DONE\?
-      LDA VLA+0
-      CMP VLB+0
+      LDA :VLA+0
+      CMP :VLB+0
 _DONE\?      EQU *
       .ENDM
 
@@ -1211,22 +1214,62 @@ _DONE\?      EQU *
 
 _MEMFWD      .MACRO  SRC,DST,LEN
       LDY #0
-      LDX LEN+1
+      LDX :LEN+1
       BEQ _FRAG\?
-_PAGE\?      LDA (SRC),Y
-      STA (DST),Y
+_PAGE\?      LDA (:SRC),Y
+      STA (:DST),Y
       INY
       BNE _PAGE\?
-      INC SRC+1
-      INC DST+1
+      INC :SRC+1
+      INC :DST+1
       DEX
       BNE _PAGE\?
-_FRAG\?      CPY LEN+0
+_FRAG\?      CPY :LEN+0
       BEQ _DONE\?
-      LDA (SRC),Y
-      STA (DST),Y
+      LDA (:SRC),Y
+      STA (:DST),Y
       INY
       BNE _FRAG\?
+_DONE\?      EQU *
+      .ENDM
+
+
+; Transfers a block of memory from one place to
+; another by copying the bytes starting at the
+; end of the block and going backwards. This is
+; the overlap-safe order when DST > SRC. SRC and
+; DST are destroyed during the copy.
+;
+; On exit: A, X & Y = ??.
+
+_MEMREV      .MACRO  SRC,DST,LEN
+      CLC
+      LDA :SRC+1
+      ADC :LEN+1
+      STA :SRC+1
+      CLC
+      LDA :DST+1
+      ADC :LEN+1
+      STA :DST+1
+      LDY :LEN+0
+      BEQ _PAGE\?
+_TAIL\?      DEY
+      LDA (:SRC),Y
+      STA (:DST),Y
+      CPY #0
+      BNE _TAIL\?
+_PAGE\?      LDX :LEN+1
+      BEQ _DONE\?
+_PGLOOP\?    DEC :SRC+1
+      DEC :DST+1
+      LDY #0
+_BYTE\?      DEY
+      LDA (:SRC),Y
+      STA (:DST),Y
+      CPY #0
+      BNE _BYTE\?
+      DEX
+      BNE _PGLOOP\?
 _DONE\?      EQU *
       .ENDM
 
@@ -1237,15 +1280,15 @@ _DONE\?      EQU *
 ; used.
 
 _MEMCPY      .MACRO  SRC,DST,LEN
-      _CMP16 SRC,DST
+      _CMP16 :SRC,:DST
       BCC _SAFE\?
-      _MEMFWD SRC,DST,LEN
-      .IF __65SC02__
+      _MEMFWD :SRC,:DST,:LEN
+      .IFDEF __65SC02__
        BRA _DONE\?
       .ELSE
        JMP _DONE\?
       .ENDIF
-_SAFE\?      _MEMREV SRC,DST,LEN
+_SAFE\?      _MEMREV :SRC,:DST,:LEN
 _DONE\?      EQU *
       .ENDM
 

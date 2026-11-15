@@ -4,7 +4,7 @@
 [![Platform: Atari 8-bit](https://img.shields.io/badge/platform-Atari%20800%20XL%20%2F%2065%20XE-red.svg)](https://en.wikipedia.org/wiki/Atari_8-bit_family)
 [![Assembler: MADS](https://img.shields.io/badge/assembler-MADS%201.9.6-green.svg)](http://mads.atari8.info/)
 [![CPU: MOS 6502](https://img.shields.io/badge/cpu-MOS%206502-orange.svg)](https://en.wikipedia.org/wiki/MOS_Technology_6502)
-[![Tests: 283 Passed](https://img.shields.io/badge/tests-283%20passed-brightgreen.svg)](tests/)
+[![Tests: 646 Passed](https://img.shields.io/badge/tests-646%20passed-brightgreen.svg)](tests/)
 
 Kompletny, profesjonalny system generowania, aranżacji, syntezy i odtwarzania muzyki dla komputerów **Atari 8-bit (Atari 800 XL / 65 XE)** wyposażonych w układ dźwiękowy **POKEY**.
 
@@ -62,6 +62,7 @@ Projekt łączy proceduralną kompozycję w Pythonie z natywnym eksportem do ase
   * **Rytmika i ornamentacja (4. głos):** 16-tkowe groovy perkusyjne, werble marszowe, modalne ostinato, wysokie dzwonki.
   * **Wieloczęściowa forma muzyczna:** Dynamiczne stopniowanie obsady (Intro $\to$ A $\to$ B $\to$ Outro $\to$ Loop).
   * **Obsługa 16-bit POKEY Bass:** Sprzęganie kanałów 1 i 2 (`AUDCTL = $10`) w 16-bitowy dzielnik częstotliwości z czystą syntezą sinusoidalną (pure tone).
+* **Profile brzmieniowe POKEY (Stage 9) — opcjonalne, zewnętrzne:** Renderowanie istniejącej kompozycji z użyciem prawdziwego profilu brzmienia zmierzonego przez projekt [POKEY Sound Archaeology](../pokey-sound-architecture/). Profil dostarcza wyłącznie realizację sprzętową głosu (generator/distortion, konfiguracja AUDCTL, tryb dzielnika 8/16-bit, obwiednia), a kompozycja pozostaje właścicielem nut, czasu trwania, velocity i aranżacji. Szczegóły: [docs/profile_integration.md](docs/profile_integration.md).
 * **Cyfrowy Syntezator POKEY (Python):**
   * Dokładna emulacja rejestrów POKEY (`AUDF1..4`, `AUDC1..4`, `AUDCTL`).
   * Bezpośredni rendering do 16-bitowego pliku WAV 44.1 kHz PCM mono.
@@ -419,6 +420,49 @@ $4361 - $4xxx   Struktury danych utworu (341 - 751 bajtów)
 
 Dokładny opis segmentów dla każdego utworu znajduje się w [stage11_xex/memory_map.md](stage11_xex/memory_map.md).
 
+### Twardy limit 2048 bajtów dotyczy odtwarzacza, a nie pliku XEX
+
+Jedynym sztywnym limitem rozmiaru w projekcie jest **2048 bajtów na złożony kod odtwarzacza**
+(kod + stan w RAM) — i jest to limit **wyłączny**: odtwarzacz o rozmiarze dokładnie 2048 bajtów
+**nie przechodzi** walidacji. Odtwarzacz mierzy się konwencją `atari_music.stage15.measure_player_size`
+(MADS na wrapperze `org $6000`, `-b:$6000 -o:...bin`, rozmiar pliku = kod + stan); obecnie jest to
+**1016 bajtów**. Sprawdzenie: `atari_music.stage15.player_size_limit_ok()` /
+`check_player_size()`; autorytatywny zapis to
+[reports/stage15/player_size_analysis.json](reports/stage15/player_size_analysis.json).
+
+Pozostałe trzy wielkości **nie** podlegają temu limitowi i nie należy ich z nim mylić:
+
+| wielkość | limit 2048 B? |
+|---|---|
+| złożony odtwarzacz (kod + stan) | **tak — ściśle poniżej** |
+| dane utworu (patterny, sekwencja, tabela instrumentów) | nie — osobny, znacznie mniejszy budżet POKEY IR |
+| **kompletny plik `.xex`** (harness + odtwarzacz + dane) | **nie — brak jakiegokolwiek limitu** |
+| segmenty w pamięci (adresy i długości `org`) | nie — ogranicza je mapa pamięci Atari (m.in. granica `$BFFF`) |
+
+Limit 2048 B na kompletny plik XEX obowiązywał do 2026-10-09 i został zniesiony, ponieważ był
+wyłącznie przybliżeniem limitu odtwarzacza (szczegóły w [HISTORY.md](HISTORY.md)). Plik `.xex`
+może więc legalnie przekraczać 2048 bajtów — i kilka przykładów AI robi to.
+
+### Walidacja układu pamięci (a nie rozmiaru pliku)
+
+Skoro rozmiar pliku nie jest już kryterium, budowanie weryfikuje **zakresy adresów**, które
+program ładujący faktycznie zapisze. Po złożeniu MADS kontener jest parsowany
+(`atari_music.xex_layout.parse_xex`) i sprawdzany (`validate_xex_layout`):
+
+* segmenty muszą leżeć w całości w **`$0400-$BFFF`** — poniżej jest strona zerowa, stos
+  sprzętowy i wektory OS/DOS, których ten binarny plik sam używa (`$02E0/$02E1` RUN,
+  IOCB `$0340-$03BF`, cienie `$02C6`/`$02C8`/`$02FC`, strona zerowa odtwarzacza
+  `PLAYER_ZP_BASE+0..9`), a powyżej ROM jądra OS (`$C000-$CFFF`), rejestry sprzętowe
+  (`$D000-$DFFF`, w tym POKEY) i ROM OS (`$E000-$FFFF`) — zgodnie z regułą „cały kod i dane
+  użytkownika muszą kończyć się na `$BFFF` lub niżej";
+* `$A000-$BFFF` (okno ROM BASIC-a) jest **dozwolone celowo** — projekt tam się relokuje;
+* dwa segmenty nie mogą zajmować tej samej pamięci (program ładujący pisze je w kolejności
+  pliku, więc późniejszy niszczy wcześniejszy);
+* segmenty RUN/INIT (`$02E0-$02E3`) to protokół programu ładującego, nie dane użytkownika.
+
+Nieudana walidacja usuwa właśnie zapisany plik `.xex` i zgłasza błąd z nazwą segmentu, jego
+zakresem i powodem. Szczegóły i dowody: [docs/xex_memory_layout.md](docs/xex_memory_layout.md).
+
 ### Pomiar wydajności CPU (cykle procesora na ramkę)
 
 | Faza wykonania | Średni koszt (cykle 6502) | Udział w ramce PAL (35 568 cykli) |
@@ -482,7 +526,7 @@ LOG_LEVEL=INFO
 ### 2. Structured Outputs i Monofonia Kanałów POKEY
 - **Natywne Structured Outputs**: Provider wykorzystuje schema-constrained JSON oparty bezpośrednio na modelach Pydantic (`AICompositionDoc`), gwarantując poprawność typów bez konieczności czyszczenia tekstu markdown.
 - **Ścisła monofonia POKEY**: POKEY posiada 4 fizycznie monofoniczne kanały. Walidator odrzuca jakiekolwiek nakładanie się nut (`NOTE_OVERLAP`) na tym samym kanale, podając dokładny krok, kanał i konfliktujące wysokości.
-- **Sprzężenie 16-bitowego basu**: Przy fladze `use_16bit_bass: true` silnik sprzęga Kanały 1 i 2 (`AUDCTL = $50`), rezerwując Kanał 2 jako slave dzielnika częstotliwości.
+- **Sprzężenie 16-bitowego basu**: Przy fladze `use_16bit_bass: true` silnik sprzęga Kanały 1 i 2 (`AUDCTL = $10`, czyli join 1+2 przy zegarze 64 kHz), rezerwując Kanał 2 jako slave dzielnika częstotliwości. Nie należy mylić tej konfiguracji z profilem archeologicznym PAIR (`AUDCTL = $50` — ten sam join przy zegarze 1.79 MHz); to dwa różne strojenia tej samej nuty (patrz [docs/profile_integration.md](docs/profile_integration.md)).
 
 ### 3. Automatyczna Pętla Naprawcza (Composition Repair Loop)
 Gdy model wygeneruje kompozycję naruszającą reguły (np. nakładające się nuty lub konflikt kanałów), system nie przerywa pracy:
@@ -644,13 +688,22 @@ atari-music/
 │   ├── bass_engine.py          # Silnik linii basowych
 │   ├── rhythm_ornament.py      # Silnik perkusji i ornamentacji (4. głos)
 │   ├── profiles.py             # Definicje 6 profili stylistycznych
+│   ├── sound_profiles/         # Integracja profili brzmieniowych POKEY (Stage 9 / 9B)
+│   │   ├── bank.py             # Wczytywanie, weryfikacja fingerprintów i statusów banku
+│   │   └── binding.py          # Zewnętrzne powiązanie instrument -> profil (realizacja sprzętowa)
 │   ├── mads_exporter.py        # Eksporter danych do asemblera MADS
 │   ├── pokey_synth.py          # Programowy syntezator POKEY (WAV 44.1 kHz)
+│   ├── stage9c.py              # Eksperyment odsłuchowy Stage 9C (pakiet blind, analiza wyników)
+│   ├── stage9d.py              # Analiza wyników odsłuchu Stage 9D (korelacje, kategorie, shortlista, werdykt)
+│   ├── stage9e.py              # Diagnoza luki percepcyjnej Stage 9E (mapa ścieżek, grupy duplikatów, brakujące zdolności)
+│   ├── stage10a.py             # Eksperyment ponownego przypisania profili Stage 10A (wybór z dowodów słuchowych, pakiet zaślepiony)
+│   ├── stage10b.py             # Eksperyment przeniesienia konturu głośności Stage 10B (mapowanie, dowód perturbacji, regresja, pakiet zaślepiony)
 │   ├── ir.py                   # POKEY Intermediate Representation (IR)
 │   ├── music_ir.py             # Symbolic Music IR
 │   └── cli.py                  # Interfejs wiersza poleceń (CLI)
 ├── docs/
-│   └── music_dsl.md            # Specyfikacja i gramatyka Music DSL
+│   ├── music_dsl.md            # Specyfikacja i gramatyka Music DSL
+│   └── profile_integration.md  # Integracja profili POKEY: mechanizm, ścieżki WAV/XEX, błędy
 ├── benchmark_results/          # Wyniki kontrolowanych eksperymentów LLM (JSON vs DSL)
 │   └── run_1790692314/         # Raport 100 prób (report.md, summary.json, raw_trials.json)
 ├── scripts/
@@ -660,6 +713,9 @@ atari-music/
 ├── player.asm                  # Odtwarzacz muzyczny 6502 (MADS, obsługa pełnych sekwencji)
 ├── hardware.asm                # Ekwipacje sprzętowe POKEY, ANTIC, GTIA, PIA
 ├── examples/ai/                # Gotowe przykłady AI
+├── examples/sound_profile_listening/  # Stage 9C: pakiet odsłuchowy (index.html, audio/, manifest.json, szablony CSV)
+├── examples/sound_profile_rebinding_10a/      # Stage 10A: pakiety trzech wersji sześciu utworów i pary zaślepione
+├── examples/sound_profile_volume_contour_10b/ # Stage 10B: trzy warianty (A/B/C) profili i utworów, pary zaślepione
 ├── stage11_xex/                # Gotowy pakiet 6 samodzielnych plików XEX (Composer v4)
 ├── tools/
 │   └── mads/mads.exe           # Asembler MADS v1.9.6
@@ -672,6 +728,14 @@ atari-music/
 │   ├── test_duration.py               # Testy weryfikacji czasu trwania ground-truth (60-120s)
 │   ├── test_structure_analysis.py     # Testy analizy struktury, powtórzeń, wariacji i formy
 │   ├── test_stage14_repair_loop.py    # Testy pętli naprawczej i lokalizacji błędów
+│   ├── test_sound_profiles.py         # Testy integracji profili POKEY (bank, binding, WAV/XEX)
+│   ├── test_sound_profile_library.py  # Pełna biblioteka 67 profili: inwentarz, statusy, regresja Stage 9
+│   ├── test_stage9c.py                # Eksperyment odsłuchowy: bodziec, poziomy, program A/B, determinizm, analiza
+│   ├── test_stage9d.py                # Analiza wyników odsłuchu: statystyki, mapowanie, korelacje, werdykt, determinizm
+│   ├── test_stage9e.py                # Diagnoza luki: rejestrowanie odczytów, grupy duplikatów, bierne pola, werdykt, immutability
+│   ├── test_stage10a.py               # Ponowne przypisanie: odzyskanie sześciu utworów, reguła decyzji, kompatybilność, zaślepienie, immutability
+│   ├── test_stage10b.py               # Kontur głośności: kontrakt mapowania, kwalifikacja profili, dowód perturbacji, regresja bajtowa, pakiet
+│   ├── data/sound_profiles/           # Przykład integracji: kompozycja DSL, powiązanie, pełny bank 67 profili
 │   ├── test_live_production.py        # Testy integracji z produkcyjnym LLM (@pytest.mark.live)
 │   ├── test_config.py                 # Testy hierarchii konfiguracji i .env
 │   └── test_stage13_llm_integration.py# Testy integracji LLM, Structured Outputs i monofonii
@@ -681,12 +745,201 @@ atari-music/
 
 ---
 
+## 🎛️ Profile Brzmieniowe POKEY (integracja z POKEY Sound Archaeology)
+
+> Kompozycja opisuje intencję muzyczną. Profil opisuje realizację na POKEY.
+
+Projekt potrafi wyrenderować **istniejącą** kompozycję przy użyciu profilu brzmienia zmierzonego z klasycznego utworu Atari przez projekt [POKEY Sound Archaeology](../pokey-sound-architecture/). Profile są **zewnętrzne i opcjonalne** — warstwa kompozycji (DSL, `AICompositionDoc`, prompty, struktury muzyczne) nie wie o ich istnieniu i nie zmieniła się.
+
+```text
+kompozycja (DSL / JSON)            ← nuty, rytm, tempo, forma, velocity, rola instrumentu
+      ↓  parse / walidacja / Music IR
+   POKEY IR (IRSong)
+      ↓  profile binding           ← profil wchodzi TUTAJ i tylko tutaj
+   POKEY IR świadomy profilu
+      ├──────────────┐
+      ▼              ▼
+   WAV           MADS → XEX
+```
+
+**Co dostarcza profil:** generator (distortion), konfigurację AUDCTL (zegar/sprzężenie), tryb dzielnika (8-bit / sprzężona para 16-bit) oraz kształt obwiedni.
+**Co pozostaje kompozycji:** wysokość nuty (profil dostarcza zegar, nie nutę), czas trwania, przerwy, velocity (profil nigdy nie nadpisuje dynamiki), aranżacja i tożsamość instrumentu.
+
+### Bank profili i powiązania
+
+Bank to katalog zapisany przez projekt archeologii (`registry.json` + `profiles/`). Powiązanie instrumentu z profilem to **osobny plik**, poza kompozycją:
+
+```json
+{
+  "schema": "atari-music/sound-profile-binding/1",
+  "bank": "bank",
+  "instruments": { "bass": "pokey_ref_3627798b", "lead": "pokey_ref_a8c81a84" }
+}
+```
+
+W repozytorium dostępne są dwa banki o różnych rolach:
+
+| | bank demonstracyjny | pełny bank badawczy |
+| :--- | :--- | :--- |
+| gdzie | `examples/sound_profiles/` | `tests/data/sound_profiles/bank/` |
+| rozmiar | 4 profile (proof-of-integration z Stage 9) | **67 profili** — cała opublikowana biblioteka |
+| statusy | 4 × `PLAYABLE` | 22 `PLAYABLE`, 39 `PLAYABLE_WITH_LIMITATION`, 6 `MEASUREMENT_ONLY` |
+
+**67 profili to nie 67 rekomendowanych instrumentów.** To kompletna biblioteka techniczna. Profile, których status mówi „opisuje ciszę" (`MEASUREMENT_ONLY`), są publikowane i możliwe do wglądu, ale **odrzucane przy próbie renderowania** (`PROFILE_STATUS_NOT_RENDERABLE`) — nigdy nie są cicho zastępowane domyślnym dźwiękiem. Status jest zapisany w `registry.json` razem z kodami przyczyn. Ostateczna selekcja palety brzmień to osobny, późniejszy etap.
+
+### Wynik rzeczywistego odsłuchu (Stage 9D)
+
+Stage 9C zbudował zaślepiony eksperyment, Stage 9D przeanalizował oddane odpowiedzi (`analyze-listening-test-9d`). Pełny raport: [docs/stage9d_human_listening_results.md](docs/stage9d_human_listening_results.md); wyniki maszynowe: `reports/stage9d/`.
+
+Cztery ustalenia, z których jedno jest negatywne:
+
+1. **Biblioteka jest słyszalnie mniejsza niż liczba profili.** 61 renderowalnych profili daje **37 różnych sygnałów audio** — 24 profile renderują **bajtowo identyczny** dźwięk jak inny profil (grupy po 10, 6, 4, 4, 3, 3). Różnią się gestem, którego player nie odtwarza.
+2. **Powiązanie profili z prawdziwymi utworami pogorszyło wynik w tym teście.** Na sześć utworów domyślne instrumenty kompozytora wygrały 5, wersja z profilami 0 (jeden remis), jednogłośnie na wszystkich trzech pytaniach. Sześć utworów to nie populacja — ale kierunek jest jednoznaczny i dlatego końcowa odpowiedź Stage 9D brzmi **NO**.
+3. **Metryka podobieństwa jest ślepa na poziom.** Cosine distance na znormalizowanym spektrum daje ≈ 0.00 zarówno dla pary bajtowo identycznej, jak i dla pary różniącej się o 12 dB RMS — a słuchacz się z tym nie zgadzał.
+4. **Słuchacz rozpoznaje rodzinę generatora, metryka widzi spektrum.** Wszystko, co zostało nazwane „noisy", to `$0`/`$8`; wszystko „clean" to `$A`/`$C` — zbiory rodzin są rozłączne, a flatness ich nie rozdziela.
+
+### Użycie
+
+```bash
+# WAV + ASM z profilem (VOICE i PAIR w jednym przebiegu)
+python -m atari_music import-dsl tests/data/sound_profiles/vaults_of_nhyrmeth.dsl \
+    --sound-bank tests/data/sound_profiles/bank \
+    --profile-bindings tests/data/sound_profiles/vaults_binding.json \
+    --output-wav examples/sound_profiles/vaults_profile.wav \
+    --output-asm examples/sound_profiles/vaults_profile.asm
+
+# XEX z tej samej, świadomej profilu reprezentacji
+python -m atari_music build-xex tests/data/sound_profiles/vaults_of_nhyrmeth.dsl --format dsl \
+    -o examples/sound_profiles/vaults_profile.xex \
+    --sound-bank tests/data/sound_profiles/bank \
+    --profile-bindings tests/data/sound_profiles/vaults_binding.json
+```
+
+### Zasady, które są egzekwowane
+
+* **Bez powiązania nic się nie zmienia** — WAV, ASM i XEX są identyczne jak przed tą funkcją (potwierdzone przez porównanie artefaktów przed/po).
+* **Dokładne `profile_id`** — brak dopasowań rozmytych, brak „najbliższego" profilu, brak cichego podstawienia; nieznany identyfikator kończy się błędem.
+* **Weryfikacja fingerprintu** — profil, którego zawartość nie zgadza się z `playable_fingerprint` w rejestrze, nie zostanie wczytany.
+* **Status profilu jest egzekwowany** — profil ze statusem `MEASUREMENT_ONLY` (opisujący ciszę) jest odrzucany z `PROFILE_STATUS_NOT_RENDERABLE`; nieznany status z `PROFILE_STATUS_UNKNOWN`. Nigdy nie ma cichego powrotu do dźwięku domyślnego.
+* **`$50` ≠ `$10`** — profil PAIR z zegarem 1.79 MHz (`$50`, offset dzielnika `+7`) nie jest konwertowany na wewnętrzną konwencję 16-bitowego basu (`$10`, offset `+1`); to różne wysokości tej samej nuty.
+* **Distortion jako nibble → bajt AUDC** — `"$A"` zamieniane jest na `0xA0` (generator w bitach 7..5), nigdy kopiowane dosłownie jako `0x0A`.
+* **Kanał to decyzja kompozycji** — kanał źródłowy profilu jest wyłącznie proweniencją; sprawdzane jest, czy wybrany przez kompozycję kanał może udźwignąć konfigurację profilu.
+* **Brak cichej degradacji** — konflikt (AUDCTL, para kanałów, distortion, obwiednia) jest błędem z kodem, nie przybliżeniem.
+* **Determinizm** — te same wejścia dają bajtowo identyczne wyjście.
+
+Pełny opis (mechanizm, rejestr, VOICE, PAIR, pitch, volume, alokacja kanałów, ścieżki WAV/XEX, kody błędów, kompatybilność wsteczna, przykład i ograniczenia): [docs/profile_integration.md](docs/profile_integration.md).
+
+### 🔊 Eksperyment odsłuchowy Stage 9C (czy te brzmienia są coś warte?)
+
+Biblioteka mówi, **co da się wyrenderować**. Nie mówi, **co warto zachować** — to pytanie percepcyjne i biblioteka nie może na nie odpowiedzieć. Stage 9C buduje eksperyment, który zadaje je człowiekowi, i niczego nie rozstrzyga za niego.
+
+```bash
+# 1. Zbuduj kompletny, samodzielny pakiet odsłuchowy (bank tylko do odczytu)
+python -m atari_music.cli prepare-listening-test-9c \
+    --package-dir examples/sound_profile_listening \
+    --sound-bank tests/data/sound_profiles/bank \
+    --songs-dir examples/songs
+
+# 2. Otwórz examples/sound_profile_listening/index.html, posłuchaj i wypełnij trzy CSV
+
+# 3. Analiza wyników -> reports/stage9c/
+python -m atari_music.cli analyze-listening-test-9c \
+    --package-dir examples/sound_profile_listening
+```
+
+Pakiet (`examples/sound_profile_listening/`) działa w przeglądarce — **bez Pythona, bez serwera, bez internetu**:
+
+| część | co porównuje | pytania |
+| :--- | :--- | :--- |
+| 1 | pojedyncze profile, 61 bodźców | wyrazistość, użyteczność, „atariowość", własny opis słowami, opcjonalna pewność |
+| 2 | dwa profile, 30 prób A/B w warstwach (podobne / odległe / ta sama rodzina generatora / różne rodziny / ta sama piosenka źródłowa / różne piosenki) | podobieństwo, preferencja, różnica charakteru, komentarz |
+| 3 | prawdziwy utwór: domyślny vs związany z profilem, 6 par | lepsze brzmienie, więcej charakteru, bardziej przekonujący Atari, wielkość różnicy |
+
+**Co jest trzymane stałe:** każdy profil realizuje **ten sam** 32-krokowy frazowany bodziec (ten sam czas, velocity, wysokość, kanał 1 — dla `PAIR` ta sama fraza ze złączem 1+2); każdy bodziec jest sprowadzany do tego samego szczytu (−0,92 dBFS) jednym wzmocnieniem, bez kompresji, EQ i clippingu, a oryginalny i końcowy peak **oraz** RMS każdej próbki są zapisane, więc głośność pozostaje zmierzoną właściwością, a nie założeniem. Próby A/B używają **tych samych** plików bodźców, a pary utworów — jednego wspólnego wzmocnienia i identycznego wycinka, więc kompozycja po obu stronach jest nietknięta.
+
+**Czego to nie rozstrzyga:** żaden gest nie jest wymyślany (player nie ma makra na kanał — profil z konturem słychać jako dźwięk statyczny); nic nie jest przemianowywane, rankingowane ani wybierane. Raport podaje mediany, rozkłady, korelacje, głosy i **słowa słuchacza**, oraz grupy kandydatów z jawnie podanymi progami — i odmawia ogłoszenia finalnej palety. Zaślepienie jest wymuszone konstrukcyjnie: interfejs, nazwy plików i README nigdy nie zawierają `profile_id`, piosenki źródłowej, rodziny generatora, AUDCTL, zakresu ani statusu; mapowanie istnieje wyłącznie w `manifest.json`.
+
+**Analiza wyników:**
+
+```bash
+python -m atari_music.cli analyze-listening-test-9d \
+    --package-dir examples/sound_profile_listening \
+    --docs-dir docs --reports-dir reports/stage9d
+```
+
+Wynik: `docs/stage9d_human_listening_results.md` oraz maszynowo `reports/stage9d/{profile_scores.json, profile_scores.csv, correlations.json, hypotheses.json, categories.json, coverage.json, shortlist.json, verdict.json}`. Analiza jest deterministyczna, nie modyfikuje ani odpowiedzi, ani eksperymentu, i **nie wybiera biblioteki** — odpowiada, czy dane uzasadniają przejście do selekcji.
+
+### Diagnoza różnicy percepcyjnej (Stage 9E)
+
+Stage 9D powiedział, że 61 profili brzmi jak 37 dźwięków, a powiązanie z utworami przegrało 5–0. Stage 9E diagnozuje **dlaczego** — nie zmieniając niczego. Zamiast czytać kod, mierzy pipeline:
+
+```bash
+python -m atari_music.cli analyze-listening-test-9e
+```
+
+Wynik: `docs/stage9e_perceptual_renderer_gap.md` oraz maszynowo `reports/stage9e/{pipeline_fields.json, duplicate_groups.json, profile_diffs.json, information_loss.json, part_c_diagnostics.json, missing_capabilities.json, verdict.json}`.
+
+Jak to jest mierzone, a nie zakładane: dokument profilu jest opakowany w mapowanie, które rejestruje **każdą ścieżkę**, jaką naprawdę czyta `apply_profile_binding`; każde pole IR jest zaburzane, żeby sprawdzić, które klatki zmienia; każda kolumna klatki jest zerowana, żeby sprawdzić, czy zmienia się dźwięk; a własny re-render jest porównywany **bajt po bajcie** ze bodźcem, który słyszał człowiek (**61 z 61 identycznych**). Diagnoza **odmawia uruchomienia**, jeśli się nie zgadza — jej twierdzenia dotyczą więc dokładnie tego pipeline'u, który wygenerował eksperyment.
+
+Trzy zmierzone fakty:
+
+1. **Powiązanie czyta 13 z 232 udokumentowanych ścieżek.** `_rebuild_song` zapisuje na instrumencie sześć wartości: nibble generatora, trzy liczby klatek obwiedni, poziom sustain i AUDCTL. Kroki 5–6 nigdy nie widzą dokumentu profilu. Zmierzony kontur wysokości, kontur głośności, modulacja, zmiany generatora w środku dźwięku i cała proweniencja są obecne w dokumencie i nieczytane przez nic.
+2. **Wszystkie 6 grup duplikatów ginie dokładnie na tej granicy.** W każdej grupie dokumenty się różnią (125–691 ścieżek), a powiązany IR jest już identyczny — więc klatki i WAV muszą być identyczne. Klasyfikacja: `representation_duplicate` w 6 z 6 grup (30 profili); **żadna grupa nie wymagała wyjaśnienia przez renderer**. Bajtowo identyczny WAV **nie** oznacza więc profilu zbędnego — jest zbędny *na dziś*.
+3. **Przegrana w Part C nie jest artefaktem głośności.** Obie strony każdej pary były renderowane przy **jednym wspólnym wzmocnieniu** (tak jak w Stage 9C); strona z profilami nie była głośniejsza (mediana różnicy RMS −2,39 dB). Powiązanie zastąpiło każdemu instrumentowi generator i/lub obwiednię, więc strony różnią się barwą i artykulacją — a instrumenty kompozytora, projektowane pod ten konkretny utwór, wygrały. To luka **interpretacji muzycznej**, i dlatego pierwszym rekomendowanym krokiem jest ponowne powiązanie sześciu utworów na podstawie dowodów ze słuchania, a nie zmiana silnika.
+
+Kolejność wniosku: luka **reprezentacji** (największa), **interpretacji muzycznej** (druga), a **renderera** tylko marginalna — kompilator klatek używa każdego pola, które powiązanie zapisuje, poza kilkoma zmierzonymi jako bierne (`envelope.decay_frames` nie zmienia żadnej klatki dla 8 z 61 profili). Zdolności, które zamknęłyby pierwszą lukę, są uszeregowane dowodowo w §12 raportu (najpierw zmierzony kontur głośności i kontur wysokości) i **żadna nie jest zaimplementowana**: zmieniłyby to, co słyszy człowiek, unieważniając obecny ranking percepcyjny.
+
+Werdykt: **DIAGNOSTICALLY_COMPLETE** — 6 grup duplikatów, 6 wyjaśnionych, 0 niewyjaśnionych.
+
+### Eksperyment ponownego przypisania profili (Stage 10A)
+
+Stage 9E pokazał, że powiązania w `examples/songs/` wybrano **według rodziny generatora**, a nie według tego, co powiedział słuchacz. Stage 10A zadaje więc pytanie w czystej postaci: **czy samo lepsze przypisanie profili poprawia całe utwory**, przy niezmienionym rendererze, kompozycji i kompozytorze?
+
+```bash
+python -m atari_music.cli prepare-rebinding-10a
+```
+
+Wynik: zaślepiony pakiet `examples/sound_profile_rebinding_10a/`, raport [docs/stage10a_rebinding_experiment.md](docs/stage10a_rebinding_experiment.md) oraz `reports/stage10a/{songs.json, rebinding.json, machine_comparison.json, verification.json}`.
+
+Jak to jest trzymane w ryzach:
+
+1. **Sześć utworów to dokładnie te same sześć utworów Part C**, wzięte z manifestu Stage 9C — a nie z nazw plików. Jeśli plik powiązania nie zgadza się już z manifestem, budowa **odmawia** uruchomienia: edytowane powiązanie po cichu zmieniłoby znaczenie słowa „stary”.
+2. **Zmienia się wyłącznie przypisanie.** Te same bajty kompozycji, to samo tempo, nuty, czasy, velocity, kanały, renderer, sample rate, okno wycinka i wzmocnienie. Trzy wersje na utwór: instrumenty kompozytora, stare powiązanie, nowe powiązanie.
+3. **Kompatybilność jest mierzona, nie zakładana.** Każdy kandydat przechodzi przez `apply_profile_binding`; odmowa usuwa go z puli. Ograniczenia z §2–§8 są spełnione z definicji, bo pyta o nie ta sama warstwa, która ich pilnuje.
+4. **Strona domyślna i stara są porównane bajt po bajcie z bodźcami Stage 9C** (i wzmocnienie zgadza się z zapisanym w manifeście). Bez tego „re-test” nie byłby porównywalny z 5–0; z tym — jest. Jeśli kiedykolwiek się rozjadą, budowa się zatrzymuje.
+5. **Zmiana wymaga dowodu ze słuchania.** Nowy dźwięk musi być oceniony **nie niżej na każdej skali** i wyżej na co najmniej jednej: o dwa punkty na jednej skali albo o jeden punkt na dwóch naraz. Pojedynczy punkt różnicy uznano za szum — bo Stage 9D zmierzył, jak bardzo słuchacz różni się od siebie samego. Ścieżki bez takiego kandydata zostają przy starym profilu i raport mówi które i dlaczego.
+
+**Czego ten etap świadomie nie robi:** nie liczy zwycięzcy z metryk maszynowych i nie ogłasza, że ponowne przypisanie jest lepsze — to rozstrzygnie dopiero odsłuch. Wynik: 10 z 21 kanałów zmienionych w 5 utworach, 1 utwór bez zmian, 18 zaślepionych porównań (6 utworów × 3 pary: domyślne-vs-nowe, stare-vs-nowe i kontrolne domyślne-vs-stare).
+
+### Przeniesienie konturu głośności (Stage 10B)
+
+Stage 9E nazwał pierwszą brakującą zdolność: archeologia **mierzy**, jak głośność zmieniała się wewnątrz dźwięku (`gesture.volume.runs` — bezwzględne poziomy AUDC, jedna próbka na klatkę VBL), a odtwarzacz to **wyrzuca** (58 z 67 profili ma zmierzony kontur, wszystkie z `playable.gesture.volume.enabled: false`). Stage 10A pokazał, że samo przypisanie profili nic nie poprawia. Stage 10B pyta więc wąsko: **czy zmierzony kontur da się przenieść do istniejącego IR i kompilatora klatek — i czy transfer zmienia dźwięk w kierunku, który pomiar opisuje?**
+
+```bash
+python -m atari_music.cli prepare-volume-contour-10b
+```
+
+Wynik: zaślepiony pakiet `examples/sound_profile_volume_contour_10b/`, raport [docs/stage10b_volume_contour_experiment.md](docs/stage10b_volume_contour_experiment.md) oraz `reports/stage10b/{profiles.json, subjects.json, transfer.json, perturbation.json, regression.json, verification.json}`.
+
+Jak to jest trzymane w ryzach:
+
+1. **Jedna ścieżka renderowania, żadnego równoległego silnika.** Kontur jest polem `IRInstrument.volume_contour` i jednym mnożeniem w `_render_note_to_frames`; kompilator klatek używa go dokładnie tam, gdzie już liczy głośność na klatkę (dolny nibble AUDC). WAV i XEX nadal pochodzą z tej samej reprezentacji.
+2. **Velocity pozostaje suwerenne.** Wzór `floor(volumes[i] * contour[i % span] / max(contour) + 0.5)` może tylko **tłumić** (współczynnik ≤ 1): kontur nie podgłośni, nie przesteruje i nie wycieknie z niego bezwzględna głośność źródła. Kontur statyczny jest dokładnym no-op-em.
+3. **Dowód perturbacji, nie statystyka.** Dla każdego testowanego profilu porównywane są trzy rendery tej samej kompozycji i tego samego powiązania: bez konturu, z konturem i z konturem **odwróconym**. Sprawdzane jest, że różni się **dokładnie jedna kolumna** (AUDC kanału, który brzmi; dla pary 16-bit AUDC2), że nibble generatora się nie zmienił, że strumień klatek równa się **dokładnie arytmetyce mapowania**, oraz że głośność w audio (RMS na klatkę) idzie za strumieniem objętości (mediana korelacji 0,97).
+4. **Regresja bajtowa.** Przy wyłączonej zdolności wszystkie **18 opublikowanych renderów Stage 10A** (6 utworów × 3 wersje) odtwarzają się **bajt po bajcie**. Żaden plik golden nie został zaktualizowany.
+5. **Uczciwa granica: XEX.** Eksporter MADS publikuje tabelę nut, a `player.asm` sam buduje obwiednię na klatkę — więc utwór z konturem jest **odrzucany** (`VOLUME_CONTOUR_NOT_EXPRESSIBLE_IN_XEX`), a nie wyeksportowany jako coś, co zagrałoby inaczej niż to, czego słuchano.
+6. **Kontur, który bramkuje, nie jest przenoszony.** Poziom 0 w pomiarze znaczy „nic nie brzmiało” — to timing, nie głośność. Przeniesienie go wstawiłoby bramkowanie cudzej aranżacji do kompozycji, która ma własne nuty. Dlatego każdy kanał, na którym kontur **odmówiono**, jest nazwany w raporcie (3 kanały w 2 utworach), a nie przybliżony.
+
+**Czego ten etap świadomie nie robi:** nie ogłasza zwycięzcy i nie twierdzi, że kontur „rozwiązuje problem profili”. Werdykt to **INCONCLUSIVE**: udowodnione jest, że transfer działa (8 z 8 profili, jedna kolumna, dokładna arytmetyka, regresja bajtowa), natomiast to, czy słuchacz go słyszy i czy brzmi lepiej, rozstrzygnie dopiero pakiet odsłuchowy — 18 zaślepionych par (14 B-vs-C + 4 kontrolne A-vs-C), w tym te same sześć utworów co w Stage 10A. Osobno zmierzono, że **najbardziej ruchliwe kontury w banku (do 119 zmian poziomu na 147 klatek) to dokładnie te, które zawierają ciszę** — klasa tremolo zostaje więc nietknięta i jest to ograniczenie zakresu tego etapu, nie biblioteki.
+
+---
+
 ## 🧪 Uruchamianie Testów
 
 Projekt posiada pełne pokrycie testami jednostkowymi, integracyjnymi oraz weryfikacją kompilacji asemblera:
 
 ```bash
-# 1. Uruchomienie pełnego zestawu testów offline (283 testy, ~4.5 s, 0 regresji)
+# 1. Uruchomienie pełnego zestawu testów offline (646 testy, 2-7 min, 0 regresji)
 pytest -q
 
 # 2. Uruchomienie opcjonalnych testów live z produkcyjnym LLM (DeepSeek / OpenAI)

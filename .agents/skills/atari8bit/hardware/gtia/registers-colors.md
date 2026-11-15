@@ -1,105 +1,102 @@
 # Registers Colors
 
-## §4.1  Register Map (3 mirrored copies $D000–$D00F / $D010–$D01F / $D080–$D08F)
+## §4.1  Register Map (`$D000-$D01F`)
 
-| Adr | R (←) | W (→) | Reset | Notes |
+GTIA uses many **dual-purpose addresses**: reading and writing the same address
+often means different registers. Do not read hardware registers expecting to get
+back the last value written.
+
+| Addr | Read | Write | OS shadow | Notes |
 |---|---|---|---|---|
-| `$D000` | M0PF | HPOSP0 | $00 | Missile-0/Playfield collision flags; only W on HPOSP0 |
-| `$D001` | M1PF | HPOSP1 | $00 | |
-| `$D002` | M2PF | HPOSP2 | $00 | |
-| `$D003` | M3PF | HPOSP3 | $00 | |
-| `$D004` | P0PF | HPOSM0 | $00 | Player-0/Playfield collision; W on missile-0 HPOS |
-| `$D005` | P1PF | HPOSM1 | $00 | |
-| `$D006` | P2PF | HPOSM2 | $00 | |
-| `$D007` | P3PF | HPOSM3 | $00 | |
-| `$D008` | M0PL | SIZEP0 | $0F | Missile-0/Player collision; W on player-size-0 (0–3) |
-| `$D009` | M1PL | SIZEP1 | $0F | |
-| `$D00A` | M2PL | SIZEP2 | $0F | |
-| `$D00B` | M3PL | SIZEP3 | $0F | |
-| `$D00C` | P0PL | SIZEM  | $0E | Player-0/Player-Missile collision; W on missile size (0–3) |
-| `$D00D` | P1PL | GRAFP0 | $0D | Player-1/Player collision; W on player-0 mask pattern |
-| `$D00E` | P2PL | GRAFP1 | $0B | Player-2/Player-1 collision; W on player-1 mask pattern |
-| `$D00F` | P3PL | GRAFP2 | $07 | Player-3/Player-2 collision; W on player-2 mask pattern |
-| `$D010` | TRIG0 | GRAFP3 | $01 | Trigger-0; W on player-3 mask pattern |
-| `$D011` | TRIG1 | GRAFM  | $01 | Trigger-1; W on combined missile mask |
-| `$D012` | TRIG2 | COLPM0 | $01 | Trigger-2 (TRIG3 is cartridge sense on XL/XE); W on player-0 colour |
-| `$D013` | TRIG3 | COLPM1 | $01 | Trigger-3; W on player-1 colour |
-| `$D014` | PAL  | COLPM2 | $0F/$01 | NTSC=$0F PAL=$01; W only on player-2 colour |
-| `$D015` | —    | COLPM3 | $0F | W: player-3 colour |
-| `$D016` | —    | COLPF0 | $0F | W: playfield colour 0 (BAK when B=0,P=0) |
-| `$D017` | —    | COLPF1 | $0F | W: playfield colour 1 |
-| `$D018` | —    | COLPF2 | $0F | W: playfield colour 2 |
-| `$D019` | —    | COLPF3 | $0F | W: playfield colour 3 (=PF3 if priority allocs PF3 to P/M) |
-| `$D01A` | —    | COLBK  | $0F | W: background/border colour |
-| `$D01B` | —    | PRIOR  | $0F | W: P/M priority + GTIA mode =9/10/11 |
-| `$D01C` | —    | VDELAY | $0F | W: P/M vertical delay (player/missile sub-scanline offset) |
-| `$D01D` | —    | GRACTL | $0F | W: P/M display enable: bit 0=missiles, bit 1=players, bit 2=trigger latch |
-| `$D01E` | —    | HITCLR | $0F | W: write any clears all P/M collision flags |
-| `$D01F` | —    | CONSOL | $00 | R/W: bit 0=Start, bit1=Select, bit2=Option |
+| `$D000` | `M0PF` | `HPOSP0` | — | Missile 0 ↔ playfield / player 0 X |
+| `$D001` | `M1PF` | `HPOSP1` | — | Missile 1 ↔ playfield / player 1 X |
+| `$D002` | `M2PF` | `HPOSP2` | — | Missile 2 ↔ playfield / player 2 X |
+| `$D003` | `M3PF` | `HPOSP3` | — | Missile 3 ↔ playfield / player 3 X |
+| `$D004` | `P0PF` | `HPOSM0` | — | Player 0 ↔ playfield / missile 0 X |
+| `$D005` | `P1PF` | `HPOSM1` | — | Player 1 ↔ playfield / missile 1 X |
+| `$D006` | `P2PF` | `HPOSM2` | — | Player 2 ↔ playfield / missile 2 X |
+| `$D007` | `P3PF` | `HPOSM3` | — | Player 3 ↔ playfield / missile 3 X |
+| `$D008` | `M0PL` | `SIZEP0` | — | Missile 0 ↔ players / player 0 width |
+| `$D009` | `M1PL` | `SIZEP1` | — | Missile 1 ↔ players / player 1 width |
+| `$D00A` | `M2PL` | `SIZEP2` | — | Missile 2 ↔ players / player 2 width |
+| `$D00B` | `M3PL` | `SIZEP3` | — | Missile 3 ↔ players / player 3 width |
+| `$D00C` | `P0PL` | `SIZEM` | — | Player 0 ↔ players / packed missile widths |
+| `$D00D` | `P1PL` | `GRAFP0` | — | Player 1 ↔ players / player 0 graphics |
+| `$D00E` | `P2PL` | `GRAFP1` | — | Player 2 ↔ players / player 1 graphics |
+| `$D00F` | `P3PL` | `GRAFP2` | — | Player 3 ↔ players / player 2 graphics |
+| `$D010` | `TRIG0` | `GRAFP3` | `STRIG0 $0284` | Joystick 0 trigger / player 3 graphics |
+| `$D011` | `TRIG1` | `GRAFM` | `STRIG1 $0285` | Joystick 1 trigger / missile graphics |
+| `$D012` | `TRIG2` | `COLPM0` | `PCOLOR0 $02C0` | Joystick 2 trigger / player+missile 0 colour |
+| `$D013` | `TRIG3` | `COLPM1` | `PCOLOR1 $02C1` | Joystick 3 trigger / player+missile 1 colour |
+| `$D014` | `PAL` | `COLPM2` | `PCOLOR2 $02C2` | PAL flag / player+missile 2 colour |
+| `$D015` | — | `COLPM3` | `PCOLOR3 $02C3` | Player+missile 3 colour |
+| `$D016` | — | `COLPF0` | `COLOR0 $02C4` | Playfield colour 0 |
+| `$D017` | — | `COLPF1` | `COLOR1 $02C5` | Playfield colour 1 |
+| `$D018` | — | `COLPF2` | `COLOR2 $02C6` | Playfield colour 2 |
+| `$D019` | — | `COLPF3` | `COLOR3 $02C7` | Playfield colour 3 |
+| `$D01A` | — | `COLBK` | `COLOR4 $02C8` | Background / border colour |
+| `$D01B` | — | `PRIOR` | `GPRIOR $026F` | Priority, fifth player, player-overlap, GTIA modes |
+| `$D01C` | — | `VDELAY` | — | Per-object one-scan-line vertical delay |
+| `$D01D` | — | `GRACTL` | — | PMG display enable and trigger latches |
+| `$D01E` | — | `HITCLR` | — | Clear all PMG collision latches |
+| `$D01F` | `CONSOL` | `CONSPK` | — | Console keys / speaker click |
 
-**HPOSPn horizontal range:** `$22` — just visible left edge; `$80` = screen centre; `$DE` — just visible right edge; wider playfields map `$20–$DF`.
+## §4.2  Player / Missile Coordinates and Sizes
 
-### SIZEPn / SIZEM values
+- Visible PMG pixels are normally in horizontal color-clock range
+  `$22-$DD` (34-221 decimal).
+- Setting HPOS to `0`, or to `$DE` and above, keeps the object off-screen.
+- Player width register values:
+  - `$00` = normal width
+  - `$01` = double width
+  - `$02` = same as normal
+  - `$03` = quadruple width
+- `SIZEM` packs four 2-bit missile widths in the same encoding. Missiles are
+  2 color clocks wide at normal width, 4 at double, and 8 at quadruple.
 
-```
-SIZEPn / SIZEM = $00–$03  (0–3):
-  $00 = 1 pixel  (8 dots)
-  $01 = 2 pixels (16 dots = double width)
-  $02 = 4 pixels (32 dots = quad)
-  $03 = 8 pixels (64 dots = double-height in hires)
-```
+## §4.3  Colour Registers and Palette Model
 
----
+GTIA colour registers are 8-bit values:
 
-## §4.2  9-bit Palette & NTSC Artifact Colours
+| Bits | Meaning |
+|---|---|
+| 7-4 | hue / chroma |
+| 3-0 | luminance |
 
-GTIA produces 9-bit colour: 4 bits luminance (bits 0–3) + 4 bits chrominance (bits 4–7) + 1 artefact bit (bit 8). Each of the 16 registers (`COLPM0–3`, `COLPF0–3`, `COLBK`) hold a 4-bit NTSC colour.
+In the normal CTIA/GTIA colour interpretation, the least-significant luminance
+bit is not observed, so the practical palette is **16 hues × 8 luminances =
+128 colours**. GTIA mode 9 uses all 16 luminance steps for playfield pixels.
 
-**NTSC Artfact notes:** P/M sprites can produce false colours at pixel-clock boundary (mode 8–F GTIA with ORA overlapping. High-resolution pixels are **half-colour-clock** wide (effectively 320 colour-clock pixels in 160 colour-clock field).
+All nine visible colour registers have OS shadows:
 
----
+- `PCOLOR0-$02C0` .. `PCOLOR3-$02C3` for `COLPM0-3`
+- `COLOR0-$02C4` .. `COLOR4-$02C8` for `COLPF0-3` and `COLBK`
 
-## §4.3  Multi-Colour & Composite Colour Modes
+If the OS is running, write the shadow in ordinary frame code. Write the
+hardware register directly only when you need an immediate same-frame effect,
+such as in a DLI.
 
-| Mode | Colour bits per pixel | Notes |
-|---|---|---|
-| ANTIC 2/3 | 1-bit (PF2) | BAK or PF2 = hi-res text mode |
-| ANTIC 4 | 2 bit pairs | BAK, PF0–2; optional PF3 at bit 7 |
-| ANTIC 5 | 2-bit double-height | BAK, PF0–2 |
-| ANTIC 6/7 | 1-bit + FG-colour bits | 5-colour single line width |
-| ANTIC 8/E | 2-bit (4 colour) | 40×192 or 160×192 4-colour |
-| ANTIC 9/A | 1-bit (2 colour) | 80×192 |
-| ANTIC B/D | 1-bit (2 colour) | 160×96 (double vertical res) |
-| ANTIC C | 1-bit (2 colour) | 160×192 |
-| ANTIC F | 1-bit hi-res | BAK/PF2 luminance at dot-clock |
-| GTIA 9 | 4-bit brightness | BAK background, 16 shades of one hue |
-| GTIA 10 | 3-bit intensity | 9 colours (3 lum × 3 chroma) using COLPFn as hue |
-| GTIA 11 | 4-bit hue | 16 hues (one lum) using PF2 register as luminance |
+## §4.4  Hi-res Playfield Colour Rules
 
-**GTIA 9+10+11 priority:** Only bits 6–7 of `PRIOR` select GTIA mode; all other `PRIOR` bits still affect P/M priority.
+ANTIC modes 2, 3, and F are the half-color-clock hi-res modes.
 
----
+- Within the playfield, **0 bits use `COLPF2`**.
+- **1 bits use the hue of `COLPF2` and the luminance of `COLPF1`**.
+- `COLBK` is the border colour around the playfield, not the playfield
+  background itself.
 
-## §4.4  Hires GRAPHICS 0 / GRAPHICS 8
+That is why changing `COLPF1` in these modes changes only brightness, while
+changing `COLPF2` changes the hue of both foreground and background.
 
-**GRAPHICS 0 (ANTIC mode 2):** 1-bit pixels; all pixels = PF2 colour; bit=1 = PF1 luminance, bit=0 = BAK colour. P/M sprites alter *chrominance* not luminance of pixels they overlap — this is the key trick used by the *Ironman Atari* compositing mode.
+## §4.5  GTIA Mode Summary
 
-**GRAPHICS 8 (ANTIC mode F):** 320-pixel hi-res at normal playfield width; each bit of each byte maps directly to luminance at half-colour-clock rate. Full visible width = 320 colour-clocks → dots at 7.16 MHz dot clock. One byte = 2 pixels. Each byte stored MSB-left, LSB-right.
+`PRIOR` bits 6-7 select the GTIA colour interpretation:
 
-```asm
-        ; Set up GRAPHICS 0 via OS
-        lda #$00
-        jsr $EFE3            ; OS GR.0 init in XL/XE
+| `PRIOR` bits 7-6 | Mode | BASIC | Behaviour |
+|---|---|---|---|
+| `00` | Default | — | Normal CTIA/GTIA playfield colour rules |
+| `01` (`$40`) | GTIA 9 | 9 | 16 luminances of the hue in `COLBK` |
+| `10` (`$80`) | GTIA 10 | 10 | 9 colour-register choices on the playfield |
+| `11` (`$C0`) | GTIA 11 | 11 | 15 hues at one luminance from `COLBK`, plus background |
 
-        ; OR direct register — write DMACTL + SDLSTL:
-        lda #$22          ; GR.0: narrow, pf-on, players off
-        sta SDMCTL
-
-        ; GRAPHICS 8 direct:
-        lda #<dlist_mode_F
-        sta SDLSTL
-        lda #>dlist_mode_F
-        sta SDLSTL+1
-```
-
----
+More detail, collision caveats, and practical notes are in `gtia-modes.md`.

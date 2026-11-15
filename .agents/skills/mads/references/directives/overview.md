@@ -9,14 +9,14 @@
  [.ASIZE](#asize)<br>
  [.ISIZE](#isize)<br>
 
- [.ALIGN N[,fill]](symbols-vars.md#align)
+ [.ALIGN N[,fill]](segments.md#align)
 
  [.ARRAY label [elements0][elements1][...] .type [= init_value]](../arrays.md#arrays)<br>
  [.ENDA, [.AEND]](../arrays.md#arrays)<br>
 
  [.DEF label [= expression]](symbols-vars.md#def)
 
- [.DEFINE macro_name expression](file-output.md#define)<br>
+ [.DEFINE macro_name expression](symbols-vars.md#define)<br>
  [.UNDEF macro_name](symbols-vars.md#undef)<br>
 
  [.ENUM label](../data-types.md#enumerations)<br>
@@ -26,12 +26,12 @@
 
  [.EXTRN label [,label2,...] type](../relocatable-code/external-symbols.md#external-symbols)
 
- [.IF [IFT] expression](expression-helpers.md#if_else)<br>
- [.ELSE [ELS]](expression-helpers.md#if_else)<br>
- [.ELSEIF [ELI] expression](expression-helpers.md#if_else)<br>
- [.ENDIF [EIF]](expression-helpers.md#if_else)<br>
+ [.IF [IFT] expression](conditionals-repeat.md#if_else)<br>
+ [.ELSE [ELS]](conditionals-repeat.md#if_else)<br>
+ [.ELSEIF [ELI] expression](conditionals-repeat.md#if_else)<br>
+ [.ENDIF [EIF]](conditionals-repeat.md#if_else)<br>
 
- [.IFDEF label](symbols-vars.md#ifdef)<br>
+ [.IFDEF label](conditionals-repeat.md#ifdef)<br>
  [.IFNDEF label](conditionals-repeat.md#ifndef)<br>
 
  [.LOCAL label](../local-areas.md#local-area)<br>
@@ -40,7 +40,7 @@
  [.LONGA ON|OFF](../relocatable-code/65816-width-directives.md#directives-longa-and-longi)<br>
  [.LONGI ON|OFF](../relocatable-code/65816-width-directives.md#directives-longa-and-longi)<br>
 
- [.LINK 'filename']](../relocatable-code/linking.md#linking-link)
+ [.LINK 'filename'](../relocatable-code/linking.md#linking-link)
 
  [.MACRO label](../macros/overview.md#macros)<br>
  [.ENDM, [.MEND]](../macros/overview.md#macros)<br>
@@ -49,10 +49,10 @@
 
  [.NOWARN](#nowarn)
 
- [.PRINT [.ECHO] 'string1','string2'...,value1,value2,...](symbols-vars.md#print)
+ [.PRINT [.ECHO] 'string1','string2'...,value1,value2,...](file-output.md#print)
 
- [.PAGES [expression]](conditionals-repeat.md#pages)<br>
- [.ENDPG, [.PGEND]](conditionals-repeat.md#pages)<br>
+ [.PAGES [expression]](segments.md#pages)<br>
+ [.ENDPG, [.PGEND]](segments.md#pages)<br>
 
  [.PUBLIC, [.GLOBAL], [.GLOBL] label [,label2,...]](../relocatable-code/public-symbols.md#public-symbols)
 
@@ -60,9 +60,9 @@
  [.ENDP, [.PEND]](../procedures/declaration.md#procedure-declaration)<br>
  [.REG, .VAR](../procedures/declaration.md#procedure-declaration)<br>
 
- [.REPT expression [,parameter1, parameter2, ...]](segments.md#rept)<br>
- [.ENDR, [.REND]](segments.md#rept)<br>
- [.R](segments.md#rept)<br>
+ [.REPT expression [,parameter1, parameter2, ...]](conditionals-repeat.md#rept)<br>
+ [.ENDR, [.REND]](conditionals-repeat.md#rept)<br>
+ [.R](conditionals-repeat.md#rept)<br>
 
  [.RELOC [.BYTE|.WORD]](../relocatable-code/reloc-block.md#relocatable-block-reloc)
 
@@ -71,13 +71,13 @@
 
  [.SYMBOL label](#symbol)
 
- [.SEGDEF label address length [bank]](segments.md#seg)<br>
+ [.SEGDEF label address length [attrib] [bank]](segments.md#seg)<br>
  [.SEGMENT label](segments.md#seg)<br>
  [.ENDSEG](segments.md#seg)<br>
 
- [.USING, [.USE] proc_name, local_name](misc.md#using)
+ [.USING, [.USE] proc_name, local_name](symbols-vars.md#using)
 
- [.VAR var1[=value],var2[=value]... (.BYTE|.WORD|.LONG|.DWORD)](data-storage.md#var)<br>
+ [.VAR var1[=value],var2[=value]... (.BYTE|.WORD|.LONG|.DWORD)](symbols-vars.md#var)<br>
  [.ZPVAR var1, var2... (.BYTE|.WORD|.LONG|.DWORD)](symbols-vars.md#zpvar)<br>
 
  [.END](#end)
@@ -115,10 +115,10 @@
 
  [.FILEEXISTS 'filename'](file-output.md#fileexists)<br>
 
- [.GET [index] 'filename'["filename"][*][+-value][,+-ofset[,length]]](symbols-vars.md#get)<br>
- [.WGET [index]](symbols-vars.md#get)<br>
- [.LGET [index]](symbols-vars.md#get)<br>
- [.DGET [index]](symbols-vars.md#get)<br>
+ [.GET [index] 'filename'["filename"][*][+-value][,+-ofset[,length]]](file-output.md#get)<br>
+ [.WGET [index]](file-output.md#get)<br>
+ [.LGET [index]](file-output.md#get)<br>
+ [.DGET [index]](file-output.md#get)<br>
  [.PUT [index] = value](file-output.md#put)<br>
  [.SAV [index] ['filename',] length](file-output.md#sav)<br>
 

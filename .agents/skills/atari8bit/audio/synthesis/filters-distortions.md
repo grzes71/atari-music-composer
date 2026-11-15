@@ -20,35 +20,22 @@ Each tick of the paired divider captures the current filtered-channel level and 
 
 **Behavioural table:**
 
-| Paired divider | Input frequency | Flip-flop state | XOR output | Perceived effect |
-|---------------|-----------------|----------------|------------|-----------------|
-| Slower than input | Input toggles several times per D tick | Cannot track input | XOR ≅ input (rapid 0/1 toggling) | Signal passes, no attenuation |
-| Equal to input | Input and flip-flop toggle in lockstep | Stored value equals input every tick | XOR = 0 (always zero) | Output near zero — series of nulls |
-| Faster than input | Flip-flop toggles several times per input period | Input persists across many flip-flop transitions | XOR alternates 0/1 randomly | Output near zero — smooth null pass |
+| Paired divider | Input frequency | Perceived effect |
+|---------------|-----------------|-----------------|
+| Slower than input | Input toggles several times per D tick | Tone passes essentially unchanged |
+| Equal to input | Input and flip-flop toggle in lockstep | XOR stays 0 — the output nulls out |
+| Faster than input | Input is held across many D ticks | Narrow pulses at the input rate: thinner, brighter tone |
 
-The cutoff sits approximately at the paired divider frequency (±15 % depending on phase relationship). POKEY's digital high-pass is not a smooth analog roll-off — it is a series of narrow peaks and nulls spaced at integer multiples of the filter divider. A melody line at exactly 2 kHz run through a filter clocked at exactly 2 kHz is near-zero; move the divider just 10 % and the tone opens back up.
+The transition sits near the paired channel's frequency. POKEY's digital high-pass is
+not a smooth analog roll-off — it is a series of peaks and nulls spaced at multiples of
+the filter divider, which is why the effect is used as a "filter sweep" colour rather
+than as a clean EQ.
 
-**PDM link:** In dual-channel PDM (§6) channels 1 and 3 are set to an integer-frequency
-ratio by both running from the 1.789 77 MHz clock. The XOR of the two channels produces
-a fixed-order sideband train centred at exactly `|f_ch1 − f_ch3|`. This spike is the LSB
-carrier. The AUDF1 and AUDF3 divider pair is selected so the spike lands at exactly
-16 × the sample rate, providing exactly 16 pulse slots per sample period. The AUDF4
-timer (channel 4) then runs at the same rate as channel 3, giving exactly one LSB pulse
-in every 16 carrier slots:
-
-f_sample = f_carrier / 16       (every 16th carrier slot)
-        = f_cpu · |AUDF_ch1 − AUDF_ch3| / (16 · divisor_base)
-
-The MSB nibble is held on channel 1 for the full sample period; channel 2 toggles its
-4-bit LSB output at the carrier rate so each slot carries one LSB pulse. The duty-cycle
-ratio for 1/16 duty: the carrier sideband lands exactly at 16×f_sample. AUDF4 runs at the carrier rate and provides the 1/16-period slot clock. AUDF2 holds the fx sample-timer value and the LSB pulse is timed exactly at the 1/16 slot edge, giving stable 1/16 duty without phase drift across periods.
-
-```
-f_sample = f_sideband / 16
-        = |f_ch1 − f_ch3| / 16
-        = f_cpu × |AUDF_ch1 − AUDF_ch3| / (16 × divisor)
-```
-
+**Filter in a PCM/PDM player:** gating one channel's output with another is how the classic
+"filter" attack and percussion effects are built, and a common PCM trick is to run an LSB
+channel in volume-only mode alongside the MSB channel so the two outputs sum to roughly one
+extra bit of resolution. The exact divider ratios for such a player are implementation
+specific — tune them by ear rather than deriving them from a formula.
 
 ---
 
@@ -67,20 +54,21 @@ quantisation floor, DC drift, or noise-floor hiss at sample-rates above 4 kHz.
 |                 | quantisation                          | noise floor into benign random hiss     |
 
 ```asm
-; Pre‑process 8‑bit sample in A → 4‑bit in A
+; Pre-process 8-bit sample in A → 4-bit volume value in A
 pre_process:
-    PHA                       ; save original 8‑bit
-    AND #$F0                  ; high nibble → low nibble container
-    LSR A ; LSR A ; LSR A ; LSR A   ; A = high nibble (0‑15)
-    CLC
-    ADC RANDOM                ; RANDOM ($D20A) = POKEY polynomial counter
-    AND #$0F                  ; clip back to 0‑15 (dithered)
-    ORA #$10                  ; forced‑output bit
-    STA AUDC1
+    lsr                       ; keep the top nibble (4-bit output range 0-15)
+    lsr
+    lsr
+    lsr
+    clc
+    adc dither_bit            ; 0 or 1, e.g. from a random-bit source, for dithering
+    and #$0F                  ; stay inside 0-15
+    ora #$10                  ; bit 4 = volume-only output
+    rts
 ```
 
-For dual‑channel PDM: carry the DC‑centred MSB through directly; the LSB
-nibble receives only the dithered residue (no separate DC‑offset pass).
+For dual-channel PDM: carry the DC-centred MSB through directly; the LSB
+nibble receives only the dithered residue (no separate DC-offset pass).
 
 
 ---

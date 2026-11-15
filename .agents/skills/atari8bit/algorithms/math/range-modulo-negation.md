@@ -2,55 +2,70 @@
 
 ## 10.3 Modulo, Range, Negation
 
-### Modulo 255 — constant-time 5B
+### Modulo 255
 
-```asm
-mod255   clc
-         lda   lo_byte
-         adc   hi_byte
-         adc   #1
-         sbc   #0
-         sta   result         ; result = (256·HI + LO) mod 255
+For a 16-bit value `n = 256*hi + lo`, use the identity:
+
+```text
+n mod 255 = (hi + lo) mod 255
 ```
 
-### Range-clamp [LO..HI]
+The modulus 255 is special because 256 = 255 + 1. The standard 5-byte
+implementation is exact for all 16-bit inputs (verified over 0..65535) and
+returns a result in `$00..$FE`:
 
 ```asm
-; clamp A to [LO..HI]: A = clamp(A, LO, HI)
+; A = (256*HI + LO) mod 255   (8 bytes of code, 11 cycles)
+mod255  clc
+        lda   LO
+        adc   HI
+        adc   #1
+        sbc   #0
+        rts
+```
+
+`HI+LO` is a 9-bit value (`$000..$1FE`) held in A plus carry, so `ADC #1`
+performs a second `HI+LO` sum. Adding 1 leaves carry set when that second sum is
+exactly 255 (`0 mod 255`); when carry is clear the `+1` is undone by `SBC #0`,
+leaving `$00..$FE`.
+
+### Range-clamp `[LO..HI]`
+
+```asm
+; clamp A to [LO..HI]
 range_clamp
-         clc
-         adc   #$FF - HI
-         adc   #(HI - LO + 1)
-         bcs   in_range
-         lda   #LO
-         rts
-in_range
-         clc
-         eor   #$FF           ; undo mask on A
-         rts
+        cmp   #LO
+        bcs   @check_hi
+        lda   #LO
+        rts
+@check_hi
+        cmp   #HI+1
+        bcc   @in_range
+        lda   #HI
+@in_range
+        rts
 ```
 
 ### Negation
 
 ```asm
-; Two's complement negation:
-neg_16b   clc
-          eor   #$FF
-          adc   #$1
-          sta   value         ; low byte
-          lda   value+1
-          eor   #$FF
-          adc   #$0           ; propagate carry through high byte
-          sta   value+1
+; 16-bit two's-complement negate in place
+neg_16b
+        lda   value
+        eor   #$ff
+        clc
+        adc   #1
+        sta   value
+        lda   value+1
+        eor   #$ff
+        adc   #0
+        sta   value+1
 ```
 
-### BIT-trick for carry-heavy multi-byte chains
+### Carry setup
 
-```asm
-; Pre-load C = bit7 of <address> with BIT immediate, then ADC to chain carries:
-          bit   #$80           ; C=1
-          sbc   value          ; A = value - 1  via C-subtract
-          sbc   #$00           ; -0 when C=1, ship-carry via C-subtract
-```
+On NMOS 6502 there is no `BIT #imm`; use `SEC`/`CLC` when you need a defined
+carry input. On 65C02/65816, `BIT #imm` still does not load carry; it only
+updates Z from `A & imm`.
 
 ---

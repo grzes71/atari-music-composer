@@ -4,13 +4,14 @@
 
 | Condition | Behavior |
 |---|---|
-| Warm boot (400/800) | RNMI → OS `$FED6` — warm-start, keeps RAM |
-| Cold boot (all) | RESET line → `$FFFC` vector; all registers undefined |
-| PIA on 400/800 | Only reset on power-on; not by RESET key |
-| PIA on XL/XE | Reset on power-on AND RESET key; all regs cleared to $00 |
+| Power-on | CPU starts through the RESET vector; RAM contents are undefined until initialized |
+| 400/800 RESET key | Raises an NMI reported by ANTIC `NMIST` bit 5 and enters the OS warm-start path; RAM is preserved; PIA is **not** reset |
+| XL/XE RESET key | Hardware reset of the system; RAM is normally preserved on a warm reset, but hardware and OS shadows/vectors must be reinitialized |
 
-**RAM power-up bias:** DRAM decays after power-off → power-on produces block patterns (often `$00/$FF` alternating). Treat RAM as undefined until explicitly initialized.
+Practical rules:
 
-**Floating data bus:** On 800 (secondary I/O bus), on XL/XE without pull-ups: un-decoded reads return the last byte on the data bus (often from the *previous* cycle). On XL/XE with pull-ups: undecoded reads return `$FF`.
+- Use `WARMST ($08)` and `COLDST ($0244)` together with your own RAM signature if you need to distinguish a recoverable warm reset from a cold start.
+- If you own `SDLSTL`, `VDSLST`, or VBI vectors, expect the OS warm-start path to rebuild display/editor state unless you reinstall your values.
+- Power-on RAM patterns are not stable data; always initialize anything you depend on.
 
 ---

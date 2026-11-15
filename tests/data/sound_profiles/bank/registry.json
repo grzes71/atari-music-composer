@@ -1,0 +1,895 @@
+{
+  "bank": {
+    "note": "a working set for format validation, not a recommended library: no profile was selected, ranked or named, and the size of a final library is not decided",
+    "status": "experimental"
+  },
+  "kind": "pokey-sound-profile-bank",
+  "producer": {
+    "library": "output/profiles",
+    "library_profiles": 67,
+    "tool": "pokey-sound-archaeology"
+  },
+  "profile_count": 67,
+  "profiles": [
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_048db11d.json",
+      "playable_fingerprint": "a9f78bff0c3415f8326e64a69de27c180014e347d4cce9da1a84ab96aa56501b",
+      "profile_id": "pokey_ref_048db11d",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_050170ef.json",
+      "playable_fingerprint": "61ad745cd2df71be54fdf6afbe528dbf8a3e382cdbb15b3377f676f0516b4dd5",
+      "profile_id": "pokey_ref_050170ef",
+      "scope": "PAIR",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_0657f037.json",
+      "playable_fingerprint": "9a4a277323135738eede2e25e8ee6c5942245890afb5d471a0d5eb0fa8c48994",
+      "profile_id": "pokey_ref_0657f037",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "blocking_issues": [
+        "SILENT_PROFILE"
+      ],
+      "file": "profiles/pokey_ref_076852dd.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "b228a887e44959ed73584cae06dafc2d1246d1b36d2134d1d6ac84bbe322b916",
+      "profile_id": "pokey_ref_076852dd",
+      "scope": "VOICE",
+      "status": "MEASUREMENT_ONLY"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_089a0846.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "095cc1440583b89f175129ac64ee484b77111067ca2dfd7eb37f55c79ff01ac5",
+      "profile_id": "pokey_ref_089a0846",
+      "scope": "PAIR",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_0a53188c.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "cc211aa4e30bba629a29bede25e34232a9e2ad90259292b019bb1ea3183d6e99",
+      "profile_id": "pokey_ref_0a53188c",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_0bd72343.json",
+      "limitation_codes": [
+        "PITCH_BASE_PAIR_INCONSISTENT"
+      ],
+      "playable_fingerprint": "a2245c66a65be3e0e17850dc78e7fe8135889638b79449ee08a564beb074dbd4",
+      "profile_id": "pokey_ref_0bd72343",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_1bed70f4.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "0c55fb72d24a258f5b7ecde045c695758f9543e43c9f5fe5c633f5ff60fe780b",
+      "profile_id": "pokey_ref_1bed70f4",
+      "scope": "PAIR",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "file": "profiles/pokey_ref_1e9be30a.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "40a39cfa75cf66bc3c94d811ef558fd845a79b78b8db92c8e58f3adb09986a40",
+      "profile_id": "pokey_ref_1e9be30a",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_1ef377fc.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "1a4e02b04b7655eb6966d1c7a417f43b6230160dc3aea8f552e7be568d3f0dfb",
+      "profile_id": "pokey_ref_1ef377fc",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_1efd9336.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "aae40c51352576d7b09c9e37262ca897a64118bb1d35010c1c533049f889114e",
+      "profile_id": "pokey_ref_1efd9336",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_23665c4f.json",
+      "limitation_codes": [
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "6b583c295dd507b26674aa0fb5b5e1ee17b6a744725d6976a3a6f95bc53c5ca1",
+      "profile_id": "pokey_ref_23665c4f",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_25f94201.json",
+      "playable_fingerprint": "e38233097b37decf494ded78e759657ab97ff121a0a514c498f51e90267a919b",
+      "profile_id": "pokey_ref_25f94201",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "file": "profiles/pokey_ref_275b992a.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "cb8215b7fd8dcf3fcff18bf04332ea1f02bdbf756db6135d6da22c2250e7449e",
+      "profile_id": "pokey_ref_275b992a",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_2b83db43.json",
+      "limitation_codes": [
+        "PITCH_BASE_PAIR_INCONSISTENT"
+      ],
+      "playable_fingerprint": "5c3afef4fa0658e1331dcc5ae0592c36b197b4db308eda9e51515f0f217f183d",
+      "profile_id": "pokey_ref_2b83db43",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_2de893a6.json",
+      "playable_fingerprint": "63831dd711eebf9d259ae4501b47221b3cbce331a64dbd2551a2d5e790a22780",
+      "profile_id": "pokey_ref_2de893a6",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "blocking_issues": [
+        "AUDCTL_SCOPE_JOIN_CONTRADICTION",
+        "SILENT_PROFILE"
+      ],
+      "file": "profiles/pokey_ref_321e6359.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_BASE_PAIR_INCONSISTENT",
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "a9dea84fbb13c863cd9f8cce0f932e10c1d8003fe29b7e68f27843a9469f81fa",
+      "profile_id": "pokey_ref_321e6359",
+      "scope": "VOICE",
+      "status": "MEASUREMENT_ONLY"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_331fbbd7.json",
+      "playable_fingerprint": "6182f9549418ad0a2a921933d730f36c832d4b9ad28c4d7e569f8f8bde7cc947",
+      "profile_id": "pokey_ref_331fbbd7",
+      "scope": "PAIR",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_3627798b.json",
+      "playable_fingerprint": "7a1cad511946aa52a641b511dbe3596f0c377d55be6f935c68d1d51d41755120",
+      "profile_id": "pokey_ref_3627798b",
+      "scope": "PAIR",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_3658a088.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_BASE_PAIR_INCONSISTENT"
+      ],
+      "playable_fingerprint": "7b9a0664b6afb71d88b66dbe7860c3abd7b5df006cf6a0f196750c8bbae9a048",
+      "profile_id": "pokey_ref_3658a088",
+      "scope": "PAIR",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_3c36e574.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "df9151bc6e615d710614b10c8ee5ddb33eea7926d8cabdaaa4e797045303bf26",
+      "profile_id": "pokey_ref_3c36e574",
+      "scope": "PAIR",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "blocking_issues": [
+        "AUDCTL_SCOPE_JOIN_CONTRADICTION",
+        "SILENT_PROFILE"
+      ],
+      "file": "profiles/pokey_ref_3c49d676.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "6070e565b05d5bd240a1b71afe124d0bbf138a8d5c362bd6edd16b11f01e8df9",
+      "profile_id": "pokey_ref_3c49d676",
+      "scope": "VOICE",
+      "status": "MEASUREMENT_ONLY"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_3faf80b4.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_BASE_PAIR_INCONSISTENT"
+      ],
+      "playable_fingerprint": "a1efa6532d7ebf1894a37e0d1fa01bbc72c142b634db5a402945add2e17c3d91",
+      "profile_id": "pokey_ref_3faf80b4",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_568403b4.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "e422c856f485279ef50944cecedf08f279ca6b0faa6810cf5497af61fbfccae8",
+      "profile_id": "pokey_ref_568403b4",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_5ee9c1a8.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "f146545dccfa1bf3d4cb8f7727fa5cf9d7b7a59db2ddb43bbdd3e145e09bc3bb",
+      "profile_id": "pokey_ref_5ee9c1a8",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "AUDF_FF_EXPORT_BOUNDARY",
+        "ENVELOPE_FRAME_ABOVE_CONSUMER_MAX",
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_686d2070.json",
+      "playable_fingerprint": "e7d8a18aab93a1eda367f2765823a6489ff9e2e447f5cacb39506d941e1d2b37",
+      "profile_id": "pokey_ref_686d2070",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_689d3402.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "842fdd5ef677bf15d9ca2440b23a2c5727ee50672c9af502ecaac481161d3279",
+      "profile_id": "pokey_ref_689d3402",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_6ad0e843.json",
+      "limitation_codes": [
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "d567531b952a9fd0ccc351f24484ee094d99c9a5c85f87aa31118070c4b383a6",
+      "profile_id": "pokey_ref_6ad0e843",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_6db98eb5.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "3e10b8d90122c4f864137a5d8b5eac0b2de86f93c0585d5d0e37a016d649cb1f",
+      "profile_id": "pokey_ref_6db98eb5",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_714607ba.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "6265645c0232a9f0a9dad624657dd80e4c92d2683daf01c97e40b016f60f90a8",
+      "profile_id": "pokey_ref_714607ba",
+      "scope": "PAIR",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "AUDF_FF_EXPORT_BOUNDARY",
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_7611576e.json",
+      "playable_fingerprint": "4687c5afbd29b97f4013657d73a3a042ff0b388842e5eaf306f4693b7d69b621",
+      "profile_id": "pokey_ref_7611576e",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_7983ed84.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "30b27499336f4c85eef502a113b64bbd7b7514b748197a4b152cf1c50f2d7e08",
+      "profile_id": "pokey_ref_7983ed84",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_80d1ce25.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "30dc785527c765ce2779a65cc123e5e9126e30f70404d457f209b96377016626",
+      "profile_id": "pokey_ref_80d1ce25",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_9098232a.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "c461f9d157d3f5c0a3b2679517ca6ea6cb2b63d53c87b4bcae9f7d8af14ef5c0",
+      "profile_id": "pokey_ref_9098232a",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_914c63ec.json",
+      "playable_fingerprint": "bbf52c3605f35d63d4d0991304319ea182efdd7012ba74f6a1af31b85fdb2418",
+      "profile_id": "pokey_ref_914c63ec",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_953311ef.json",
+      "limitation_codes": [
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "b0751da00f9ec55a7fd96a72a83b443233e1d7c1f86efa67369cb0188e294ad6",
+      "profile_id": "pokey_ref_953311ef",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_959628d6.json",
+      "playable_fingerprint": "baa39eefc05ca3f4cc07fe756fbfe929e2881ce4ffe9361b2278cbffeac7fc06",
+      "profile_id": "pokey_ref_959628d6",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_9a42d6fe.json",
+      "playable_fingerprint": "0eb577c7262004a88c63f20892a1d1d3815131e03bd7a4b0b25e34b96750f6c4",
+      "profile_id": "pokey_ref_9a42d6fe",
+      "scope": "PAIR",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_9a86568a.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "2ea151a9d37a43d93495ac16870d417644d2aa534c30be57776f206ab0465df1",
+      "profile_id": "pokey_ref_9a86568a",
+      "scope": "PAIR",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "AUDF_FF_EXPORT_BOUNDARY",
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_9daa0429.json",
+      "playable_fingerprint": "c3b125f70bc44bc8f29df0d038221101cc66255f46e4b54c7ddfc68607b3971f",
+      "profile_id": "pokey_ref_9daa0429",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_a09c0263.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "2e3237fb115a3e1d430620ab69b8cb5bcee68ff96c494270b858315fc72f756c",
+      "profile_id": "pokey_ref_a09c0263",
+      "scope": "PAIR",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_a68743ad.json",
+      "playable_fingerprint": "6c3ad07081e38eb5fd4b732593ccaf756c4b4124bb9bef12493ce260a0297b10",
+      "profile_id": "pokey_ref_a68743ad",
+      "scope": "PAIR",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_a8c81a84.json",
+      "playable_fingerprint": "49fbb35d704f4ef0b75bb71193d51146f863b2080563b98b9b050d7cee9a98f6",
+      "profile_id": "pokey_ref_a8c81a84",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "blocking_issues": [
+        "AUDCTL_SCOPE_JOIN_CONTRADICTION",
+        "SILENT_PROFILE"
+      ],
+      "file": "profiles/pokey_ref_aa93ba17.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_BASE_PAIR_INCONSISTENT",
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "26af56210169ff510f5a8d0b220ae6261b8f5731b7b4e0fbc4a8c51dad8b472f",
+      "profile_id": "pokey_ref_aa93ba17",
+      "scope": "VOICE",
+      "status": "MEASUREMENT_ONLY"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_ad730372.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_BASE_PAIR_INCONSISTENT"
+      ],
+      "playable_fingerprint": "51484dd9f8902173a0de4359ecfa4196e9e05d6b82e94db1577fde85222e270b",
+      "profile_id": "pokey_ref_ad730372",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_af009fe0.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_BASE_PAIR_INCONSISTENT"
+      ],
+      "playable_fingerprint": "0a7dabb55d44fda42d6165c830e62b49ba05df7a8f6e1f75e27de8bf46960b99",
+      "profile_id": "pokey_ref_af009fe0",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_b1b73fa2.json",
+      "playable_fingerprint": "5faa96b7bde78e14c149c6d7c1f8022195c8374c7606e56acb94c8bb601184be",
+      "profile_id": "pokey_ref_b1b73fa2",
+      "scope": "PAIR",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_c0b97138.json",
+      "limitation_codes": [
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "f1c533fe9890e5812e68d90f012a668fb956fbff4fa071c7d7fc23ac21c03400",
+      "profile_id": "pokey_ref_c0b97138",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_c25e268b.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_BASE_PAIR_INCONSISTENT"
+      ],
+      "playable_fingerprint": "aeb0913b5bbe08da8cc9c94a585fecba05aa58361c397ed48f75d440f3d59261",
+      "profile_id": "pokey_ref_c25e268b",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_c2983132.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "35caf020c0b591a2b53229cf7dd11697793e4e37427d4c74e22772598cd19e5e",
+      "profile_id": "pokey_ref_c2983132",
+      "scope": "PAIR",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_c321892f.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "fa2f96bc9c77ed0adb296877d93de84b285cd255de6fafe490c303575efd3a99",
+      "profile_id": "pokey_ref_c321892f",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_c53d7640.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_BASE_PAIR_INCONSISTENT"
+      ],
+      "playable_fingerprint": "c8d92c5c772f19a880baabb7f5c7d012e9c58ac97777117275652b2d78a2c2dd",
+      "profile_id": "pokey_ref_c53d7640",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_c6eca16a.json",
+      "playable_fingerprint": "e4e4052848b40a810cd2b13df91c6f3613132206730eb73080cbb3ef7ae03247",
+      "profile_id": "pokey_ref_c6eca16a",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_cb9b6db2.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "d7515dcc0555aed80ff92c4cf7cb73f21d86e2d5a2e003763785070f0354be51",
+      "profile_id": "pokey_ref_cb9b6db2",
+      "scope": "PAIR",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "AUDF_FF_EXPORT_BOUNDARY",
+        "ENVELOPE_FRAME_ABOVE_CONSUMER_MAX",
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_d172d15e.json",
+      "playable_fingerprint": "3d410724e0a6f968cb486624e6bf4e96b93fa061fa16228d4a47ceba82de2236",
+      "profile_id": "pokey_ref_d172d15e",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_d9bef36c.json",
+      "playable_fingerprint": "d3616ed548905fda91f5932aaf4ac8695c660c553769052ce571b9cadc867d69",
+      "profile_id": "pokey_ref_d9bef36c",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_db7fe434.json",
+      "playable_fingerprint": "5ad5d7d4fe87fa56eb1e653f6011c73b6b0b94063afac24a5560d21ed3589870",
+      "profile_id": "pokey_ref_db7fe434",
+      "scope": "PAIR",
+      "status": "PLAYABLE"
+    },
+    {
+      "blocking_issues": [
+        "AUDCTL_SCOPE_JOIN_CONTRADICTION",
+        "SILENT_PROFILE"
+      ],
+      "file": "profiles/pokey_ref_dd6f0330.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "15c5ce5a6973aa6661d6f634a0d5e71f952a57d41d0f13a3c3d9d1f6391f4ee6",
+      "profile_id": "pokey_ref_dd6f0330",
+      "scope": "VOICE",
+      "status": "MEASUREMENT_ONLY"
+    },
+    {
+      "consumer_gap_codes": [
+        "AUDF_FF_EXPORT_BOUNDARY",
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_e4e5235f.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "5f56878519f76f2a83b7e47562510906078e98126c1f30eddb272a522581121c",
+      "profile_id": "pokey_ref_e4e5235f",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_e86c9631.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED",
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "a4e5fff3466de36fc7408ff4e4c48971b542fe8d53c8c98b69fbe35f6f46a86b",
+      "profile_id": "pokey_ref_e86c9631",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_e913803e.json",
+      "limitation_codes": [
+        "PITCH_CENTRE_NOT_MEASURED",
+        "PITCH_RANGE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "d9d49f200e1314a80c6f15831e35798bc46e8c72d8a41390ea49e61c66655ec1",
+      "profile_id": "pokey_ref_e913803e",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_ed07bb73.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "2e8a4f41e93a156ecb499fec48c74cb3c955407e6b2c9d6e959e9cb5f2d1d76b",
+      "profile_id": "pokey_ref_ed07bb73",
+      "scope": "PAIR",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_ef214010.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "b7ac76444486f43c08dd6a99252f33eb2d453d32c6d4c143b68fc951c5831336",
+      "profile_id": "pokey_ref_ef214010",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_f022d673.json",
+      "playable_fingerprint": "90c6a1c144c64452b2a2c41c781179bee7dc10cb44e76bb5a40701f117d76ae5",
+      "profile_id": "pokey_ref_f022d673",
+      "scope": "VOICE",
+      "status": "PLAYABLE"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+        "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+      ],
+      "file": "profiles/pokey_ref_f3e3c618.json",
+      "playable_fingerprint": "91386f3bd06ed1b62fdcbe02226d7b5cd3029a11e1ac906444366868a83a4bcd",
+      "profile_id": "pokey_ref_f3e3c618",
+      "scope": "PAIR",
+      "status": "PLAYABLE"
+    },
+    {
+      "blocking_issues": [
+        "SILENT_PROFILE"
+      ],
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_f8e704d4.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "f8a8ea350d206397f53de7ac510545f87a244d67b64fd08e9fbbd794e7f25a34",
+      "profile_id": "pokey_ref_f8e704d4",
+      "scope": "VOICE",
+      "status": "MEASUREMENT_ONLY"
+    },
+    {
+      "consumer_gap_codes": [
+        "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+      ],
+      "file": "profiles/pokey_ref_feb29c1f.json",
+      "limitation_codes": [
+        "ENVELOPE_NOT_MEASURED"
+      ],
+      "playable_fingerprint": "9cb5301ea3f8e3897478cd127a4d0383c4c0a3ce8ed551ced5cca127071566d1",
+      "profile_id": "pokey_ref_feb29c1f",
+      "scope": "VOICE",
+      "status": "PLAYABLE_WITH_LIMITATION"
+    }
+  ],
+  "schema": "pokey-sound-profile-registry-1.0"
+}

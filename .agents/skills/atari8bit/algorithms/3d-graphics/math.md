@@ -21,8 +21,8 @@ Common choices for 3D:
 | Format | Bits | Meaning | Range | Use |
 |---|---|---|---|---|
 | signed byte (Q0) | 8 | integer −128..127 | ±127 | screen coords, small counters |
-| **Q3.9** (16-bit store) | 3 int (incl. sign) + 9 frac | value·512 | −4.0 … +3.998 | matrix elements, unit-scaled coords |
-| **8.8** (16-bit) | 8 int + 8 frac | value·256 | 0..255.996 | interpolation accumulators, slopes |
+| **Q3.9** (12-bit value, held in a 16-bit word) | 3 int (incl. sign) + 9 frac | value·512 | −4.0 … +3.998 | matrix elements, unit-scaled coords |
+| **8.8** (16-bit) | 8 int + 8 frac | value·256 | 0..255.996 unsigned (−128…+127.996 signed) | interpolation accumulators, slopes |
 | Q1.7 (byte) | 1 int + 7 frac | value·128 | −1.0 … +0.992 | normals, cos/sin as a unit fraction |
 
 **Why these.** Matrix elements and rotated coordinates live in roughly
@@ -70,10 +70,10 @@ UMult8  lda ma
         ldx mb               ; X = the other operand
         sec
         sbc mb               ; A = ma-mb  (may borrow)
-        bcs +                ; carry-preserving |ma-mb|:
+        bcs @+               ; carry-preserving |ma-mb|:
         sbc #0               ;   C=0 -> A=A-1, and sets C=1
         eor #$FF             ;   A = mb-ma
-+       tay                  ; Y = |ma-mb|, C=1 guaranteed
+@       tay                  ; Y = |ma-mb|, C=1 guaranteed
 getLo   lda SQR_LO,x         ; patched -> SQR_LO[ma+mb]
         sbc SQR_LO,y
         sta prod_lo
@@ -102,10 +102,11 @@ SMult8  lda ma
         rts
 ```
 
-**Why quarter-square over shift-add:** ~2–3× faster and constant-time (no
-data-dependent branching in the core), at a cost of 1 KB of tables. On a
-cycle-starved renderer that trade is almost always right. Use shift-add
-only when RAM is scarce or a multiply is rare.
+**Why quarter-square over shift-add:** ~2–3× faster and near-constant-time
+(one ~3-cycle data-dependent branch in the |a−b| setup, versus the
+shift-add's eight; the table work itself is branchless), at a cost of 1 KB
+of tables. On a cycle-starved renderer that trade is almost always right.
+Use shift-add only when RAM is scarce or a multiply is rare.
 
 **Why not a full 256×256 product table:** it would be 64 KB — impossible.
 Quarter-square gets full 8×8 coverage from 1 KB.
@@ -122,11 +123,16 @@ If you only ever divide by a bounded depth `z`, precompute the *scaled
 reciprocal*:
 
 ```
-RECIP[z] = round(FOCAL · 256 / z)     for z = 1 .. 255
+RECIP[z] = round(FOCAL · 256 / z)     for z = ZMIN .. 255
 ```
 
 Then `screen = (coord · RECIP[z]) >> 8` — one multiply + a lookup, no
-divide. 256 bytes. Clamp `z` to `1..255` first; `z = 0` is undefined.
+divide. One entry per byte (256 bytes) is only valid while
+`FOCAL · 256 / z ≤ 255`, i.e. `z ≥ ZMIN = ceil(FOCAL·256 / 255)`
+(≈ `FOCAL` while `FOCAL ≤ 255`). `z = 0` is undefined and `z < ZMIN`
+overflows the byte, so clamp the depth to `ZMIN..255` — choose `CAM_DIST`
+so the nearest visible depth is already ≥ `ZMIN` — or keep 16-bit entries
+if you really must divide by small depths.
 
 ### General fixed-point divide table (interpolation slopes)
 
@@ -194,21 +200,25 @@ sine    sta ang             ; keep the angle for the quadrant tests
         tax                 ; assume no mirror (quadrants 0 and 2)
         lda ang
         and #$40            ; bit 6 -> quadrants 1 and 3: mirror
-        beq +
+        beq @+
         txa
         eor #$3F            ; index = 63 - pos
         tax
-+       lda QSIN,x
+@       lda QSIN,x
         bit ang             ; bit 7 -> quadrants 2 and 3: negate
-        bpl +
+        bpl @+
         eor #$FF
         clc
         adc #1
-+       rts
+@       rts
 ```
 
 `cos(a) = sin(a + 64)` — no separate cosine table; just offset the index
 by a quarter turn.
+
+The `63 − pos` mirror is one brad short of a full 256-entry table (worst
+case ≈4 LSB at amplitude 127, near the low end of a quadrant); store 65
+entries (`0..64`) and mirror with `64 − pos` when the fold has to be exact.
 
 > **Common mistake:** mirroring whenever the angle is ≥ 64 (a `cpy #$40`
 > test) instead of only when bit 6 is set. That wrongly mirrors quadrant 2,
@@ -216,9 +226,10 @@ by a quarter turn.
 > negate on **bit 7** — they are independent.
 
 **Why fold:** saves ~192 bytes and, more importantly, lets you generate
-the table trivially at build time. **Why *not* fold:** the folding costs a
-dozen cycles per call; if you call it in a hot loop, store the full 256
-entries (and even a full `cos`) and pay bytes instead of cycles. Typical
+the table trivially at build time. **Why *not* fold:** the folding costs
+~35 cycles per call (measured; a bare 256-entry `lda table,x` is 4); if you
+call it in a hot loop, store the full 256 entries (and even a full `cos`)
+and pay bytes instead of cycles. Typical
 choice: fold when building per-frame rotation tables (called ~9 times a
 frame); full table when indexing per vertex.
 
@@ -255,7 +266,8 @@ Needed for normalizing, shading falloff, or distance culling.
   an inner loop is the first thing to tabulate away.
 - **Generate the tables at build time, never by hand.** MADS evaluates
   expressions at assembly time, so you can emit a table with a directive —
-  e.g. a page-aligned signed sine as `dta b(sin(0,255,256,0,127))`, or a
+  e.g. a page-aligned signed sine as `dta b(sin(0,127,256))` (MADS is
+  `sin(centre,amp,size)`, so this is 256 bytes of `127·sin`), or a
   square/reciprocal table with a `.rept` loop — and regenerate it whenever
   a parameter changes. See `algorithms/math/trig-tables.md` for the sine
   form and `tooling/mads-assembler.md` for the expression syntax.

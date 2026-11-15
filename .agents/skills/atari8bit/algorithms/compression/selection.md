@@ -20,8 +20,9 @@ decompression.
 Avoid LZ78-style dictionary-building depackers for small Atari loaders unless
 there is a strong reason: the decoder must allocate and update a dictionary,
 which costs RAM and cycles. DEFLATE can be worthwhile for tool-side packed data,
-but dynamic Huffman tables and the sliding window make it a much heavier runtime
-contract than RLE or LZ4.
+but rebuilding Huffman trees per block makes it a much heavier runtime contract
+than RLE or LZ4 (the decoder itself is still only ~500 bytes plus tables — see
+§12.4).
 
 When designing a custom packer:
 
@@ -34,7 +35,8 @@ When designing a custom packer:
   with few runs.
 
 Source note: this section condenses the portable parts of Pasi Ojala's
-Compression Basics / C= Hacking compression articles into Atari loader rules.
+"Compression Basics" and pucrunch articles in the C= Hacking series into Atari
+loader rules.
 
 ---
 

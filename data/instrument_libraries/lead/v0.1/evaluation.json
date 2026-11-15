@@ -1,0 +1,245 @@
+{
+  "schema": "atari-music/instrument-library-evaluation/1",
+  "library_id": "lead",
+  "library_version": "0.1",
+  "status": "experimental_specification",
+  "purpose": "The listening ratings that Experiment 30 collected for the four Lead Library instruments. They are kept apart from library.json because they are not properties of the instruments: they are one listener's opinion, from one experiment, on one composition, in one session.",
+  "source": {
+    "experiment": "experiment30",
+    "evaluation_csv": "experiments/experiment30/evaluation_experiment30__anonymous.csv",
+    "evaluation_template": "experiments/experiment30/evaluation_template.csv",
+    "experiment_manifest": "experiments/experiment30/manifest.json",
+    "experiment_summary": "experiments/experiment30/summary.json",
+    "report": "docs/experiment30_timbre_ab_evaluation.md",
+    "listener": "",
+    "listener_note": "the CSV's listener column is empty, so these ratings are anonymous",
+    "transcription_note": "these values are transcribed from the returned CSV, not recomputed. The CSV and the other Experiment 30 artefacts were not modified.",
+    "transcription_verification": "tests/test_lead_library_v0_1.py re-reads the CSV when it is present and asserts that every value below matches it"
+  },
+  "design": {
+    "contexts": {
+      "solo": "a 9-second figure: a held note, a rest, the composition's own opening motif, and a descent to A-3",
+      "composition": "examples/songs/Vaults-of-Nhyrmeth.dsl with only the lead's timbre changed"
+    },
+    "loudness_versions": {
+      "original": "one shared gain per context, no per-file normalisation",
+      "matched": "every clip brought to the same measured K-weighted loudness (LUFS)"
+    },
+    "why_both_versions": "Experiment 29 had found an 18.3 dB level spread that could have driven the ratings by itself. The matched version exists so the timbre can be judged without the level deciding the answer.",
+    "blinding": "the instruments were presented as letters A-D. The letter is recorded per instrument below because it is the join key back to the CSV."
+  },
+  "rating_scales": {
+    "usefulness_1_5": {
+      "question": "Could you use this sound as an instrument in a game tune?",
+      "endpoints": ["1 = no", "5 = yes, definitely"]
+    },
+    "interest_1_5": {
+      "question": "How interesting is the timbre itself?",
+      "endpoints": ["1 = dull", "5 = striking"]
+    },
+    "annoyance_1_5": {
+      "question": "How irritating is it after a few repeats?",
+      "endpoints": ["1 = not at all", "5 = very"]
+    },
+    "typical_use": "one of melody / bass / percussion / effect / other",
+    "supports_melody": "one of yes / partly / no / not applicable"
+  },
+  "evaluations": {
+    "c1_octave_pulse": {
+      "letter_in_experiment30": "B",
+      "solo": {
+        "original": {
+          "usefulness_1_5": 4,
+          "interest_1_5": 4,
+          "annoyance_1_5": 2,
+          "typical_use": "melody",
+          "supports_melody": "yes",
+          "comment": "\"Oryginalna\" i \"Wyrównana\" brzmią dla mnie identycznie"
+        },
+        "matched": {
+          "usefulness_1_5": 4,
+          "interest_1_5": 3,
+          "annoyance_1_5": 2,
+          "typical_use": "melody",
+          "supports_melody": "yes",
+          "comment": ""
+        }
+      },
+      "composition": {
+        "original": {
+          "usefulness_1_5": 4,
+          "interest_1_5": 4,
+          "annoyance_1_5": 1,
+          "typical_use": "melody",
+          "supports_melody": "yes",
+          "comment": ""
+        },
+        "matched": {
+          "usefulness_1_5": 4,
+          "interest_1_5": 4,
+          "annoyance_1_5": 1,
+          "typical_use": "melody",
+          "supports_melody": "yes",
+          "comment": "\"Oryginalna\" i \"Wyrównana\" brzmią dla mnie identycznie"
+        }
+      }
+    },
+    "pure_sustain": {
+      "letter_in_experiment30": "A",
+      "solo": {
+        "original": {
+          "usefulness_1_5": 3,
+          "interest_1_5": 3,
+          "annoyance_1_5": 2,
+          "typical_use": "melody",
+          "supports_melody": "partly",
+          "comment": ""
+        },
+        "matched": {
+          "usefulness_1_5": 3,
+          "interest_1_5": 3,
+          "annoyance_1_5": 2,
+          "typical_use": "melody",
+          "supports_melody": "partly",
+          "comment": "\"Oryginalna\" i \"Wyrównana\" brzmią dla mnie identycznie"
+        }
+      },
+      "composition": {
+        "original": {
+          "usefulness_1_5": 4,
+          "interest_1_5": 4,
+          "annoyance_1_5": 1,
+          "typical_use": "melody",
+          "supports_melody": "",
+          "comment": ""
+        },
+        "matched": {
+          "usefulness_1_5": 4,
+          "interest_1_5": 4,
+          "annoyance_1_5": 1,
+          "typical_use": "",
+          "supports_melody": "",
+          "comment": "\"Oryginalna\" i \"Wyrównana\" brzmią dla mnie identycznie"
+        }
+      }
+    },
+    "pure_pluck": {
+      "letter_in_experiment30": "D",
+      "solo": {
+        "original": {
+          "usefulness_1_5": 3,
+          "interest_1_5": 3,
+          "annoyance_1_5": 2,
+          "typical_use": "melody",
+          "supports_melody": "",
+          "comment": ""
+        },
+        "matched": {
+          "usefulness_1_5": 3,
+          "interest_1_5": 3,
+          "annoyance_1_5": 2,
+          "typical_use": "melody",
+          "supports_melody": "",
+          "comment": "\"Oryginalna\" i \"Wyrównana\" brzmią dla mnie identycznie"
+        }
+      },
+      "composition": {
+        "original": {
+          "usefulness_1_5": 4,
+          "interest_1_5": 4,
+          "annoyance_1_5": 1,
+          "typical_use": "melody",
+          "supports_melody": "yes",
+          "comment": ""
+        },
+        "matched": {
+          "usefulness_1_5": 4,
+          "interest_1_5": 4,
+          "annoyance_1_5": 1,
+          "typical_use": "melody",
+          "supports_melody": "yes",
+          "comment": "\"Oryginalna\" i \"Wyrównana\" brzmią dla mnie identycznie"
+        }
+      }
+    },
+    "buzz_steady": {
+      "letter_in_experiment30": "C",
+      "solo": {
+        "original": {
+          "usefulness_1_5": 3,
+          "interest_1_5": 3,
+          "annoyance_1_5": 2,
+          "typical_use": "melody",
+          "supports_melody": "yes",
+          "comment": ""
+        },
+        "matched": {
+          "usefulness_1_5": 3,
+          "interest_1_5": 3,
+          "annoyance_1_5": 2,
+          "typical_use": "melody",
+          "supports_melody": "",
+          "comment": "\"Oryginalna\" i \"Wyrównana\" brzmią dla mnie identycznie"
+        }
+      },
+      "composition": {
+        "original": {
+          "usefulness_1_5": 4,
+          "interest_1_5": 4,
+          "annoyance_1_5": 1,
+          "typical_use": "melody",
+          "supports_melody": "yes",
+          "comment": ""
+        },
+        "matched": {
+          "usefulness_1_5": 4,
+          "interest_1_5": 4,
+          "annoyance_1_5": 1,
+          "typical_use": "melody",
+          "supports_melody": "yes",
+          "comment": "\"Oryginalna\" i \"Wyrównana\" brzmią dla mnie identycznie"
+        }
+      }
+    }
+  },
+  "observation_from_the_listener": {
+    "text": "The listener wrote the same note on six of the sixteen rows: that the original and the loudness-matched versions sounded identical to them.",
+    "where": "solo matched pure_sustain, solo matched pure_pluck, solo matched buzz_steady, and all four composition matched rows",
+    "how_to_read_it": "This is the listener's observation, not a measurement. The two versions do differ in level: Experiment 30 measured an 8.15 LU spread within the composition block before matching. So either the difference was not audible in their setup, or it did not register. It is recorded because it is a genuine result about whether the level control worked for this listener."
+  },
+  "observations_about_the_ratings": [
+    {
+      "observation": "In the composition block all four instruments were rated identically: usefulness 4, interest 4, annoyance 1, in both loudness versions.",
+      "what_it_means": "The composition block on its own does not separate these four instruments. It says all four work in that arrangement; it says nothing about which is better.",
+      "what_it_does_not_mean": "It is not evidence that the four sound the same, and it is not a ranking. Two instruments can be rated alike for different reasons."
+    },
+    {
+      "observation": "In the solo block the three bank instruments were rated identically to each other - usefulness 3, interest 3, annoyance 2 - while c1_octave_pulse was rated 4 for usefulness and 4 (original) or 3 (matched) for interest.",
+      "what_it_means": "Solo is where the listener's ratings separated the four, and only one instrument stood out.",
+      "what_it_does_not_mean": "Identical ratings are not proof that the three sounds were indistinguishable to the listener. It may equally mean the listener did not need to distinguish them, or that the single 9-second figure did not expose the difference."
+    },
+    {
+      "observation": "Every instrument was rated higher in the composition context than solo: usefulness and interest rose by about one point and annoyance fell by about one point for all four.",
+      "what_it_means": "In this experiment the context mattered more than the instrument: the arrangement lifted every timbre.",
+      "what_it_does_not_mean": "It does not follow that the instruments are interchangeable, and it does not follow that they would fare the same in a different arrangement. One composition, one listener."
+    }
+  ],
+  "how_these_observations_were_produced": "By reading the sixteen rows in evaluation.json. No score, weight or ranking was computed; these are descriptions of the ratings as recorded, and each carries what it does not mean.",
+
+  "not_computed": [
+    "no combined quality score",
+    "no weighted total",
+    "no ranking",
+    "no 'best instrument'",
+    "no cross-instrument comparison beyond what the ratings themselves show"
+  ],
+  "why_nothing_is_computed": "This library forbids an arbitrary weighted score, and one listener's single-session ratings cannot support one. The ratings are kept in their four separate contexts so a reader can judge them; collapsing them into one number would hide exactly the differences that matter.",
+  "caveats": [
+    "one listener, one session, one composition, one test grid",
+    "the ratings are the listener's opinion, not properties of the instruments",
+    "the solo and composition ratings differ substantially for every instrument, so neither set should be quoted alone",
+    "the two loudness versions were rated separately and, for this listener, produced near-identical ratings",
+    "the instruments were presented as letters A-D, so the ratings are only as blind as Experiment 30's partially blinded design allowed",
+    "these ratings must not be presented as evidence that any instrument will sound the same on real Atari hardware"
+  ]
+}

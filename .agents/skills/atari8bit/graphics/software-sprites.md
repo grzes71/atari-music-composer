@@ -107,10 +107,14 @@ stamp_2x2
         ora   sprite_char1
         sta   (screen_ptr),y
         ldy   #playfield_width
-        lda   sprite_char2
+        lda   (screen_ptr),y
+        and   #$80
+        ora   sprite_char2
         sta   (screen_ptr),y
         iny
-        lda   sprite_char3
+        lda   (screen_ptr),y
+        and   #$80
+        ora   sprite_char3
         sta   (screen_ptr),y
         rts
 ```

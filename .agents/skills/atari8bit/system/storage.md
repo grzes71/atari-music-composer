@@ -6,7 +6,7 @@ description: >-
 
 # 07 — Disk Drives & File I/O
 
-> **Key items:** SIO DCB fields; Status byte C/E/A/N; DDEVIC/DUNIT/DCMD; IOCB $0340
+> **Key items:** SIO DCB fields; Status byte C/E/A/N; DDEVIC/DUNIT/DCOMND; IOCB $0340
 > **Scope:** SIO frame format, disk drive commands, XEX/ATR binary formats, IOCB, SpartaDOS X relocatable, xBIOS
 
 ---
@@ -32,7 +32,7 @@ description: >-
 
 ## §7.1  SIO Serial I/O
 
-> ⚠ **SIO timeout:** The POKEY SIO serial port times out after roughly 540 ms of no activity (128-bit clock at 19200 baud ≈ 6.692 ms per byte × 80 bytes ≈ 535 ms). If the drive doesn't ACK the device ID within this window, the calling routine must handle the timeout explicitly rather than retry-loops on a dead channel. Always check the STATUS byte after every SIO transmission before reusing the DCB.
+> ⚠ **SIO timeout:** Each SIO phase is time-limited: SIO arms a countdown timer (derived from the DCB timeout `DTIMLO` and the handler's own limits) and returns a timeout error (`$8A`) if the device never answers. A silent device therefore fails the call instead of hanging it — check `DSTATS` ($0303) after every SIO call before reusing the DCB, and never retry-loop on a dead channel.
 
 > ⚠ **IOCB status discipline:** After CIO calls, always check the returned status before consuming data or reusing the IOCB. Poll loops that treat any nonzero status as success can race device-handler transitions and lose data.
 
@@ -44,14 +44,14 @@ description: >-
 
 | Field | Value |
 |---|---|
-| Device ID | $40–$4F (serial address) |
-| Leader byte | $55 AA55 AA55 … (128 bytes of sync) |
-| COMMAND frame | 4 bytes: Device-ID + Cmd byte + AUX1 + AUX2 |
-| ACK/NACK | 1 byte: device acknowledges or NACK |
-| DATA frame | Data bytes + CRC |
-| STATUS | Status byte + COMPLETE ($FF) or ERROR ($XX) |
+| Device ID | Unit address: $31–$3F disk (D1:–D8: = $31–$38), $40–$4F printer, $60 cassette, $70+ third-party |
+| Leader | A run of `$55` bytes; the frame begins at the first byte that is not `$55` |
+| COMMAND frame | 5 bytes: Device ID + command byte + AUX1 + AUX2 + checksum, sent while COMMAND is asserted low |
+| ACK/NACK | 1 byte from the device: ACK `$41` (`'A'`) or NAK `$4E` (`'N'`) |
+| DATA frame | Data bytes + one-byte checksum |
+| STATUS | One byte from the device at the end of the operation: COMPLETE `$43` (`'C'`) or ERROR `$45` (`'E'`) |
 
-SIO acknowledge byte = device acknowledges ID, then NACK ($00) = fault; COMPLETE (done = $FF). After data transmission: device asserts DONE in status to confirm completion.
+The selected device answers the command frame with ACK (`$41`); NAK (`$4E`) or silence means the frame was rejected. The receiving side acknowledges each data frame the same way, and a finished operation ends with a single status byte, COMPLETE (`$43`) or ERROR (`$45`).
 
 ### SIO checksum
 
@@ -82,36 +82,37 @@ then verify the data-frame checksum before sending final COMPLETE/ERROR.
 
 | Drive | Key features |
 |---|---|
-| 810 | 1771 FDC; density 128/256; write-protect pin |
-| 1050 | Enhanced: 256-byte sector interleave; double-sided |
-| XF551 | 512-byte sectors by default; 4 density profiles (180K/360K DS); fast copy-protect |
-| Indus GT | Command-based SIO with interrupt; double-sided 192/360 KB; bootable from P3 |
+| 810 | WD1771 FDC; single density (FM), 128-byte sectors, 90 KB |
+| 1050 | Single + enhanced density (130 KB); 256-byte sectors need a US Doubler-class ROM; single-sided |
+| XF551 | Double density (MFM), 256-byte sectors, 360 KB double-sided |
+| Indus GT | Double density, 180 KB single-sided; compatible with the standard SIO disk commands |
 
-Drive SIO address `$31` unit 1; device type byte `$01` (disk).
+The drive's SIO address goes in `DDEVIC` ($31 for D1:, $32 for D2:, …) and the drive number in `DUNIT`.
 
 ---
 
-## §7.3  IOCB File-Access (IOSB free-finder)
+## §7.3  IOCB File-Access (free-IOCB finder)
 
-Finding a free IOCB: scan for `$FF` in status byte at `$340/$350/$360…/3B0`. Each IOCB is 16 bytes. Only one byte must be `$FF: the status field.
+Finding a free IOCB: scan the handler-index byte (`ICHID`, offset `+0`) of each IOCB for `$FF` — CIO writes `$FF` there when a channel is closed. Each IOCB is 16 bytes, so that byte sits at `$0340/$0350/$0360…$03B0`.
 
 ```asm
+; out: X = IOCB base offset ($00,$10,…,$70) — use $0340+X as the IOCB
+;      Y negative ($A1) when no channel is free
 find_free_iocb
-        ldx #0                  ; IOCB index ×16
-?loop   lda $340,x              ; status byte
+        ldx #0                  ; IOCB offset (index × 16)
+?loop   lda $340,x              ; ICHID: $FF = free (closed) channel
         cmp #$FF
-        beq ?found              ; $FF = free
+        beq ?found
         txa
+        clc
         adc #$10                ; next IOCB (16 bytes)
         tax
         cmp #$80                ; past IOCB 7 → none free
         bcs ?none
         jmp ?loop
-?found  txa
-        adc #$01                ; ch = IOCB / 16 + 1
-        sta $34a                 ; store channel number (IOCB + $01)
+?found  txa                     ; X = IOCB base
         rts
-?none   lda #$00                ; no free IOCB
+?none   ldy #-95                ; $A1: too many files (no free channel)
         rts
 ```
 
@@ -126,7 +127,7 @@ find_free_iocb
 | INIT vector | segment writes `$02E2/$02E3`; DOS calls it after loading that segment |
 | RUN vector | segment writes `$02E0/$02E1`; DOS jumps there after loading completes |
 
-XEX files are the native Atari binary format. A file may contain several load segments. `$FF $FF` is a marker, not a universal per-block command byte; after it, the loader expects start/end address pairs and raw bytes. For reversing, build a segment map and watch writes to `INITAD ($02E2)` and `RUNAD ($02E0)`.
+XEX files are the native Atari binary format. A file may contain several load segments. `$FF $FF` is a marker, not a universal per-block command byte; after it, the loader expects start/end address pairs and raw bytes. DOS 2.x refuses segments that load below `$0700` (the DOS/MEMLO area), so a normal executable's first segment starts at `$0700` or above. For reversing, build a segment map and watch writes to `INITAD ($02E2)` and `RUNAD ($02E0)`.
 
 ---
 
@@ -134,14 +135,14 @@ XEX files are the native Atari binary format. A file may contain several load se
 
 | Field | Value |
 |---|---|
-| ATR magic | `$96 $02` header size = 0x80 bytes |
-| Sector size | 128 bytes (SD) or 256 bytes (DD) |
-| Sector count | (file size − header_size) / sector_size |
-| Double-sided (1050) | 180K → 720 KB (360 Tracks × 16 Sectors × 256 × 2 sides) |
+| ATR magic | `$96 $02` (little-endian `$0296`); the header is 16 bytes |
+| Paragraph count | Word at +2: image size in 16-byte paragraphs, excluding the 16-byte header (high word at +6) |
+| Sector size | Word at +4: 128 bytes (SD) or 256 bytes (DD); `0` = unknown |
+| Sector count | `(file size − 16) / sector_size`; when the sector size is 256 the three boot sectors are normally 128 bytes each, giving `(file size − 400) / 256 + 3` |
 
 Boot and loader notes:
 
-- The first three sectors are commonly 128-byte boot sectors even on enhanced-density images.
+- When the sector size is 256, the first three (boot) sectors are usually stored as 128 bytes each, as on enhanced-density images.
 - Boot disks may load code before any DOS filesystem is active.
 - Custom loaders often bypass CIO and call `SIOV` with direct sector commands.
 - Directory entries are DOS-dependent; do not infer MyDOS/SpartaDOS/DOS 2.x layout without identifying the DOS.
@@ -169,43 +170,50 @@ SDX strips binary into relocatable blocks. The block header types:
 
 ## §7.7  xBIOS — Mini-OS File Access
 
-xBIOS is a compact disk I/O layer that can run from low memory and provides file read/write without the full DOS overhead.
+xBIOS is a small resident I/O module that loads and saves files without a DOS. Its loader reads a configuration (including the `XAUTORUN` file) from disk, the module normally lives at `$0800`, and it is called through a vector table — `OPEN_FILE`, `LOAD_DATA`, `WRITE_DATA`, `LOAD_BINARY_FILE`, `READ_SECTOR`, directory entry calls, and so on at `$0800+$03`, `$0800+$06`, `$0800+$09`, ….
 
-**What xBIOS provides:** open, read, write, seek, and file-size query through SIO-compatible structures. It is useful for compact loaders and games that need file access without keeping a full DOS resident.
+**What xBIOS provides:** open, load, read/write bytes, seek (file offset), sector reads and directory scanning. It keeps its own DCB-like variables (`xDEVICE`, `xDCMD`, `xDAUX1/2`, buffer pointer) inside its memory area and drives the standard SIO layer below.
 
-**DCB access for xBIOS:** identical to standard Atari 810 SIO DCB format: $09 command / $0A AUX1 / $0B AUX2; uses the same serial bus protocol as Atari DOS — xBIOS translates IECBUS calls to SIO internally by passing the DCB directly, then uses the OS handler sequence `SIOV` to call and poll.
+**Limitations:** it cannot create new files or directories, and cannot extend an existing file.
+
+**DCB layout for direct SIO access:** the DCB is fixed at `$0300` (not zero page); offsets from it are `$00` DDEVIC, `$01` DUNIT, `$02` DCOMND, `$03` DSTATS, `$04` DBUFLO/HI, `$06` DTIMLO, `$08` DBYTLO/HI, `$0A` DAUX1/2.
 
 ```asm
-                ; xBIOS-style DCB init for READ — file already on disk/drive_1_unit
-                ; dcb must be in zero page for rapid SIO access
+                ; standard DCB init for a sector READ
+dcb_dev     = $0300         ; DDEVIC — SIO device ID (e.g. $31 for drive 1)
+dcb_unit    = $0301         ; DUNIT  — drive number (1-8)
+dcb_cmd     = $0302         ; DCOMND — $52 = read sector
+dcb_stats   = $0303         ; DSTATS — $40 = read into buffer, $80 = write
+dcb_buf     = $0304         ; DBUFLO/DBUFHI — buffer address
+dcb_tim     = $0306         ; DTIMLO — timeout
+dcb_len     = $0308         ; DBYTLO/DBYTHI — byte count
+dcb_aux     = $030a         ; DAUX1/DAUX2 — sector number
 
-dcb_dev     = $00           ; device ID (e.g. $31 for drive-1)
-dcb_cmd     = $02           ; $52 = read record
-dcb_aux1    = $03           ; buffer address low
-dcb_aux2    = $04           ; buffer address high
-dcb_buf_lo  = $05           ; buffer page-lo (page aligned preferred)
-dcb_buf_hi  = $06           ; buffer page-hi
-dcb_len     = $09           ; buffer length (2-byte)
-
-init_xbios_read
-        lda #$31               ; DDEVIC = drive 1, SIO device
+        lda #$31               ; DDEVIC = drive 1
         sta dcb_dev
-        lda #$52               ; DCMD = $52 (read-sector / get-verify record)
+        lda #1
+        sta dcb_unit
+        lda #$52               ; DCOMND = $52 (read sector)
         sta dcb_cmd
-        lda #<read_buffer
-        sta dcb_aux1
-        lda #>read_buffer
-        sta dcb_aux2
+        lda #$40               ; DSTATS = transfer from device to computer
+        sta dcb_stats
+        mwa #read_buffer dcb_buf
+        lda #$80               ; DBYT = 128 bytes
+        sta dcb_len
+        lda #0
+        sta dcb_len+1
+        mwa #sector dcb_aux    ; DAUX1/2 = sector number
 
         jsr SIOV               ; $E459 — call SIO handler via OS vector
-        bcs ?error             ; carry = SIO error
+        cpy #$01               ; Y = status: $01 = success
+        bne ?error
         ; ... read_buffer now holds the sector
 ?error  rts
 
 ; read_buffer must be sector-aligned: 128 bytes for SD disks (Atari 810 format)
 ```
 
-**xBIOS vs native CIO:** CIO is the OS-level handler layer (`CIOV`); SIO is the serial-bus layer (`SIOV`). xBIOS bypasses standard DOS file handling and uses SIO-compatible access patterns with a smaller runtime API.
+**xBIOS vs native CIO:** CIO is the OS-level handler layer (`CIOV`); SIO is the serial-bus layer (`SIOV`). xBIOS bypasses standard DOS file handling and calls SIO through its own vectors and buffer variables.
 
 ---
 
@@ -240,31 +248,41 @@ the OS disk entry or direct `SIOV` calls to read sectors into memory:
 ```asm
         org $0700
 boot_hdr
-        .word $0001             ; boot sector count, low byte used
-        .word boot_hdr          ; load address
-        .word $ffff             ; CASINI-related field
+        .word $0001             ; number of boot sectors to load (1-255)
+        .word boot_hdr          ; load address of the boot block
+        .word $ffff             ; init/entry address ($ffff = none)
 
         lda #$ff
         sta $d301               ; disable BASIC / map RAM on XL/XE
         lda #1
         sta $0301               ; DUNIT = drive 1
-        lda #'R'
-        sta $0302               ; DCMD = read
+        lda #$52                ; DCOMND = GET SECTOR
+        sta $0302
         mwa #main_start $0304   ; DBUF
         mwa #main_sector $030a  ; DAUX sector number
 
-load    jsr $e453               ; SIOV
-        bmi error
+load    jsr $e453              ; DSKINV — resident disk handler (SIOV is $E459)
+        bmi error               ; negative status in Y
         adw $0304 #$80          ; next 128-byte buffer
         inw $030a               ; next sector
         ; decrement sector counter...
         jmp load
-error   jmp $e477               ; OS SIO error handling path
+error   jmp $e477               ; COLDSV — cold start (reboot)
 ```
 
 Use this only for ATR/boot-disk workflows. DOS file APIs are not active yet,
 and the first three boot sectors are normally 128 bytes even on
 enhanced-density disks.
+
+**`DSKINV` vs `SIOV` — different contracts.** `DSKINV` (`$E453`) is the resident disk
+handler: it sets `DDEVIC` (`$31`), `DTIMLO` (7 s, or `DSKTIM` for FORMAT), `DSTATS` and
+`DBYTLO/HI` (from `DSCTLN`) itself, then calls `SIOV`. The caller only supplies
+`DUNIT`, `DCOMND`, `DBUFLO/H` and `DAUX1/2`. `SIOV` (`$E459`) is the raw serial-bus
+layer: it needs the complete DCB, including `DDEVIC`, `DTIMLO`, `DSTATS` (`$40` = computer
+reads, `$80` = computer writes) and `DBYTLO/HI`. Both return the status byte in
+`DSTATS ($0303)` and in `Y`; a negative value (`N=1`) is an error. Do not mix the two — a
+`SIOV` call given a DCB prepared for `DSKINV` transfers nothing, because `SIOV` never
+fills in `DDEVIC`, `DSTATS` or `DBYT`.
 
 Dual-address loader stub:
 
@@ -315,9 +333,10 @@ conservative software delays, not proof that all devices can collapse timing.
 
 ## §7.11 DSKINV Disk-Driver Entry
 
-`DSKINV` is the OS disk-driver entry at `$E453`. It fills standard DCB fields
-for basic disk operations and then uses `SIOV ($E459)`. Status is returned in
-`DSTATS ($0303)` and in `Y`; negative status (`N=1`) means error.
+`DSKINV` is the OS disk-driver entry at `$E453`. It sets `DDEVIC` (`$31`), `DTIMLO`
+and `DSTATS`, copies the sector size from `DSCTLN` into `DBYTLO/HI`, then calls
+`SIOV ($E459)`. The caller supplies `DUNIT`, `DCOMND`, `DBUFLO/H` and `DAUX1/2`.
+Status is returned in `DSTATS ($0303)` and in `Y`; negative status (`N=1`) means error.
 
 The disk driver uses:
 
@@ -332,13 +351,17 @@ Supported direct commands:
 | Command | Meaning |
 |---|---|
 | `$21` / `'!'` | format disk |
+| `$22` / `'"'` | format disk using the parameters in AUX1/AUX2 |
+| `$4E` / `'N'` | read the PERCOM block (drive configuration) |
+| `$4F` / `'O'` | write the PERCOM block |
 | `$50` / `'P'` | put sector without verification |
 | `$52` / `'R'` | read sector |
 | `$53` / `'S'` | read status |
 | `$57` / `'W'` | write sector with verification |
 
-Any other command is effectively treated as a read-sector setup by the disk
-driver; use a manually prepared DCB and `SIOV` for nonstandard drive commands.
+`DSKINV` only sets up these commands; anything else (for example the
+double-density `$D0–$D5` commands of third-party drives) needs a manually
+prepared DCB and a direct `SIOV` call.
 
 Read/write sector setup:
 
@@ -359,10 +382,11 @@ Read/write sector setup:
         bmi error
 ```
 
-Read status sets `DSTATS` for read, `DBYT` to 4, `DBUF` to `DVSTAT ($02EA)`,
-and timeout to about seven seconds. Formatting uses `DSKTIM`; after a format,
-the buffer receives a list of bad sector numbers ending with `$FFFF`, and
-`DBYT` returns the list length excluding the terminator.
+The status command sets `DSTATS` ($0303) to `$40`, `DBYT` to 4 and `DBUF` to
+`DVSTAT ($02EA)`, where the four status bytes are stored. Formatting uses
+`DSKTIM`; after a format, the buffer receives a list of bad sector numbers
+ending with `$FFFF`, and `DBYT` is set to the list length excluding the
+terminator.
 
 ## §7.12 DOS and SpartaDOS X Command Lines
 
@@ -371,10 +395,11 @@ protocol. Detect it by checking that DOS is loaded, `DOSVEC ($000A)` points
 below ROM, and `(DOSVEC)+3` contains opcode `$4C` (`JMP`). The callable
 parameter reader is at `(DOSVEC)+3`.
 
-The parameter reader places the next parameter in `COMFNAM` at `(DOSVEC)+33`.
-The returned string starts with a device name and ends with EOL `$9B`. The
-routine does not by itself report end-of-line; compare the buffer offset
-before and after the call to detect that no more parameters were consumed.
+The parameter reader copies the next parameter into the DOS's command-name
+buffer, `COMFNAM`. The returned string starts with a device name and ends with
+EOL `$9B`. The routine does not by itself report end-of-line; compare the buffer
+offset before and after the call to detect that no more parameters were
+consumed.
 
 SpartaDOS X also provides a richer parsing library:
 
@@ -428,18 +453,12 @@ Common `D:` special commands:
 | `$2F` / 47 | get disk info |
 | `$30` / 48 | get current directory |
 | `$31` / 49 | set attributes on SpartaDOS X-style handlers |
-| `$FD-$FF` / 253-255 | formatting variants on some DOSes |
+| `$FE` / 254 | format disk on common DOSes |
 
-`E:` and `P:` normally have no standard special commands, but XEP80 handlers
-add device-specific commands. Typical XEP80 `E:` commands include:
-
-| CMD | Meaning |
-|---|---|
-| `$14` / 20 | send command |
-| `$15` / 21 | set normal or burst transmit mode |
-| `$16` / 22 | send input command |
-| `$18` / 24 | enable 80-column mode, with optional clear-screen |
-| `$19` / 25 | disable 80-column mode |
+`E:` and `P:` have no standard special commands, but the XEP80's `E:` handler
+adds device-specific ones (for example switching 80-column mode on and off and
+controlling burst transmit). Treat those numbers as handler-specific and verify
+them against the handler in use.
 
 The graphics-screen `S:` handler implements:
 

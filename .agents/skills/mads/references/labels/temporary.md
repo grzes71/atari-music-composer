@@ -56,7 +56,7 @@ The [SET](../pseudo-commands/symbols-repeat.md#set) pseudo-command allows redefi
  tmp = 2
 ```
 
-For the above example, an **Infinite loop** will occur; it should correctly be:
+For the above example MADS reports `WARNING: Infinite loop by label TMP`, then fails with `ERROR: Label TMP declared twice`; it should correctly be:
 
 ```
  tmp set 1

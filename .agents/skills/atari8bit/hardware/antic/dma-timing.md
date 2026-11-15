@@ -8,54 +8,85 @@
 |---|---|---|
 | Master crystal | 14.318 18 MHz | 14.187 57 MHz |
 | Machine clock (CPU) | 14.318 18 ÷ 8 = **1.789 773 MHz** | 14.187 57 ÷ 8 = **1.773 447 MHz** |
-| Color clock | 3.579 545 MHz (NTSC subcarrier) | 4.433 618 MHz ÷ 2 |
+| Color clock | 3.579 545 MHz | 4.433 618 MHz ÷ 2 |
 | Cycles / scan line | **114** | **114** |
 | Scan lines / frame | 262 (NTSC) | 312 (PAL) |
 | Frame rate | 59.922 71 Hz | 49.860 74 Hz |
 
-### Playfield widths (DMACTL bits 0–1)
+### Playfield widths (`DMACTL` bits 0–1)
 
-| Width | Color clocks | Bytes/line (normal) | Use |
+| Width | Color clocks | Bytes/line (text or normal-width bitmap fetch) | Use |
 |---|---|---|---|
-| Narrow | 128 ($40–$7F) | 32 | Saves DMA, more CPU cycles |
-| Normal | 160 ($30–$CF) | 40 | Default GR.0 width |
-| Wide | 192 ($20–$DF) | 48 | Covers overscan |
+| Narrow | 128 | 32 | Saves DMA |
+| Normal | 160 | 40 | Default |
+| Wide | 192 | 48 | Overscan / wide playfield |
 
-Wide playfield left-clipped to 178 actual visible (ANTIC cuts 12 color clocks; right 2 cut by HBLANK).
+### DMA overview
 
-### Cycle-stealing budget
+ANTIC steals 6502 bus cycles for several jobs:
 
-ANTIC DMA steals CPU cycles per scan line. **These are hard limits for DLI code.**
+- display-list fetches,
+- screen-memory fetches,
+- character-glyph fetches in character modes,
+- player/missile DMA when enabled,
+- DRAM refresh.
 
-| Scenario | Available 6502 cycles / line |
-|---|---|
-| Baseline (playfield DMA + refresh) | ~97 |
-| Mode E bitmap (160×192 4-color) | ~57 |
-| Mode 2 first scan line | ~30 (font fetch dominates) |
-| Mode 2 subsequent | ~60 |
-| Mode 4 + scroll + PMG | <10 first line, ~50 subsequent |
+Practical consequences:
 
-Wide playfield (+16 bytes/line) + horizontal scroll (+8 bytes/line) = **more DMA steal → fewer DLI cycles**.
+- Character modes are heaviest on the **first scan line of a mode line**, when
+  ANTIC must fetch both screen codes and character data.
+- Enabling **HSCROL** makes ANTIC fetch one playfield width larger for narrow
+  and normal screens to provide the scroll buffer.
+- Enabling **player DMA** also consumes the missile-DMA time slot, even if you
+  are not using missiles visibly.
+- Cycle budgets vary by mode, width, scrolling, and PMG DMA, so for exact
+  split timing use `WSYNC` and test on real hardware or a cycle-accurate
+  emulator.
 
 ### Memory refresh
 
-ANTIC performs up to 9 refresh cycles per scan line (all 9 during VBLANK). Refresh rows are 128-entry (older ANTIC) or 256-entry (later). Any CPU or ANTIC non-refresh access to a DRAM row also refreshes that row — a DRAM access counts as a refresh in addition to doing useful work.
+Classic ANTIC references document **9 DRAM refresh cycles per scan line**.
+These refresh slots are part of ANTIC's normal DMA budget and therefore reduce
+CPU time available on each line.
 
-### Bus and video timing landmarks
+### Bus and video landmarks
 
-For cycle-exact kernels, remember these stable hardware landmarks:
-
-| Event | Position |
+| Event | Meaning |
 |---|---|
 | Scan line length | 114 CPU cycles = 228 color clocks |
-| Color clocks per CPU cycle | 2 |
-| HBLANK end / wide playfield start | color clock 32 |
-| Visible normal playfield start | color clock 48 |
-| Narrow playfield starts | color clock 64 |
-| Center of scan line | color clock 128 |
-| Normal playfield end / `WSYNC` release | color clock 208 |
-| HBLANK start / VCOUNT increment | color clock 222 |
+| `HSCROL` unit | 1 color clock |
+| Visible playfield widths | 128 / 160 / 192 color clocks |
+| `WSYNC` | CPU pauses until the end of the current scan line |
 
-Display-list bytes are fetched by ANTIC on the CPU bus; each byte costs one CPU cycle. A display-list instruction with LMS or JVB consumes the opcode plus two address bytes. Player DMA costs cycles every scan line when enabled; missile DMA is automatically enabled with player DMA.
+Display-list instructions cost one DMA fetch per byte. `LMS` and `JMP/JVB`
+instructions therefore consume three display-list bytes instead of one.
 
----
+### Per-scanline CPU budget (what is left for the 6502)
+
+A scan line is 114 CPU cycles, but the CPU only executes in the slots ANTIC does
+not steal:
+
+| Job | Bytes / line | Notes |
+|---|---|---|
+| DRAM refresh | 9 | every scan line |
+| PMG (players + missiles) | 5 (single-line) / 10 (double-line) | only when `DMACTL` bits 2-3 are set |
+| Display-list fetch | 1..3 | every line; `LMS`/`JMP`/`JVB` cost 3 |
+| Playfield fetch | 20 / 40 / 48 (narrow / normal / wide) | usually only on the mode line's fetch scanline |
+| Character glyph fetch | 40 (40-col) / 20 (20-col) per scanline | text modes; screen codes add the same amount on the first scanline |
+
+Example - Mode D (160x96, 2 scanlines/line), normal width, `SDMCTL = $3E` (PAL):
+
+| Scanline | Stolen | Usable CPU cycles |
+|---|---|---|
+| Mode-line first scanline (playfield fetch) | 9 + 5 + 40 + 3 = 57 | ~57 |
+| Mode-line repeat scanline | 9 + 5 = 14 | ~100 |
+
+A DLI that fires on the *last* scanline of its trigger line only gets the
+remainder of that scanline: ~70 usable cycles on a DMA-light repeat scanline,
+~57 on a DMA-heavy pas scanline (see `dli-wsync.md` §3.9). Measured in this
+project: a 55-cycle setup phase fits, the same phase grown to 79 cycles slips
+the whole kernel one scanline.
+
+**Rule:** with playfield + PMG DMA active, keep one DLI phase at <= ~55 CPU
+cycles, and verify cycle-sensitive splits on hardware or a cycle-accurate
+emulator.

@@ -7,100 +7,83 @@ description: >-
 
 # 4-Bit Digital Sample Playback
 
-POKEY volume is a 4-bit register ($0–$F for AUDCn volume bits). Rapidly writing volume-only values to AUDC3/AUDC4 produces 4-bit digital audio. Unpack a full 8-bit sample into two nibbles: upper nibble → high volume burst; lower nibble → next burst. At ~3.9 kHz (one nibble every two scan lines on NTSC), the result is a clean 4-bit sample stream.
+POKEY volume is a 4-bit register ($0–$F for AUDCn volume bits). Rapidly writing volume-only values to AUDC3/AUDC4 produces 4-bit digital audio. Unpack a full 8-bit sample into two nibbles: upper nibble → high volume burst; lower nibble → next burst. At ~7.85 kHz (one nibble per VCOUNT step, i.e. every two scan lines on NTSC), the result is a clean 4-bit sample stream.
 
 **Conversion pipeline:**
 
-1. Convert PC audio to unsigned 8-bit mono RAW @ 3.9 kHz: `sox in.wav -t raw -r 3900 -u -b -c 1 out.raw`
-2. Convert RAW to 4-bit big-endian: pair bytes, take upper nibble + lower nibble of next byte → single 4-bit-packed byte.
-3. In playback: read packed byte → output high nibble then low nibble → increment pointer.
+1. Convert PC audio to unsigned 8-bit mono RAW at the target rate (~7.8 kHz): `sox in.wav -t raw -r 7850 -u -b -c 1 out.raw`
+2. Convert RAW to 4-bit packed: take the upper nibble of each byte, then pack two nibbles per byte, high nibble first.
+3. In playback: read packed byte → output high nibble then low nibble → advance pointer once per byte.
 
-**VCOUNT-based sample-play kernel (taken from Space Harrier XE):**
+**VCOUNT-synced sample-play kernel:**
 
 ```asm
-; play_sample — VCOUNT-sync 4-bit sample playback on audio channel 3
-; Assumes: play_channel = AUDC3 ($D205)
-; sample_ptr = $80/$81 (zero page)
-; dest_end   = $82/$83 (end address for stop)
-; Uses VCOUNT to time each sample nibble precisely
+; play_sample — 4-bit PCM on AUDC3, one nibble per VCOUNT step (~7.85 kHz NTSC)
+; in:   sample_ptr/sample_ptr+1 -> packed sample data (2 nibbles per byte)
+;       out_end/out_end+1       -> first byte past the sample data
+; uses: Y (index), nibble_flag, last_vcount — reserve free zero-page bytes
+; note: AUDC3 stays owned by this routine while it runs
 
-sample_nibble   = $84        ; bit 0 = which nibble pending (toggle)
-sample_ptr       = $85        ; ZP pointer lo/hi already stored elsewhere
-sample_hi        = $86
-dest_end_lo      = $87
-dest_end_hi      = $88
-next_vcount      = $89
+sample_ptr   = $85          ; zero-page pointer pair: $85 = low byte, $86 = high
+out_end      = $87          ; $87/$88
+nibble_flag  = $84          ; 0 = high nibble next, 1 = low nibble next
+last_vcount  = $89
 
 play_sample
-        lda #0
-        tay
-        sta sample_nibble            ; reset counter
-        sta next_vcount
-
-?wait_for_vcount_130
-        lda #130                     ; NTSC: max VCOUNT value before wrap
-        cmp VCOUNT
-        bne ?wait_for_vcount_130     ; spin until VCOUNT=130 (selected scan-line)
+        lda #$00
+        sta nibble_flag
+        sta AUDC3           ; start silent
+        ldy #$00
+        lda VCOUNT
+        sta last_vcount
 
 ?main_loop
-        ; advance VCOUNT target by 2 = ~3.9 kHz
-        lda next_vcount
-        clc
-        adc #2
-        cmp next_vcount_max          ; if NTSC max = 130, PAL = 155
-        bcc ?no_wrap
-        sbc next_vcount_max          ; wrap: subtract max (0 or 1 on overflow)
-?no_wrap
-        sta next_vcount
+?wait_tick
+        lda VCOUNT          ; VCOUNT advances once per two scan lines
+        cmp last_vcount
+        beq ?wait_tick      ; one sample per VCOUNT step
 
-        lda sample_nibble
-        eor #1                       ; toggle 0→1→0
-        sta sample_nibble
-        bne ?lo_nibble               ; if toggled to 1 → output high nibble next
-
-        ; === HIGH NIBBLE ===
-?hi_nibble
-        lda (sample_ptr),y          ; fetch current packed byte
-        lsr a
-        lsr a
-        lsr a
-        lsr a                       ; high nibble into low bits
-        ora #$10                    ; bit 4 = volume-only mode
-        tax                         ; save to X
-        beq ?skip_play              ; volume 0 = silent frame (unnecessary DMA)
-        bne ?store_vol
-
-?lo_nibble
-        lda (sample_ptr),y          ; fetch same byte again
-        and #$0F                    ; low nibble
-        ora #$10
+        lda (sample_ptr),y  ; one packed byte = two 4-bit samples
+        ldx nibble_flag
+        bne ?low_nibble
+        lsr                 ; high nibble of the packed byte
+        lsr
+        lsr
+        lsr
         tax
-        iny
-        bne ?no_page
-        inc sample_hi
-?no_page
-        lda sample_hi
-        cmp dest_end_hi
-        bne ?store_vol
-        cpy dest_end_lo
-        beq ?stop
-?store_vol
-        txa                         ; volume nibble + $10 (volume-only)
-        sta AUDC3                   ; $D205 — write volume to channel 3
-?skip_play
+        jmp ?store
+?low_nibble
+        and #$0F            ; low nibble
+        tax
+        iny                 ; only the low-nibble pass consumes a byte
+        bne ?check_end
+        inc sample_ptr+1
+?check_end
+        lda sample_ptr+1
+        cmp out_end+1
+        bne ?store
+        cpy out_end
+        bcs ?stop
+?store
+        txa
+        ora #$10            ; bit 4 = volume-only output
+        sta AUDC3           ; $D205
+        lda nibble_flag
+        eor #$01
+        sta nibble_flag
         jmp ?main_loop
 
 ?stop
         lda #$00
-        sta AUDC3                   ; turn off sample playback
+        sta AUDC3           ; silence the channel
         rts
 ```
 
 > [!WARNING]
-> **Sample overflow:** 4-bit packed samples use approximately 2 bytes per sample nibble (2 bytes per 3.9 kHz sample = ~7.7 KB/s). For a 6-second song at that rate → 46 KB stored in Atari memory. Use a single-player VBI-driven pre-fetched ring buffer to avoid sourcing from the wrong bank of extended RAM. Keep sample in consecutive ROM pages (e.g., $6000–$7FFF bankswitched) to avoid extra cycle from incrementing ZP pointer across pages.
+> **Sample data size:** two 4-bit samples share one byte, so a full-rate 7.85 kHz stream costs ~3.9 KB per second (~24 KB for 6 seconds). For longer samples, page the data in from extended RAM or a bank-switched cart; when the source is outside the main 64K window, copy through a small ring buffer instead of pointing the sample pointer at banked memory. Keeping the sample inside consecutive pages avoids the pointer-high-byte update on every 256th byte.
 
 > [!WARNING]
-> **÷0 in VCOUNT timing:** VCOUNT is 8-bit (0–255); PAL machines reach scan line 155, NTSC machines wrap at scan line ~262 but the counter only counts to 255. Always use `CMP next_vcount_max` where `next_vcount_max = 130` for NTSC / 155 for PAL — don't assume a universal value.
+> **VCOUNT wrap:** VCOUNT (`$D40B`) is an 8-bit counter that increments every two scan lines and wraps after about 130 on NTSC and about 155 on PAL. Compare for equality against the previous value (as above) rather than assuming a universal maximum; when syncing to an absolute line, use the value for the target machine.
 
 ## Variable Pitch and Mixing
 
@@ -117,7 +100,7 @@ advance_sample
         adc   step_frac
         sta   samp_frac
         lda   samp_lo
-        adc   step_lo
+        adc   step_lo       ; carry out of the fractional add propagates
         sta   samp_lo
         bcc   @same_page
         inc   samp_hi
@@ -141,7 +124,3 @@ POKEY's 4-bit volume:
 
 Interpolation can improve high-pitch playback but costs cycles. On stock XL/XE,
 prefer nearest-sample stepping unless the mixer has a very small voice count.
-
-Source note: the fixed-point stepping and volume-table advice comes from the
-portable digital-mixing discussion in C= Hacking issue 20; the output register
-and timing rules here remain Atari POKEY-specific.

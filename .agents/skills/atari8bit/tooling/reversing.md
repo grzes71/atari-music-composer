@@ -10,6 +10,7 @@ description: >-
 
 > **When to load:** The task is to understand, port, patch, debug, or document an existing XEX/ATR/source/listing/demo.
 > **Do not use for:** Pure register lookup; load `hardware/*` instead.
+> Register addresses here are OS/XL targets; use an emulator (e.g. Altirra) with write breakpoints on the addresses in §6 to confirm them in a running program.
 
 ## Quick Lookup
 
@@ -192,7 +193,7 @@ Use write breakpoints on these addresses to discover behavior quickly:
 | `$0200/$0201` | DLI vector changes |
 | `$0222-$0225` | VBI vector changes |
 | `$D000-$D01F` | GTIA colors, PMG positions, priorities |
-| `$D200-$D20F` | POKEY sound, timers, keyboard/SIO |
+| `$D200-$D20F` | POKEY audio, timers, `RANDOM`, pot ports, serial/keyboard scan |
 | `$D301` | PORTB ROM/RAM banking |
 
 ## 7. Output of a Reverse Pass

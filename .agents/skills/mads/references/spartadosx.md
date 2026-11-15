@@ -58,19 +58,19 @@ Block length. This much data should follow the header, unless it's a memory-rese
 
 When writing relocatable code, one must keep in mind several limitations imposed by the idea of *moveable* code. All addresses referring to the area of such a program must be updated during loading; therefore, sequences such as the following cannot be used:
 
-    lda coś
+    lda something
     ...
-    coś equ *
+    something equ *
     ...
 
 Instead, options like this remain:
 
-    lda _coś
-    ldx _coś+1
+    lda _something
+    ldx _something+1
     ...
-    _coś dta a(coś)
+    _something dta a(something)
     ...
-    coś equ *
+    something equ *
 
 ### Update Block (Relocation)
 
@@ -149,19 +149,19 @@ The number of `RELOC` and `EMPTY` blocks is limited to 7 by **SDX**.
 Such blocks can be chained together, e.g.:
 
 ```
-blk sparta $600
-...
+ blk sparta $600
+ ...
 
-blk reloc main
-...
+ blk reloc main
+ ...
 
-blk empty $100 main
-...
+ blk empty $100 main
+ ...
 
-blk reloc extended
-...
+ blk reloc extended
+ ...
 
-blk empty $200 extended
+ blk empty $200 extended
 ```
 
 This means that instructions in these blocks can refer to all blocks in the chain.

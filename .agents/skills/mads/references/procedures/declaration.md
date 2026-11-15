@@ -53,7 +53,7 @@ name .PROC ( .WORD inputPointer, outputPointer ) .VAR
 name .PROC ( .WORD src+1, dst+1 ) .VAR
 ```
 
-For `.VAR`, the parameter names indicate the names of variables into which the passed parameters will be loaded. This method is slower than `.REG` but still faster than the software stack method.
+For `.VAR`, the parameter names indicate the names of variables into which the passed parameters will be loaded (`MVA`/`MWA`); they must be labels or `label+n` expressions that already exist in the program. This method is slower than `.REG` but still faster than the software stack method.
 
 You exit a procedure in the standard way, i.e., using the `RTS` instruction. Adding an `RTS` instruction within the procedure body at every exit path is the programmer's responsibility, not the assembler's.
 
@@ -67,7 +67,7 @@ As with a `.LOCAL` block, we can specify a new assembly address for a `.PROC` bl
 .ENDP
 ```
 
-For procedures utilizing the software stack, after the procedure ends with `.ENDP`, **MADS** calls the `@EXIT` macro, which is responsible for modifying the `@STACK_POINTER` software stack pointer. This is necessary for the software stack to function correctly. The user can design their own `@EXIT` macro or use the one included with **MADS** (file `..\EXAMPLES\MACROS\@EXIT.MAC`), which currently takes the following form:
+For procedures utilizing the software stack, **MADS** calls the `@EXIT` macro at every call site (after the generated `@CALL 'X',...`), which is responsible for modifying the `@STACK_POINTER` software stack pointer. This is necessary for the software stack to function correctly. The user can design their own `@EXIT` macro or use the one included with **MADS** (file `..\EXAMPLES\MACROS\@EXIT.MAC`), which currently takes the following form:
 
 ```
 .macro @EXIT

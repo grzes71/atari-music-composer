@@ -17,7 +17,7 @@ Advantages of **MADS** relocatable code:
 Limitations of **MADS** relocatable code:
 
 * label declarations via `EQU` must be made before the `.RELOC` block
-* if you want to define a new label within the `.RELOC` block, its name must be preceded by a space or tab (global label)
+* a new label inside the `.RELOC` block is written like any other label, in column 0; a label preceded by a space or tab must end with `:` (otherwise MADS reads it as a macro invocation, e.g. *Undeclared macro NAME*)
 * pseudo-commands `ORG`, `RMB`, `LMB`, `NMB`, and the `.DS` directive cannot be used
 * the highest byte of a 24-bit word cannot be relocated, e.g., `lda ^$121416`
 

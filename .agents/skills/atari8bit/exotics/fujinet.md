@@ -12,7 +12,7 @@ FujiNet is a multi-peripheral emulator and network adapter for vintage systems. 
 ### Device IDs and Addresses
 - **$70 (FujiNet Control Device):** Used for configuration, WiFi scanning, SSID setups, TNFS host and disk mounting, directory browser, app-key storage, Base64/Hash/QR utility operations.
 - **$71–$78 (FujiNet Network Devices - `N1:` to `N8:`):** Allocated for network socket and stream operations. Standard `N:` defaults to unit 1 (`N1:`, ID `$71`).
-- **$50–$53 (FujiNet R: Devices - `R1:` to `R4:`):** Serial/Modem emulation interface.
+- **$50–$53 (Serial / R: devices - `R1:` to `R4:`):** Serial/modem (R:) emulation; the firmware names this class `SERIAL` ($50–$53, `SERIAL_LAST` = $53).
 - **$45 (Clock / APETime Device):** Emulates the APETime clock, providing date and time in various formats.
 
 ### Communication Vectors
@@ -124,11 +124,11 @@ Device `$70` handles configuration, WiFi settings, local time, and TNFS slot mou
 |:---:|:---:|:---:|---|
 | `Test` | `$00` | `$00` | Check if FujiNet is online |
 | `Scan Networks` | `$FD` | `$40` | Kick off scan. Reads 1 byte (count of APs found). |
-| `Get Scan Result` | `$FC` | `$40` | `DAUX1` = AP index (0-based). Reads 33 bytes (32-byte SSID + 1-byte signed RSSI). |
-| `Set SSID` | `$FB` | `$80` | `DAUX1` = 1 (save to config). Payload: SSID (32 bytes) + Password (64 bytes). |
-| `Get SSID` | `$FE` | `$40` | Reads 96 bytes (SSID + Password) of stored network. |
+| `Get Scan Result` | `$FC` | `$40` | `DAUX1` = AP index (0-based). Reads a packed `SSIDInfo`: SSID (33 bytes = 32 + NUL) + 1-byte signed RSSI = 34 bytes. |
+| `Set SSID` | `$FB` | `$80` | Payload: packed `SSIDConfig` = 97 bytes — SSID (33, NUL-terminated) + password (64). Saved to config. |
+| `Get SSID` | `$FE` | `$40` | Reads 97 bytes (`SSIDConfig`: SSID 33 + password 64) of the stored network. |
 | `Get WiFi Status` | `$FA` | `$40` | Reads 1 byte: `3` = connected, `6` = not connected. |
-| `Get Adapter Config` | `$E8` | `$40` | Reads 139 bytes of layout: SSID (32), hostname (64), local IP (4), gateway (4), netmask (4), DNS (4), MAC (6), BSSID (6), firmware version string (15). |
+| `Get Adapter Config` | `$E8` | `$40` | Reads 140 packed bytes (`AdapterConfig`): SSID (33), hostname (64), local IP (4), gateway (4), netmask (4), DNS (4), MAC (6), BSSID (6), firmware version string (15). |
 | `Read Host Slots` | `$F4` | `$40` | Reads 256 bytes (8 × 32-byte host slot names). |
 | `Write Host Slots`| `$F3` | `$80` | Sends 256 bytes (8 × 32-byte host slot names) to configure slots. |
 | `Read Device Slots`| `$F2` | `$40` | Reads 304 bytes (8 × 38-byte slot array). Record is: host slot (1), mode (1: 1=RO, 2=RW), filename (36). |
@@ -139,18 +139,18 @@ Device `$70` handles configuration, WiFi settings, local time, and TNFS slot mou
 | `Unmount Image` | `$E9` | `$00` | `DAUX1` = disk slot. |
 | `Mount All` | `$D7` | `$00` | Mounts all configured slots. |
 | `Set Dev Filename`| `$E2` | `$80` | `DAUX1` = slot, `DAUX2` = `(host << 4) \| mode`. Payload = filename. |
-| `Get Dev Filename`| `$A0–$A7`| `$40` | `$A0 + slot` (0 to 7) queries and reads the path back. |
+| `Get Dev Filename`| `$A0–$A9`| `$40` | `$A0 + slot` for device slots 0–9 (`FUJI_GET_DEVICE1…10_FULLPATH`) queries and reads the path back. |
 | `New Blank Disk` | `$E7` | `$80` | Payload (262 bytes): sector count (2), sector size (2: 128/256/512), host slot (1), disk slot (1), filename (256). |
 | `Open Directory` | `$F7` | `$80` | `DAUX1` = host slot. Payload: path + NUL + optional filter. |
 | `Read Dir Entry` | `$F6` | `$40` | `DAUX1` = max len, `DAUX2` = flags (`$80` appends packed date/size/flags). Reads one entry (first byte `$7F` is EOF). |
 | `Close Directory`| `$F5` | `$00` | Closes active directory browser session. |
 | `Get Position` | `$E5` | `$40` | Reads current directory position (2 bytes) for paging. |
 | `Set Position` | `$E4` | `$00` | `DAUX1`/`DAUX2` = position to seek to. |
-| `Open App Key` | `$DC` | `$80` | Payload (5 bytes): creator id (2, low first), app id (1), key id (1), mode (1: 0=Read, 1=Write). |
+| `Open App Key` | `$DC` | `$80` | Payload (6 bytes, packed `appkey`): creator id (2, little-endian), app id (1), key id (1), mode (1: 0=Read, 1=Write, 2=Read-256), reserved (1). |
 | `Write App Key` | `$DE` | `$80` | `DAUX1`/`DAUX2` = length (up to 64 bytes). Payload: data bytes. |
 | `Read App Key` | `$DD` | `$40` | Reads 2-byte length followed by data bytes. |
 | `Close App Key` | `$DB` | `$00` | Closes active key. |
-| `Get Time` | `$D2` | `$40` | Reads 7-byte binary date/time: century (1), year (1), month (1), day (1), hour (1), minute (1), second (1). |
+| `Get Time` | `$D2` | `$40` | Defined in `fujiCommandID.h` and listed in the `$70` wiki table, but the current Atari `fujiDevice` handler set does not implement it (its intended 7-byte layout could not be verified). Use the `$45` clock device instead. |
 | `Random Number` | `$D3` | `$40` | Reads 4 hardware-generated random bytes. |
 | `GUID Gen` | `$BB` | `$40` | Reads 36-character GUID string. |
 | `Disable CONFIG Boot`| `$D9`| `$00` | `DAUX1` = 0/1 to disable/enable CONFIG boot. |
@@ -164,7 +164,7 @@ Device `$70` handles configuration, WiFi settings, local time, and TNFS slot mou
 | `Reset FujiNet` | `$FF` | `$00` | Performs hardware reboot of the ESP32. |
 
 #### App Key / Hash / Base64 / QR Code Families
-- **Hash commands:** `$C8` input, `$C7` compute, `$C6` length, `$C5` output, `$C2` clear. Hash algorithm is passed in the byte after `$C7` (0 = MD5, 1 = SHA-1, 2 = SHA-256, 3 = SHA-512).
+- **Hash commands:** `$C8` input, `$C7` compute, `$C6` length, `$C5` output, `$C2` clear (`$C3` = compute without clearing the input buffer). The algorithm is passed in the parameter byte of `$C7`/`$C3` (0 = MD5, 1 = SHA-1, 2 = SHA-256, 3 = SHA-512, 4 = SHA-224, 5 = SHA-384).
 - **Base64 encode:** `$D0` input, `$CF` compute, `$CE` length, `$CD` output.
 - **Base64 decode:** `$CC` input, `$CB` compute, `$CA` length, `$C9` output.
 - **QR Code:** `$BC` input, `$BD` encode, `$BE` length, `$BF` output (reads raw QR bitmap bytes).
@@ -182,8 +182,12 @@ Used to directly control individual sockets and network streams.
 | `Get Error` | `'E'` | `$45` | `$40` | Returns detailed error string. |
 | `Parse JSON` | `'P'` | `$50` | `$00` | Instructs ESP32 to parse downloaded JSON data. |
 | `Query JSON` | `'Q'` | `$51` | `$80` | Queries path in parsed JSON. Payload: JSONPath query string. `DAUX2` = trans. |
-| `Set Translation` | `'T'` | `$54` | `$00` | Changes translation mode via `DAUX2` (0/1/2/3). |
-| `Set Channel Mode` | | `$FC` | `$00` | Configure channel mode (`DAUX2`: 0 = protocol, 1 = JSON). |
+| `Set Translation` | `'T'` | `$54` | `$00` | Sticky translation mode ORed into later operations, via `DAUX2` (0/1/2/3). |
+| `Set Native EOL` | `'L'` | `$4C` | `$80` | Set the byte string the adapters translate as the network line ending. |
+| `Set HTTP Mode` | `'M'` | `$4D` | `$00` | HTTP channel mode only (`DAUX2`: 0 = body, 1 = collect headers, 2 = get headers, 3 = set headers, 4 = set POST data). |
+| `Point in File` | `'%'` | `$25` | `$80` | Seek (3-byte offset). |
+| `Note in File` | `'&'` | `$26` | `$40` | Tell (returns 3-byte offset). |
+| `Set Channel Mode` | | `$FC` | `$00` | Configure channel mode (`DAUX2`: 0 = protocol/none, 1 = JSON, 2 = SGML/HTML, 3 = XML). |
 | `Set Interrupt Rate`| `'Z'` | `$5A` | `$00` | Set status poll interrupt rate in ms via `DAUX1` (low) / `DAUX2` (high). |
 | `Username` | | `$FD` | `$80` | Set username credential payload before `OPEN`. |
 | `Password` | | `$FE` | `$80` | Set password credential payload before `OPEN`. |
@@ -210,12 +214,14 @@ FujiNet emulates the APETime clock at SIO bus ID `$45`. It offers the current NT
 
 | Command | Hex | Direction | Description |
 |:---:|:---:|:---:|---|
-| `Get APETime Binary` | `$93` | `$40` | Reads 6 bytes: `Day Month Year Hour Minute Second` (binary). |
-| `Get Atari Binary` | `$41` (`'A'`) | `$40` | Reads Atari OS-native binary time format. |
-| `Get ISO Local` | `$49` (`'I'`) | `$40` | Reads ISO-8601 local time string. |
-| `Get ISO UTC` | `$5A` (`'Z'`) | `$40` | Reads ISO-8601 UTC time string. |
-| `Get ProDOS Time` | `$50` (`'P'`) | `$40` | Reads ProDOS format date/time. |
-| `Set Time Zone` | `$99` | `$80` | Sends timezone definition string. |
+| `Get APETime Binary` | `$93` | `$40` | Reads 6 bytes: `Day Month Year Hour Minute Second` — plain binary values (day 1–31, month 1–12, year as year−2000, hour/min/sec), *not* BCD. |
+| `Get ISO Local` | `$49` (`'I'`) | `$40` | Reads an ISO-8601 local time string (NUL-terminated). |
+| `Get ISO UTC` | `$5A` (`'Z'`) | `$40` | Reads an ISO-8601 UTC time string. |
+| `Get ProDOS Time` | `$50` (`'P'`) | `$40` | Reads a 4-byte ProDOS date/time. |
+| `Get Simple + hundredths` | `$4D` | `$40` | Reads the 7-byte simple time (century, year, month, day, hour, min, sec) plus hundredths. |
+| `Set Time Zone` | `$99` | `$80` | Sends a timezone definition string; sets the *alternate* timezone (`$74` sets the FujiNet-wide one). |
+
+> The GET commands accept `DAUX1 = 1` to use the alternate timezone. `$41` (`'A'`) is defined in `fujiCommandID.h` but is only remapped onto `$93` on the Apple IWM bus, so it is not an Atari clock command.
 
 ---
 
@@ -224,7 +230,8 @@ FujiNet emulates the APETime clock at SIO bus ID `$45`. It offers the current NT
 FujiNet emulates an Atari 850 interface / R: device, enabling legacy BBS software and terminal clients to work over TCP/IP seamlessly.
 
 ### Additional R: Commands (SIO Level)
-- **`'L'` (`$4C`) - Listen:** Binds and listens on a specified TCP port for incoming BBS callers.
+- **`'D'` (`$44`) - Modem Sniffer:** `DAUX1` = 1/0 turns logging of incoming/outgoing modem traffic to `/modem_sniffer.txt` on the SD card on/off.
+- **`'L'` (`$4C`) - Listen:** Binds and listens on a specified TCP port for incoming BBS callers (port split across `DAUX1` low / `DAUX2` high).
 - **`'M'` (`$4D`) - Unlisten:** Closes the listening TCP port.
 - **`'N'` (`$4E`) - Toggle Baud Rate Lock:** Locks/unlocks the virtual baud rate, preventing subsequent `CONFIGURE` calls from resetting the connection speed.
 
@@ -235,11 +242,14 @@ FujiNet emulates an Atari 850 interface / R: device, enabling legacy BBS softwar
 When programming HTTP clients using the `N:` handler, the ESP32 manages TLS/SSL handshakes, redirection, and packet fragmentation.
 
 ### HTTP Open Modes
-Using `OPEN #iocb, mode, aux2, "N:HTTP://..."`:
-- **Mode 4 (`ICAX1` = `$04`):** Standard HTTP GET (read-only).
-- **Mode 12 (`ICAX1` = `$0C`):** Standard HTTP GET / read-write socket.
-- **Mode 13 (`ICAX1` = `$0D`):** HTTP GET/POST with raw header management. Setting headers requires using `PUT` commands to send headers before fetching payload.
-- **Mode 5 (`ICAX1` = `$05`):** HTTP DELETE.
+`aux1` (ICAX1) selects the HTTP method; the mode list is HTTP-specific:
+- **4:** GET, path encoded into the request line.
+- **12:** GET with a verbatim path plus staged headers (the usual read/write socket mode).
+- **8:** PUT.
+- **13:** POST.
+- **14:** PUT-with-headers (sent as POST).
+- **5:** DELETE. **9:** DELETE+headers. **6:** WebDAV PROPFIND directory listing.
+Headers are not selected by the open mode: use special command `$4D` (HTTP channel modes — 0 = body, 1 = collect headers, 2 = get headers, 3 = set headers, 4 = set POST data). `OPEN` does not send the request — the first `STATUS` does, so headers/POST data can be staged between the two.
 - **Aux2 (`ICAX2`):** Sets EOL translations (typically `2` for LF to EOL or `3` for CR/LF to EOL).
 
 ### Using HTTP/HTTPS from BASIC
@@ -255,6 +265,8 @@ Using `OPEN #iocb, mode, aux2, "N:HTTP://..."`:
 ---
 
 ## 7. MADS Assembly Examples
+
+> **MADS/CPU-mode note:** the examples below are plain 6502. If you extend them with 65816 code, add `opt c+` to the source, and write accumulator addressing bare — `asl`, `lsr`, `rol`, `ror` (MADS 2.1.7 rejects the `ASL A` spelling).
 
 ### Example 1: HTTP GET Request (CIO-based)
 Downloads raw content from a URL via the `N:` device using CIO.
@@ -277,6 +289,7 @@ CIOV    = $E456
 CMD_OPEN  = $03
 CMD_CLOSE = $0C
 CMD_GETBYT = $07
+CMD_PUTBYT = $0B
 
         org $2000
 
@@ -328,20 +341,23 @@ close_conn
         jsr CIOV
         rts
 
-; Print character in Accumulator to E:
+; Print character in Accumulator to E: (IOCB #0, PUT BYTE)
 print_char
-        ldy #$00            ; Use IOCB #0 for screen/editor
-        sta $0342,y         ; Put byte command (actually use CMD_PUTBYT = $0B)
-        lda #$0B
-        sta $0342,y
-        lda #0
-        sta $0348,y         ; Buffer len = 0 for single byte
-        sta $0349,y
-        lda $2000           ; dummy read or restore character
-        lda #0              ; print character from A (needs setup depending on E: state)
-        ; For simplicity, write directly to screen memory or call OS routine:
-        jsr $F2B0           ; OS print character routine (put byte to screen)
+        sta char_buf        ; PUT BYTE takes the character from memory
+        ldy #$00            ; IOCB #0 is the E: editor
+        lda #CMD_PUTBYT
+        sta ICCOM,y
+        lda #<char_buf
+        sta ICBAL,y
+        lda #>char_buf
+        sta ICBAH,y
+        lda #0              ; length is unused by PUT BYTE
+        sta ICBLL,y
+        sta ICBLH,y
+        jsr CIOV
         rts
+
+char_buf .byte 0
 
 url_str .byte 'N:HTTP://fujinet.online/test.txt',$9B
 ```
@@ -580,18 +596,18 @@ check_tcp_data
         jsr CIOV
         bmi conn_error
 
-        ; FujiNet populates DVSTAT status buffer:
-        ; DVSTAT+0: Network connection status (1 = connected, 0 = disconnected)
-        ; DVSTAT+1: Bytes available to read (Low)
-        ; DVSTAT+2: Bytes available to read (High)
-        ; DVSTAT+3: Last error code
-        
-        lda DVSTAT
+        ; FujiNet fills the 4 status bytes (NDeviceStatus):
+        ; DVSTAT+0: Bytes available to read (low)
+        ; DVSTAT+1: Bytes available to read (high)
+        ; DVSTAT+2: Connection status (1 = connected, 0 = disconnected)
+        ; DVSTAT+3: Last error code (1 = success)
+
+        lda DVSTAT+2        ; Connection status
         beq disconnected
 
-        lda DVSTAT+2        ; Check bytes high byte
+        lda DVSTAT+1        ; Bytes available, high byte
         bne data_available
-        lda DVSTAT+1        ; Check bytes low byte
+        lda DVSTAT          ; Bytes available, low byte
         bne data_available
 
 no_data
@@ -633,16 +649,16 @@ A standard "NetCat" pattern in Atari BASIC connects to a TCP endpoint and create
 ## 9. Optimization and Caveats
 
 ### Connection Timeouts
-Network operations depend on external servers. Set appropriate SIO timeouts (default is usually 7 seconds). For long HTTP requests, ensure the timeout is extended by modifying `DTIMLO` (`$0306`) in raw SIO blocks, or use non-blocking status queries.
+Network operations depend on external servers. Set an appropriate `DTIMLO` (`$0306`) in raw SIO blocks; the published examples use `$0F` (15 s). For long HTTP requests prefer a generous timeout plus non-blocking status polling.
 
-### NDEV 128-Byte Receive Cap
-The resident `N:` handler (NDEV) receive and transmit buffers are 128 bytes each, and NDEV caps a single read at 127 bytes. While high-level programs using `INPUT` or `GET` inside loops do not notice this (the handler automatically loops to read incoming streams), it means NDEV cannot return a large block (e.g. 512 bytes) in a single CIO call. For high-speed bulk data transfers, direct SIO reads (`$52` on the low road) bypass this buffer limit and are significantly faster.
+### NDEV buffer size
+The resident `N:` handler (NDEV) transfers through a fixed-size internal buffer, so a single CIO read returns at most one buffer's worth of bytes; programs that loop over `GET`/`INPUT` never notice, but a single large read will not return a large block. Direct SIO reads (`$52`) bypass the CIO handler and its buffering, so bulk transfers are much faster.
 
 ### Page boundaries and SIO Buffers
-Like all Atari SIO transactions, direct SIO buffers passed to `DBUFLO/DBUFHI` should avoid crossing page boundaries if executing under systems with custom SIO software that requires strict timing alignment.
+Direct SIO buffers passed in `DBUFLO/DBUFHI` may cross page boundaries — the OS advances the pointer byte by byte.
 
 ### DOS Compatibility
-Under SpartaDOS X or RealDOS, memory allocations for the resident `N:` handler may conflict with program buffers. Always configure your loaders to reserve zero page addresses `$F0`–`$FF` and memory above the handler address limit (`$0C00` or `$2000` depending on the DOS footprint).
+Under SpartaDOS X or RealDOS the resident `N:` handler is loaded as a binary alongside your program; reserve the memory the handler reports rather than assuming a fixed address, and re-check your load addresses when the handler version changes.
 
 ### CIO Register Overwriting Gotcha
 In Atari OS, calling `CIOV` can overwrite zero page variables or registers in the target IOCB (`ICBLL/H`, `ICAX1/2`, `ICBAL/H` can be altered depending on the command executed and the device handler implementation). 
@@ -675,11 +691,11 @@ For the latest specifications and protocol enhancements, refer to the official F
 
 ## 11. Common SIO Pitfalls & Gotchas
 
-When programming bare-metal SIO (`$E459`), it is easy to make assumptions that lead to NAKs (`$88` / 136) or Timeouts (`$8A` / 138). Be aware of the following FujiNet-specific constraints:
+When programming bare-metal SIO (`$E459`), it is easy to make assumptions that lead to NAKs (`$8B` / 139) or Timeouts (`$8A` / 138). Be aware of the following FujiNet-specific constraints:
 
 > [!WARNING]
 > **Gotcha #1: SIO Status (`$53`) and the `DVSTAT` buffer**
-> When querying FujiNet for the number of Bytes Waiting via the `Status` (`$53`) command, FujiNet replies with exactly 4 bytes (the `nstatus` structure). Even though the Atari OS is supposed to store this automatically into the system `DVSTAT` registers (`$02EA` - `$02ED`), you **must explicitly point your `DBUFLO` and `DBUFHI` pointers to `DVSTAT`**. If you leave `DBUFLO/HI` pointing to your previous payload (like a JSON path string), the OS SIOV will overwrite your payload with the 4 status bytes, and `DVSTAT` will remain completely un-updated (holding garbage from previous commands).
+> FujiNet replies with exactly 4 bytes (`NDeviceStatus`: `avail` u16 low/high, `connected`, `error`). Point `DBUFLO`/`DBUFHI` at `DVSTAT` (`$02EA`-`$02ED`), the buffer the OS expects for a status frame — the network STATUS handler fills it there. If you leave `DBUFLO/HI` aimed at your previous payload (a JSON path, say), the 4 status bytes are written over that payload.
 
 > [!WARNING]
 > **Gotcha #2: `DAUX1` / `DAUX2` in SIO Read (`$52`) dictates payload size**
@@ -699,11 +715,17 @@ After executing an SIO command via `SIOV` (`$E459`), `DSTATS` will contain the S
 
 | Code | Hex | Description |
 |:---:|:---:|---|
-| **1** | `$01` | **SUCCESS** - Command completed successfully |
-| **138** | `$8A` | **TIMEOUT** - Device timed out (no response on the bus) |
-| **139** | `$8B` | **NAK** - Device NAK (the frame was refused by the peripheral) |
-| **143** | `$8F` | **BAD FRAME** - Checksum mismatch |
-| **144** | `$90` | **DEVICE ERROR** - FujiNet signaled a device error. You must issue a Network `STATUS` (`$53`) command to read the extended error code. |
+| **1** | `$01` | **SUCCESS** - Operation completed |
+| **136** | `$88` | **EOFERR** - End of file |
+| **138** | `$8A` | **TIMOUT** - Peripheral device timeout (no response on the bus) |
+| **139** | `$8B` | **DNACK** - Device does not acknowledge the command |
+| **140** | `$8C` | **FRMERR** - Serial bus framing error |
+| **142** | `$8E` | **OVRRUN** - Serial bus data overrun |
+| **143** | `$8F` | **CHKERR** - Serial bus checksum error |
+| **144** | `$90` | **DERROR** - General device failure. On FujiNet, issue a Network `STATUS` (`$53`) command to read the extended error code. |
+| **146** | `$92` | **FNCNOT** - Function not implemented in handler |
+
+Names follow the Atari OS error table (see cc65 `libsrc/atari/oserror.s`).
 
 ### FujiNet Extended Device-Status Error Codes
 When `DSTATS` returns `144` (or `PEEK(749)` / `DVSTAT+3` under NDEV), query the channel status and read byte 3 of the status payload to get the exact error code:

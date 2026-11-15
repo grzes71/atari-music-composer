@@ -5,8 +5,9 @@
 ```
  BLK N[one] X                    - block without headers, program counter set to X
 
- BLK D[os] X                     - DOS block with $FFFF header or without header if the
-                                   previous one is the same, program counter set to X
+ BLK D[os] X                     - DOS block, program counter set to X; with OPT H+ writes a
+                                   $FFFF segment header only for the first block - later blocks
+                                   emit just the start/end address pair; contiguous blocks merge
 
  BLK S[parta] X                  - block with fixed loading addresses and $FFFA header,
                                    program counter set to X

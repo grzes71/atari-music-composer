@@ -1,13 +1,15 @@
 # GTIA Graphics Chip
 
-Router for GTIA registers, colour modes, player/missile graphics, and collisions.
+Router for GTIA/CTIA registers, colour interpretation, player/missile graphics,
+priority, and collisions.
 
 Load only the focused file that matches the task.
 
-- [overview.md](gtia/overview.md) - Quick-lookup
-- [registers-colors.md](gtia/registers-colors.md) - §4.1  Register Map (3 mirrored copies $D000–$D00F / $D010–$D01F / $D080–$D08F)
-- [gtia-modes.md](gtia/gtia-modes.md) - §4.5  Advanced / Exotic GTIA Modes
-- [player-missile.md](gtia/player-missile.md) - §4.6  Player / Missile Graphics (P/M Graphics)
-- [collisions.md](gtia/collisions.md) - §4.8  Collision Detection
+- [overview.md](gtia/overview.md) - Quick lookup
+- [registers-colors.md](gtia/registers-colors.md) - Register map at `$D000-$D01F`, shadows, colour/luminance model
+- [gtia-modes.md](gtia/gtia-modes.md) - `PRIOR` bits 6-7 and GTIA 9/10/11 behaviour
+- [player-missile.md](gtia/player-missile.md) - PMG memory, DMA/GRACTL enable, sizes, priority, and `VDELAY`
+- [collisions.md](gtia/collisions.md) - Collision latches and `HITCLR`
 
-For HIP/RIP/TIP/GTIA 9++ implementation recipes, also use `../graphics/advanced-fx.md`.
+For HIP/RIP/TIP and other scene-picture techniques built on top of GTIA modes,
+also use `..\graphics\advanced-fx.md`.

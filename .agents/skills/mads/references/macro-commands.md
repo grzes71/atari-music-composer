@@ -71,7 +71,7 @@ If the jump is short (range -128..+127), **MADS** will use a short jump: `BEQ`, 
 <a name="add"></a>
 ### ADD, SUB
 
-The above macro commands perform an increment/decrement of a memory byte respectively, without saving the result (the result remains in the *CPU* accumulator).
+The above macro commands add/subtract from the *CPU* accumulator without including the carry flag (the result remains in the accumulator).
 
 ```
   ADD -> CLC         SUB -> SEC

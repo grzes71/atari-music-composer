@@ -22,9 +22,9 @@ Don't rasterize faces pointing away from the camera.
   failing it are dropped **before** you rotate and project their vertices:
 
 ```asm
-@face   ldy nx,x : lda VX,y : sta d      ; viewX * nx
-        ldy ny,x : lda VY,y : clc : adc d : sta d
-        ldy nz,x : lda VZ,y : clc : adc d
+@face   ldy nx,x \ lda VX,y \ sta d      ; viewX * nx
+        ldy ny,x \ lda VY,y \ clc \ adc d \ sta d
+        ldy nz,x \ lda VZ,y \ clc \ adc d
         bmi @hide            ; dot < 0 -> facing away, skip entirely
         ; (optional) also reject if too deep for a distance cull
         ...record as visible...
@@ -47,7 +47,7 @@ with zero comparisons:
         ; scatter: bucket = depth >> k. Here >>3 of a 0..255 depth gives
         ; 32 buckets; shift more for fewer, coarser buckets.
 @fill   lda depth,x
-        lsr : lsr : lsr
+        lsr \ lsr \ lsr
         tay
         lda bkt_head,y       ; push onto a linked list per bucket
         sta link,x

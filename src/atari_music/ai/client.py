@@ -35,6 +35,7 @@ from atari_music.api import MusicGenerationMetadata, MusicGenerationResult
 from atari_music.composer_v4 import ComposerV4QualityReport
 from atari_music.ir import calculate_ir_binary_size, compile_ir_to_pokey_frames
 from atari_music.mads_exporter import export_mads_asm
+from atari_music.xex_layout import XexLayoutError, validate_xex_layout
 
 
 def load_composition_json(source: Union[str, Path, Dict[str, Any]]) -> AICompositionDoc:
@@ -513,6 +514,60 @@ def request_ai_composition(
 
 
 
+def _numeric_address(value: Any) -> Optional[int]:
+    """The integer form of a player/music address, or ``None`` when it is not parseable.
+
+    Addresses arrive here as either an ``int`` or a string the CLI already accepted in
+    ``$XXXX``/``0xXXXX``/decimal form. The value is only used to label segments in error
+    messages, so an unparseable one degrades to "no label" rather than failing a build.
+    """
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    text = str(value).strip()
+    try:
+        if text.startswith("$"):
+            return int(text[1:], 16)
+        if text.lower().startswith("0x"):
+            return int(text, 16)
+        return int(text, 10)
+    except ValueError:
+        return None
+
+
+def _validate_built_xex(
+    path: Path,
+    mads_exe: Path,
+    player_asm_path: Path,
+    player_address: Union[str, int],
+    music_address: Optional[Union[str, int]],
+) -> None:
+    """Judge a freshly assembled XEX: where its segments land, then the player's own size.
+
+    Two rules, and no others. The file's *size* is not examined: the 2048-byte limit applies
+    to the assembled player, not to the complete executable (``HISTORY.md``, 2026-10-09).
+
+    On failure the binary is removed, so a build that cannot be loaded leaves no artefact
+    that looks runnable — the same contract as a failed assembly, which writes nothing.
+    The generated ``.asm`` beside it is kept, because it is what makes the failure debuggable.
+    """
+    from atari_music import stage15
+
+    try:
+        validate_xex_layout(
+            path.read_bytes(),
+            player_address=_numeric_address(player_address),
+            music_address=_numeric_address(music_address),
+        )
+        player_bytes = stage15.measure_player_size(player_asm_path, mads_exe)
+        if player_bytes is not None:
+            stage15.check_player_size(player_bytes)
+    except (XexLayoutError, stage15.PlayerSizeError):
+        path.unlink(missing_ok=True)
+        raise
+
+
 def build_xex_from_composition(
     composition: Union[AICompositionDoc, Dict[str, Any], str, Path],
     output_path: Union[str, Path] = "output.xex",
@@ -522,6 +577,7 @@ def build_xex_from_composition(
     mads_bin: Optional[Union[str, Path]] = None,
     player_asm: Optional[Union[str, Path]] = None,
     format: Optional[str] = None,
+    result_transform: Optional[Any] = None,
     **kwargs: Any,
 ) -> Path:
     """Compile an AI composition directly into an executable Atari XEX file via MADS.
@@ -545,6 +601,12 @@ def build_xex_from_composition(
         repository root, and package directory.
     format : Optional[str]
         Optional explicit format: 'json' or 'dsl'.
+    result_transform : Optional[callable], default=None
+        Optional ``transform(result, composition) -> result`` hook applied to the
+        compiled result before the assembly is exported. Whatever it returns is what
+        both the WAV preview and the XEX are built from, so a caller that rewrites
+        hardware realization (for example by attaching a POKEY sound profile) cannot
+        make the two outputs disagree. ``None`` leaves the pipeline untouched.
     Returns
     -------
     Path
@@ -577,6 +639,11 @@ def build_xex_from_composition(
         comp_doc = composition
 
     res = generate_music_from_composition(comp_doc)
+    if result_transform is not None:
+        # An optional, profile-agnostic hook on the compiled result. Whatever it returns
+        # is what both the WAV preview and the exported assembly are built from, so the
+        # two outputs cannot disagree about the hardware configuration.
+        res = result_transform(res, comp_doc)
     song_asm = export_mads_asm(res)
 
     out_p = Path(output_path)
@@ -1106,5 +1173,12 @@ def build_xex_from_composition(
         raise MusicCompositionError(
             f"MADS compilation failed (exit code {proc.returncode}):\nSTDOUT: {proc.stdout}\nSTDERR: {proc.stderr}"
         )
+
+    # The bytes exist now, so the layout can be judged for real: where every segment lands,
+    # and whether the player itself is still inside its own limit. Deliberately not the file
+    # size — the 2048-byte rule bounds the player, not the complete executable.
+    _validate_built_xex(
+        out_p, mads_exe, player_asm_path, player_address, music_address,
+    )
 
     return out_p

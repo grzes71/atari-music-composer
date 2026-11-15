@@ -3,93 +3,114 @@
 ## 13.4 Labels and Scope
 
 ```asm
-global_label:             ; global by default
+global_label              ; global by default (column 1)
 .local local_area
-  local_label:            ; local to local_area
-  ?temporary:             ; temporary (OPT ?- implicit); auto-cleared each pass
+local_label               ; local to local_area (column 1!)
+?temporary                ; temporary: value may be redefined at any time
 .endl
+```
 
-; Self-modifying label
-        lda  label:#$40     ; assembles as LDA immediate $40,
-                            ; but linker form keeps label as data in-situ*
-        ; generally only writes T2 instruction reads
-.UNDEF  macro_name         ; removes single-line macro definition
+- Temporary labels (`?name`) can be reassigned anywhere, including with `+= -= ++ --`; `OPT ?+` turns `?name` into MAE-style *local* labels instead. Reach a label from an outer scope with a leading colon (`lda :label5`).
+- `.LOCAL name` / `.ENDL` (alias `.LEND`) opens a scoped area; fields are addressed as `area.field` and `.USING area,field` imports one.
+- Self-modifying labels: a label attached with `:` defines the label at the operand address, so the operand itself is the patch point.
+
+```asm
+        lda  label:#$40     ; LDA #$40      (label equ *-1)
+        lda  src:$ff00,y    ; LDA $ff00,y   (src equ *-2)
+        lda  temp::#$00     ; global-scope self-modification label (MADS 2.1+)
 ```
 
 ---
 
 ## 13.5 Macros (.MACRO/.ENDM)
 
-Up to 9 positional parameters. Anonymous forwarded labels `@+[1..9]` / `@-[1..9]` for forward/backward branching within macros.
+```
+name .MACRO [arg1,arg2,...] ['separator'] ["separator"]
+     .MACRO name [(arg1,arg2,...)]
+:1 :2 ... :argname        ; parameters, ":0"/"%%0" = number of parameters
+.EXITM [.EXIT]            ; leave the macro body
+.ENDM [.MEND]
+```
+
+- The parameter count is limited only by memory — there is no 9-parameter cap; parameters not passed come back as `-1` (`:0` reports how many were given).
+- `['x']` declares the argument separator, `["x"]` additionally splits each argument into addressing mode + value.
+- Anonymous labels inside a macro: `@+[0..9]` forward, `@-[0..9]` backward; without a number the occurrence is `0`.
+- Every label defined in a macro is local (`LOOP::1` in the `.LAB` file). `.END` cannot close a macro.
+- `name .DEFINE expr` (alias `.DEF`) creates a single-line macro whose expansion is used wherever the name appears; `.UNDEF name` disables such a definition again (any other name produces *Undeclared macro*).
 
 ```asm
-.macro  draw_bar  color,  xpos,  width
-        lda   #:color
-        sta   COLPM0
-        ldy   #:xpos
-        mva   #:width bar_len
-@bar    sta   (ptr),y
+.macro draw_bar color,xpos        ; arguments separated by ',' or space
+        lda #:color               ; :color == :1
+        sta COLPM0
+        ldy #:xpos
+@       sta (ptr),y               ; anonymous label starts in column 1
         iny
-        dec   bar_len
-        bne   @+              ; loop (auto uses @+1 backward)
+        bne @-                    ; nearest '@' backwards
 .endm
 
-; Anonymous forward label
-@      lda  bar_length,x
-       bne  @-              ; @- loops back to nearest @
-
-; Invocation:
-; @BAR on forward (0-based relative to last @)
+        draw_bar 3,7              ; invocation
 ```
 
 ### Macro commands (built-in pseudo-ops)
 
 | Macro command | Expansion semantics |
 |---------------|-------------------|
-| `MVA src, dst` | `LDA src / STA dst` — mov A-destination |
-| `MWA src, dst` | `LDA src+1 / STA dst+1; LDA src / STA dst` — word move |
-| `ADW ptr, val` | `CLC / LDA val / ADC ptr / STA ptr; LDA val+1 / ADC ptr+1 / STA ptr+1` |
-| `SBW ptr, val` | `SEC / LDA ptr / SBC val / STA ptr` (high byte borrow cleared) |
-| `INW / DEW` | 16-bit inc/dec on ZP word |
-| `MVX / MVY` | Move X-register or Y-register directly |
-| `ADW ptr,ptr2,result` | ptr+ptr2 → result |
+| `MVA src,dst` | `LDA src / STA dst` (byte through A); `MVX`/`MVY` use X/Y |
+| `MWA src,dst` | `LDA src / STA dst / LDA src+1 / STA dst+1` — low byte first; `MWX`/`MWY` use X/Y |
+| `ADW a,b,c` | `CLC / LDA a / ADC b / STA c / LDA a+1 / ADC b+1 / STA c+1`; `ADW dst,#v` and `ADW dst,#v,dst` optimise a byte-sized `v` to `BCC/INC` |
+| `SBW a,b,c` | `SEC / LDA a / SBC b / STA c / LDA a+1 / SBC b+1 / STA c+1` (byte-sized `b` optimises to `BCS/DEC`) |
+| `ADD/SUB`, `ADB/SBB` | add/subtract without / with store to memory |
+| `INW/DEW`, `INL/DEL`, `IND/DED` | increment/decrement a `.WORD`/`.LONG`/`.DWORD` in memory (the decrements clobber A) |
+| `CPB/CPW/CPL/CPD` | compare `.BYTE`/`.WORD`/`.LONG`/`.DWORD`, most significant byte first |
+| `PHR/PLR` | push/pull A, X and Y (`PHA/TXA/PHA/TYA/PHA`) |
+| `REQ..RVS`, `SEQ..SVS`, `JEQ..JVS` | branch to the previous instruction, the next instruction, or a full 64 KB target (`JNE dest` = `BEQ *+4 / JMP dest`) |
+
+`OPT R+` removes redundant loads/stores from consecutive `MVA/MVX/MVY/MWA/MWX/MWY` runs.
 
 ---
 
 ## 13.6 Procedures (.PROC/.ENDP)
 
-`.PROC` blocks localise scope; parameters pass via `.REG` or `.VAR`.
-
-```asm
-; .REG passes through CPU registers; .VAR allocates ZP scratch vars
-draw_line .PROC (.BYTE x0, y0, x1, y1) .REG
-    mva x0, current_x
-    mva y0, current_y
-    ; ...
-    @EXIT           ; early exit from procedure
-.endp
-
-; call:
-draw_line #10, #20, #100, #80
-@CALL draw_line
+```
+name .PROC [(.TYPE par1,par2 .TYPE par3 ...)] [.REG] [.VAR]
+.PROC name,address [(...)] [.REG] [.VAR]
+.ENDP [.PEND] [.END]
 ```
 
-Typed parameters: `.BYTE` /`.WORD` / `.LONG` / `.DWORD` can be declared. Multi-dimensional arrays pass via `.PROC`, optionally with `@PUSH`/`@PULL`.
+- Parameter types: `.BYTE` (8) and `.WORD` (16) are relocatable, `.LONG` (24) and `.DWORD` (32) are not; `.STRUCT` parameters are not supported.
+- `.REG` — parameter names must be built from the letters `A`, `X`, `Y` and at most three bytes can be passed. `.VAR` — the parameter names are the variables the arguments are stored in.
+- Without `.REG`/`.VAR` the procedure uses the software stack and needs the `@CALL`/`@PUSH` (both in `@CALL.MAC`), `@PULL` and `@EXIT` macros plus `@PROC_VARS_ADR`/`@STACK_ADDRESS`/`@STACK_POINTER` (defaults `$0500`, `$0600`, `$FE`). `@EXIT` runs automatically at `.ENDP` to fix the stack pointer — it is not an early-return instruction.
+- Arguments are passed as `#value`, a bare address, `@` (accumulator, `.BYTE` only, must be first) or `"label,x"`.
 
 ```asm
-.proc copy (.WORD src+1, dst+1) .var
-src   lda   $ffff
-dst   sta   $ffff
-       iny
-       bne   src
-       rts
+; .REG: parameter names must be A/X/Y
+draw_line .PROC (.byte x,y) .REG
+        stx current_x
+        sty current_y
+        rts
 .endp
 
-copy.ToDst #$a080, #$b000   ; explicit sub-proc call
-copy      #$a360            ; default call
+        draw_line #10,#20      ; register parameters
+
+; .VAR (per-variable storage) with software stack
+copy .PROC (.word src+1) .var
+ .proc ToDst (.word src+1,dst+1) .var    ; nested .PROC = extra entry point
+ .endp
+        ldy #0
+src     lda $ffff,y
+dst     sta $ffff,y
+        iny
+        bne src
+        rts
+.endp
+
+        copy.ToDst #$a080,#$b000   ; nested entry point
+        copy       #$a360          ; default entry point
 ```
 
-Nesting: `.PROC` blocks can be nested.
+Labels inside a `.PROC` are local but reachable from outside as `proc.label` (`lda test.pole`); a leading `:` addresses an outer or global label, and `.def :name = value` defines one. Unreferenced procedures are skipped with `-x` (checked with `-vu`).
+
+Nesting: `.PROC` blocks can be nested (this is how sub-procedure entry points such as `copy.ToDst` are created).
 ```
 .proc outer
     .proc inner

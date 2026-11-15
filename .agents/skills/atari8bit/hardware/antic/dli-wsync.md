@@ -2,22 +2,18 @@
 
 ## 3.6  DLI — Full Reference
 
-### Pre-Topic DLI Crash-Course (from playermissile.com)
-
-The NMI path: `$FFFA → OS NMI dispatcher → VDSLST user vector ($200/$201)`. OS NMI handler saves PSR (but not A/X/Y — user handler must save them).
+The NMI path is `NMI vector $FFFA/$FFFB → OS NMI dispatcher → VDSLST`
+(`$0200/$0201`) for a DLI, or the VBI vectors for vertical blank.
 
 ```
-NMIEN ($D40E)   : $40 = VBI enable, $80 = DLI enable
-NMIEN must be written by cycle 7 to ENABLE, cycle 8 to DISABLE.
-
-VDSLST          : set this BEFORE writing NMIEN bit 7 ($80)
-VDSLST+2 (=NMIRES): write $FF to clear DLI NMI flag (optional; not needed after boot)
-
-RTCLOK+2 ($14)   : increments once per VBI — use to gate VBI-rate work
-WSYNC ($D40A)   : write any value; CPU waits ≈cycle 105/114
+NMIEN ($D40E): $40 = VBI enable, $80 = DLI enable
+VDSLST      : set this BEFORE enabling DLI
+WSYNC ($D40A): write any value; CPU waits to the end of the current scan line
 ```
 
-**DLI can be shorter than a full scan line:** ANTIC fires DLI at the *beginning* of the last scan line of a DLI-tagged mode line. DLI routine should write hardware registers as soon as possible, preferably using WSYNC to land mid-HBLANK.
+**DLI timing:** a DLI triggers on the **last scan line** of a DLI-tagged blank
+or mode-line instruction. If you want clean changes at the next scan line,
+write `WSYNC` first and then the hardware registers.
 
 ### Required DLI Boilerplate
 
@@ -28,7 +24,7 @@ WSYNC ($D40A)   : write any value; CPU waits ≈cycle 105/114
         lda #>my_dli_handler
         sta VDSLST+1
 
-        lda #$C0            ; VBI+DLI enabled
+        lda #$C0            ; VBI + DLI enabled
         sta NMIEN
 
 my_dli_handler
@@ -39,11 +35,9 @@ my_dli_handler
         pha                 ; save Y
 
         ; --- critical register writes go here ---
-        ; Use WSYNC to hit horizontal blank before writing color/P/M regs
-        sta WSYNC
-        lda #$0C            ; example: COLPF0 = teal
+        sta WSYNC           ; align to the next scan line
+        lda #$0C
         sta COLPF0          ; $D016 — GTIA hardware register
-        sta WSYNC           ; optional: land on next scan line for color change
         lda #$62
         sta COLPF1          ; $D017
 
@@ -53,61 +47,74 @@ my_dli_handler
         pla
         tax
         pla
-        rti                 ; restores P register (I flag etc.)
+        rti
 ```
 
-**10-cycle rule:** On the very first scan line of a Mode 4 mode line (with DLI), only ~10 CPU cycles are available *before* ANTIC's playfield DMA starts. Avoid WSYNC-only colour DLI here. Use the scan line *after* the label as the DLI target, or check VSCROL>0.
+### Hardware vs. shadow registers
 
-### DLI timing window (OS handler vs bare-metal)
+Write **hardware** registers inside a DLI. Page-2 shadow registers are copied
+back to hardware only during VBI.
 
-| Method | Handler entry (OS) | Handler entry (bare-metal) |
-|---|---|---|
-| OS via VDSLST | Cycle 28–36 | — |
-| Direct vector (no OS) | — | Cycle 17 |
+| Shadow | Hardware |
+|---|---|
+| `GPRIOR` `$026F` | `PRIOR` `$D01B` |
+| `PCOLR0` `$02C0` | `COLPM0` `$D012` |
+| `PCOLR1` `$02C1` | `COLPM1` `$D013` |
+| `PCOLR2` `$02C2` | `COLPM2` `$D014` |
+| `PCOLR3` `$02C3` | `COLPM3` `$D015` |
+| `COLOR0` `$02C4` | `COLPF0` `$D016` |
+| `COLOR1` `$02C5` | `COLPF1` `$D017` |
+| `COLOR2` `$02C6` | `COLPF2` `$D018` |
+| `COLOR3` `$02C7` | `COLPF3` `$D019` |
+| `COLOR4` `$02C8` | `COLBK` `$D01A` |
+| `CHACT` `$02F3` | `CHACTL` `$D401` |
+| `CHBAS` `$02F4` | `CHBASE` `$D409` |
 
-OS path adds 11 cycles (BIT NMIST / BPL not-taken / JMP(VDSLST)) before your handler executes; plus refresh DMA → entry at cycle 28–36 instead of cycle 17.
+### Simple chained DLI pattern
 
-### Hardware vs Shadow registers — DLI gotcha
-
-Shadow registers (page 2, e.g. `COLOR0=$2C4`) are **VBI-updated back to hardware**. Changes to shadow regs during DLI do **not** propagate to hardware until VBI. For immediate visual effect in a DLI, write to **hardware registers** `$D016` not `$2C4`.
-
-```
-Shadow → Hardware mapping during DLI:
-  GPRIOR  ($022E) → PRIOR   ($D01B) must use PRIOR hardware directly
-  PCOLR0  ($02C0) → COLPM0  ($D012) — use $D012
-  PCOLR1  ($02C1) → COLPM1  ($D013)
-  PCOLR2  ($02C2) → COLPM2  ($D014)
-  PCOLR3  ($02C3) → COLPM3  ($D015)
-  COLOR0  ($02C4) → COLPF0  ($D016)
-  COLOR1  ($02C5) → COLPF1  ($D017)
-  COLOR2  ($02C6) → COLPF2  ($D018)
-  COLOR3  ($02C7) → COLPF3  ($D019)
-  COLOR4  ($02C8) → COLBK   ($D01A)
-  CHACT   ($02F1) → CHACTL  ($D401)
-  CHBAS   ($02F4) → CHBASE  ($D409)
-```
-
-### DLI for colour-change per scan line (marching rainbow)
+Use either a VBI to reset `VDSLST` each frame, or have each DLI point `VDSLST`
+at the next routine.
 
 ```asm
-        ; marching rainbow: COLPF0 increments each scan line
-        ; phantom DLI on blank line ($F0 instruction): DLI fires EMPTY line
-rainbow_dli
+dli1
         pha
         txa
         pha
         tya
         pha
-        inc start_color       ; update colour in-place for next DLI
-        bne ?skip
-        inc start_color+1
-?skip   lda start_color
-        sta COLPF0            ; $D016
-        ; WSYNC is not needed here — already at scan-line boundary
-        ; but WSYNC ensures no mid-scanline colour-bleed
+
+        lda #<dli2
+        sta VDSLST
+        lda #>dli2
+        sta VDSLST+1
+
         sta WSYNC
-        lda start_color+1
-        sta COLPF0+1          ; or make start_color a single-byte counter
+        lda #$34
+        sta COLPF0
+
+        pla
+        tay
+        pla
+        tax
+        pla
+        rti
+
+dli2
+        pha
+        txa
+        pha
+        tya
+        pha
+
+        lda #<dli1
+        sta VDSLST
+        lda #>dli1
+        sta VDSLST+1
+
+        sta WSYNC
+        lda #$88
+        sta COLPF0
+
         pla
         tay
         pla
@@ -116,97 +123,85 @@ rainbow_dli
         rti
 ```
 
-`start_color` updated once by VBI on DLI exit (or update directly in DLI with one-byte `INC` as shown).
-
----
-
 ## 3.7  WSYNC — Exact Timing
 
-Write to `$D40A` halts the CPU until the end of the current scan line (~cycle 105 of 114). CPU resumes at cycle 104-style — the instruction *already* at cycle 105.
+Writing to `WSYNC` halts the CPU until the end of the current scan line. The
+next CPU access happens at the start of the following scan line.
 
-**Three variance sources:**
+Practical rules:
 
-1. **Playfield DMA at cycle 105:** wide/normal + hscroll → CPU restart delayed +1  
-2. **Refresh DMA at cycle 105/106:** first scan line of a character mode → further +1/+2  
-3. **DMA blocked write cycle:** if *immediately-after* WSYNC is blocked → instruction starts over
-
-Variance: up to **3 extra cycles** after WSYNC on a heavily-dma'd line. For cycle-exact DLI timing, write WSYNC twice during VBLANK to calibrate.
-
-```asm
-        ; Safe way to calibrate cycle count: do this in VBI
-        sta WSYNC             ; waits to end of current scan line
-        sta WSYNC             ; guarantees: we are at scan-line 0
-```
-
-**Writes to WSYNC also delay IRQ acknowledgment** — the CPU can't enter an ISR until the WSYNC delay expires. If DLIs are active, use VCOUNT polling as an alternative.
-
----
+1. Put `WSYNC` **early** in the DLI if the visible register writes must land on
+   the next scan line.
+2. Do not assume one magic resume cycle for every video mode: DMA load and playfield
+   width affect how much useful time remains afterward.
+3. **Budget the phase, not the line.** `114` cycles is the *length of the scan line*,
+   not your CPU time. ANTIC steals 9 (refresh) + 5 (PMG) + 1..3 (DL fetch) + 0..48
+   (playfield) bytes out of it, and the handler only gets the remainder of its own
+   trigger scanline. Keep a single DLI phase at **<= ~55 CPU cycles** while playfield
+   + PMG DMA are active (see §3.9 and `dma-timing.md`).
+4. If a split is extremely cycle-sensitive, verify it on hardware or Altirra.
 
 ## 3.8  DLI Positioning — Multiple DLIs on Screen
 
-### DLI chaining (VDSLST pointer swap)
+- Put the DLI bit on the mode line or blank instruction whose **last scan line**
+  should trigger the interrupt.
+- Reset `VDSLST` from VBI if you want the chain to restart cleanly every frame.
+- Use blank-line DLIs when you want setup time before a visible band begins.
 
-```asm
-        ; VBI sets up page-aligned DLI chain
-        ; Page-aligned DLI = 6-cycle savings vs full 16-bit pointer reload
+## 3.9  DLI Pre-triggering & WSYNC Counting in Multi-Scanline Modes
 
-dli1    *= $2000    ; DLI subroutines must be page-aligned
-        pha
-        txa
-        pha
-        tya
-        pha
-        ; byte 0 corresponds to scan-line-relative DLI body
-        nop
-        nop
+In multi-scanline modes (e.g. ANTIC Mode D = 2 scanlines/line, Mode 4/5 = 4 scanlines/line, Mode 2/3 = 8 scanlines/line), preparing hardware registers (such as PMG sizes, positions, priorities) before a time-critical scanline kernel often requires pre-triggering the DLI $N$ mode lines earlier.
 
-dli2    *= $2100    ; next DLI at next page
+### Scanline Accounting Rule
 
-; VBI installs:
-        lda #<dli1
-        sta VDSLST
-        lda #>dli1
-        sta VDSLST+1
-```
+Because a DLI always triggers at cycle ~22 of the **last scanline** of the tagged display list instruction:
+1. The CPU enters the DLI handler on that last scanline. The remainder of that line is
+   ~85 **CPU slots** (114 - ~22 trigger offset - ~7 NMI entry) - these are *slots*,
+   **not usable CPU cycles**: ANTIC keeps stealing bus cycles for refresh, PMG and
+   playfield DMA, and the handler only gets what is left of its own trigger scanline.
+2. Usable CPU cycles in that scanline = `114 - (9 refresh + 5 PMG + 1..3 DL fetch + 0..48 playfield)`, minus the ~29 slots spent before the handler starts.
+3. The remaining scanlines before the start of the target mode line $2L$ equal:
+   $$\text{Scanlines to wait} = 1 \text{ (remainder of trigger line)} + (N - 1) \times \text{ScanlinesPerModeLine}$$
 
-### Moving DLI positions dynamically
+#### Per-scanline CPU budget (DMA-aware)
 
-```asm
-; Change DLI position mid-frame: modify DLI bit in the display-list byte
-; dl_byte = absolute address of a display-list instruction in the scrolling region
-move_dli_down
-        ; scan_line → dl_byte offset lookup table
-        lda scan_line
-        tax
-        lda dli_lookup_low,x
-        sta dli_byte_pointer
-        lda dli_lookup_high,x
-        sta dli_byte_pointer+1
+| Scanline the phase runs on | Typical stolen bytes | Usable CPU cycles (PAL, 114/line) |
+|---|---|---|
+| Mode-line first scanline (playfield fetch, PMG on) | 9 + 5 + 40 + 3 = 57 | ~57 |
+| Mode-line repeat scanline (no playfield re-fetch, PMG on) | 9 + 5 = 14 | ~100, ~70 after the DLI entry offset |
+| Blank line with PMG DMA off | 9 + 3 = 12 | ~102 |
 
-        ldy #0
-        lda (dli_byte_pointer),y   ; read display list byte
-        ora #$80                    ; set DLI bit
-        sta (dli_byte_pointer),y
-        rts
-```
+**Measured evidence** (Mode D 160x96, normal width, `SDMCTL = $3E`, PAL, 114 cycles/line):
 
----
+| DLI phase | Length | Result |
+|---|---|---|
+| Setup phase on the pre-pas scanline | 55 cycles | aligned, no artifacts |
+| Same phase grown to 79 cycles | 79 cycles | **kernel slipped one scanline** - every platform colour profile appeared one line late (stale enemy/secret colour on the first scanline, `sl0` + `sl1` black pair at the top) |
+| Pas scanline colour/position commit | 48 -> 52 cycles | fits |
 
-## 3.10  GTIA 9++ — Kernel DLI (Mode E Fine Vertically Scrolled)
+**Rule of thumb:** with playfield + PMG DMA active keep a single DLI phase at
+**<= ~55 CPU cycles**, and never size a phase from the "~85 cycles" figure above.
+If a phase needs more, split it onto a DMA-lighter scanline (blank line, repeat
+scanline) or pre-trigger the DLI one mode line earlier ($N+1$ = one extra scanline
+of setup room). Exact budgets depend on mode, width, scrolling and PMG settings -
+verify cycle-sensitive splits on hardware or Altirra (see `dma-timing.md`).
 
-Concept: VSCROL = 3 at *end* of mode-line (reducing height), VSCROL = 13 at start of next, forces the row-counter to loop 3→15, repeating every row → each scan line = 4 pixels tall. This creates GTIA 9++ with Mode-E pixel density but drastically reduced DMA.
+### Mandatory `STA WSYNC` Sequence
 
-```asm
-        ; DLI kernel executing through all 192 line-by-line GTIA Mode E lines:
-        lda #$03       ; VSCROL = 3 at end of line
-        sta VSCROL
-        sta WSYNC      ; end this scan line at row 3
-        lda #$0D       ; VSCROL = 13 next — loops row-counter from 3→15
-        sta VSCROL
-        sta WSYNC
-        ; … repeat per scan-line DLI
-```
-
-Caution: at scan line 95 of a 192-line Mode E kernel, the new mid-screen LMS instruction's timing interacts with the VSCROL boundary. Adjust VSCROL write interval at scan line 95 or use a `STA VSCROL` post-LMS at the boundary.
-
----
+To land cycle-accurately on cycle 0 of scanline 0 of target mode line $2L$:
+- **Mode D (2 scanlines/line) with $N=1$ line pre-trigger:**
+  - Remaining: 1 scanline (the trigger line's last scanline).
+  - Requires **1x `STA WSYNC`**.
+- **Mode D (2 scanlines/line) with $N=2$ lines pre-trigger (e.g., line $2L-2$):**
+  - Remaining: 1 scanline (line $2L-2$, scanline 1) + 2 scanlines (line $2L-1$, scanlines 0 and 1) = **3 scanlines**.
+  - Requires **3x `STA WSYNC`**:
+    ```asm
+    sta WSYNC   ; 1st: halts to end of trigger line (2L-2, scanline 1)
+    sta WSYNC   ; 2nd: halts to end of pre-line (2L-1, scanline 0)
+    sta WSYNC   ; 3rd: halts to end of pre-line (2L-1, scanline 1)
+    ; CPU resumes at cycle 0 of scanline 2L (start of active band)!
+    ```
+- **Gotcha:** Using $N$ WSYNCs instead of calculating scanlines (e.g., 2 WSYNCs for $N=2$ mode lines) causes the kernel to start **1 scanline early** (on line $2L-1$ scanline 1) and exit **1 scanline early** (affecting the last scanline of the active zone).
+- **Gotcha (phase overrun):** if the code before the first `STA WSYNC` exceeds the usable cycles of the trigger scanline, that `WSYNC` lands in the *next* scanline and every following `WSYNC` shifts with it - the whole kernel runs one scanline late. Symptom: per-scanline colour profiles appear shifted down by one line (the first scanline shows the previous zone's stale colour, `sl0` shows up on the second scanline).
+- **Rule (late commit):** the *last* pre-band scanline is the only place from which an `HPOSP`/`SIZEP`/`SIZEM` commit becomes active exactly on the band's first scanline (see `../../gtia/player-missile.md`, "When a PMG Register Write Takes Effect"). Anything that must still show the *old* value on the scanlines just above the band has to be committed after those scanlines - i.e. in that last pre-line scanline, not on the trigger line.
+- **Per-phase budgeting:** when one DLI does several unrelated jobs (band/row state, colour profiles, per-zone entities), split them across the `WSYNC`s and keep **each** phase under the DMA-aware budget. A phase may also be deliberately short, letting a `WSYNC` pad it, rather than packing in work that belongs to a later scanline - fewer cycles is not the goal, correct scanline ownership is.

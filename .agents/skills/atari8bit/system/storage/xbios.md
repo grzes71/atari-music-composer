@@ -2,43 +2,50 @@
 
 ## §7.7  xBIOS — Mini-OS File Access
 
-xBIOS is a compact disk I/O layer that can run from low memory and provides file read/write without the full DOS overhead.
+xBIOS is a small resident I/O module that loads and saves files without a DOS. Its loader reads a configuration (including the `XAUTORUN` file) from disk, the module normally lives at `$0800`, and it is called through a vector table — `OPEN_FILE`, `LOAD_DATA`, `WRITE_DATA`, `LOAD_BINARY_FILE`, `READ_SECTOR`, directory entry calls, and so on at `$0800+$03`, `$0800+$06`, `$0800+$09`, ….
 
-**What xBIOS provides:** open, read, write, seek, and file-size query through SIO-compatible structures. It is useful for compact loaders and games that need file access without keeping a full DOS resident.
+**What xBIOS provides:** open, load, read/write bytes, seek (file offset), sector reads and directory scanning. It keeps its own DCB-like variables (`xDEVICE`, `xDCMD`, `xDAUX1/2`, buffer pointer) inside its memory area and drives the standard SIO layer below.
 
-**DCB access for xBIOS:** identical to standard Atari 810 SIO DCB format: $09 command / $0A AUX1 / $0B AUX2; uses the same serial bus protocol as Atari DOS — xBIOS translates IECBUS calls to SIO internally by passing the DCB directly, then uses the OS handler sequence `SIOV` to call and poll.
+**Limitations:** it cannot create new files or directories, and cannot extend an existing file.
+
+**DCB layout for direct SIO access:** the DCB is fixed at `$0300` (not zero page); offsets from it are `$00` DDEVIC, `$01` DUNIT, `$02` DCOMND, `$03` DSTATS, `$04` DBUFLO/HI, `$06` DTIMLO, `$08` DBYTLO/HI, `$0A` DAUX1/2.
 
 ```asm
-                ; xBIOS-style DCB init for READ — file already on disk/drive_1_unit
-                ; dcb must be in zero page for rapid SIO access
+                ; standard DCB init for a sector READ
+dcb_dev     = $0300         ; DDEVIC — SIO device ID (e.g. $31 for drive 1)
+dcb_unit    = $0301         ; DUNIT  — drive number (1-8)
+dcb_cmd     = $0302         ; DCOMND — $52 = read sector
+dcb_stats   = $0303         ; DSTATS — $40 = read into buffer, $80 = write
+dcb_buf     = $0304         ; DBUFLO/DBUFHI — buffer address
+dcb_tim     = $0306         ; DTIMLO — timeout
+dcb_len     = $0308         ; DBYTLO/DBYTHI — byte count
+dcb_aux     = $030a         ; DAUX1/DAUX2 — sector number
 
-dcb_dev     = $00           ; device ID (e.g. $31 for drive-1)
-dcb_cmd     = $02           ; $52 = read record
-dcb_aux1    = $03           ; buffer address low
-dcb_aux2    = $04           ; buffer address high
-dcb_buf_lo  = $05           ; buffer page-lo (page aligned preferred)
-dcb_buf_hi  = $06           ; buffer page-hi
-dcb_len     = $09           ; buffer length (2-byte)
-
-init_xbios_read
-        lda #$31               ; DDEVIC = drive 1, SIO device
+        lda #$31               ; DDEVIC = drive 1
         sta dcb_dev
-        lda #$52               ; DCMD = $52 (read-sector / get-verify record)
+        lda #1
+        sta dcb_unit
+        lda #$52               ; DCOMND = $52 (read sector)
         sta dcb_cmd
-        lda #<read_buffer
-        sta dcb_aux1
-        lda #>read_buffer
-        sta dcb_aux2
+        lda #$40               ; DSTATS = transfer from device to computer
+        sta dcb_stats
+        mwa #read_buffer dcb_buf
+        lda #$80               ; DBYT = 128 bytes
+        sta dcb_len
+        lda #0
+        sta dcb_len+1
+        mwa #sector dcb_aux    ; DAUX1/2 = sector number
 
         jsr SIOV               ; $E459 — call SIO handler via OS vector
-        bcs ?error             ; carry = SIO error
+        cpy #$01               ; Y = status: $01 = success
+        bne ?error
         ; ... read_buffer now holds the sector
 ?error  rts
 
 ; read_buffer must be sector-aligned: 128 bytes for SD disks (Atari 810 format)
 ```
 
-**xBIOS vs native CIO:** CIO is the OS-level handler layer (`CIOV`); SIO is the serial-bus layer (`SIOV`). xBIOS bypasses standard DOS file handling and uses SIO-compatible access patterns with a smaller runtime API.
+**xBIOS vs native CIO:** CIO is the OS-level handler layer (`CIOV`); SIO is the serial-bus layer (`SIOV`). xBIOS bypasses standard DOS file handling and calls SIO through its own vectors and buffer variables.
 
 ---
 

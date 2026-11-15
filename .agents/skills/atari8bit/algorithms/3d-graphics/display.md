@@ -27,8 +27,9 @@ Pixel layout: 2 pixels per byte (high nibble = left, low = right).
 - **Mode 10** gives 9 colours (registers `PCOLR0..3`, `COLPF0..3`,
   `COLBK`). Load them as a **luminance/colour ramp** and pixel value 0..8
   is a shade; good when you want colour rather than a single hue.
-- **Mode 11** is 16 hues at one luminance — niche for 3D (hard to shade),
-  useful for colourful flat effects.
+- **Mode 11** is 16 values of one luminance spread across the hue range
+  (value 0 is the background) — niche for 3D (hard to shade), useful for
+  colourful flat effects.
 
 A byte is two pixels, so a fill writes two pixels at once; partial spans
 need nibble read-modify-write (`rasterizer.md`, fill strategy (b)).
@@ -38,28 +39,35 @@ need nibble read-modify-write (`rasterizer.md`, fill strategy (b)).
 GTIA-mode pixels are wide (a byte spans a chunk of the screen) but only
 **one scanline tall**, so they look squashed, and a full-height buffer is
 large and slow to fill. The fix: make each *data* line display for 2 or 4
-scanlines using ANTIC's vertical-scroll counter.
+scanlines.
 
-Enable VSCROL on the mode lines and, with a **DLI on each data line**,
-write the vertical-scroll register `VSCROL` ($D405) so ANTIC's line
-counter (DCTR) is primed to repeat the same row's DMA for N scanlines
-before advancing:
+Set the **VS** bit (`$20`) on the mode lines and re-write the vertical
+scroll register `VSCROL` ($D405) from a DLI. With VS set, a line begins
+displaying at scan line `VSCROL`; scrolling farther than the mode's
+scan-line height then re-displays the same row's data (ANTIC's documented
+"lines of repeated data" behaviour). For a mode F line (1 scan line) the row
+covers scan lines `VSCROL..15` then `0`, i.e. `17 − VSCROL` scanlines:
+`VSCROL=13` → 4, `VSCROL=15` → 2.
 
 ```asm
 DLI     pha
         sta WSYNC            ; align to horizontal blank
-        lda #VSCROL_A        ; e.g. 13  -> DCTR 13,14,15,0 = 4 scanlines
-        sta VSCROL
-        lda #VSCROL_B        ; e.g. 3   -> termination value for the row
-        sta VSCROL
+        lda #13              ; 17-13 = 4 scanlines of the same row
+        sta VSCROL           ; (15 -> 2 scanlines)
         pla
         rti
 ```
 
+Because the offset is applied when a row *starts*, it must be re-written for
+every repeated row — one `sta VSCROL` per data line, i.e. one DLI per data
+line (~29 cycles of handler body each, plus the interrupt entry). The exact
+values are timing-sensitive: check them on real hardware or a cycle-accurate
+emulator.
+
 Result: **square pixels** and, at 4 scanlines/pixel, **one quarter** of the
-data lines to fill (e.g. 48 data lines cover 192 scanlines). Cost is one
-DLI per data line (~28 cycles each). Choose 4 scanlines/pixel for maximum
-speed (fewer, chunkier pixels), 2 for more vertical resolution.
+data lines to fill (e.g. 48 data lines cover 192 scanlines). Choose 4
+scanlines/pixel for maximum speed (fewer, chunkier pixels), 2 for more
+vertical resolution.
 
 **Why:** it turns the fill area and buffer size problem into a small,
 square-pixel canvas, which is the single biggest reason these modes are
@@ -87,9 +95,12 @@ vertical blank. Two ways to swap:
   one Load-Memory-Scan operand; write its high byte to point at the other
   buffer. One store, no second display list. Best when the buffer fits
   without a 4 KB ANTIC boundary crossing.
-- **Keep two display lists** (one per buffer) and write `DLISTL/DLISTH`
-  ($D402/3) to switch. Costs a second display list but is trivial and
-  handles per-line-LMS layouts.
+- **Keep two display lists** (one per buffer) and point the display at the
+  other one. **With the OS VBI running, write the *shadow* `SDLSTL/SDLSTH`
+  ($0230/1)**, not `DLISTL/DLISTH` ($D402/3): the OS reloads the hardware
+  pointer from the shadow every VBI and would overwrite a direct write.
+  Costs a second display list but is trivial and handles per-line-LMS
+  layouts. (Writing `$D402/3` directly is only safe with the OS VBI off.)
 
 Synchronize the swap to the VBI so you never switch mid-frame:
 
@@ -154,11 +165,11 @@ at your handler:
 
 ```asm
         sei
-        lda #0   : sta NMIEN         ; silence NMIs while we set up
-        lda #$FE : sta PORTB         ; OS ROM + BASIC off -> RAM everywhere
-        lda #<myNMI : sta $FFFA      ; take the raw 6502 NMI vector
-        lda #>myNMI : sta $FFFB
-        lda #$C0 : sta NMIEN         ; enable DLI + VBI NMIs
+        lda #0   \ sta NMIEN         ; silence NMIs while we set up
+        lda #$FE \ sta PORTB         ; OS ROM + BASIC off -> RAM everywhere
+        lda #<myNMI \ sta $FFFA      ; take the raw 6502 NMI vector
+        lda #>myNMI \ sta $FFFB
+        lda #$C0 \ sta NMIEN         ; enable DLI + VBI NMIs
         jmp mainloop
 ```
 
@@ -193,11 +204,11 @@ entry when a frame counter passes `duration`:
 
 ```asm
         ldy #0
-        lda (script),y : cmp #$FF : beq @end   ; tag: end of script?
+        lda (script),y \ cmp #$FF \ beq @end   ; tag: end of script?
         ldy #1
-        lda (script),y : sta count
-        iny : lda (script),y : sta call+1      ; handler low
-        iny : lda (script),y : sta call+2      ; handler high
+        lda (script),y \ sta count
+        iny \ lda (script),y \ sta call+1      ; handler low
+        iny \ lda (script),y \ sta call+2      ; handler high
 call    jsr $0000                              ; operand self-modified above
 ```
 

@@ -4,28 +4,47 @@
 
 ### RMW on zero page
 
-`INC <addr>` and `DEC <addr>` are single-byte instructions on zero page that perform a read-modify-write cycle inside the chip. They honour the bit-7 wrap for `INC` and underflow for `DEC`:
+`INC <addr>` and `DEC <addr>` are single-operand instructions that read the byte,
+add or subtract one, and write it back. The value wraps modulo 256 (`INC $FF`
+gives `$00`, `DEC $00` gives `$FF`) and N/Z are set from the result:
 
 ```asm
 zp_inc  equ $80
 zp_dec  equ $81
 
-        inc   zp_inc          ; NZ flags set from result
-        dec   zp_dec          ; NZ flags set from result
+        inc   zp_inc          ; +1, NZ flags set from result
+        dec   zp_dec          ; -1, NZ flags set from result
 ```
 
-### INC / DEC on hardware registers — AUDCTL and NMIEN
+On the NMOS 6502 the write-back happens **twice**: the dummy modify cycle
+stores the unchanged value first, then the new value. On I/O registers that
+double write is why such tricks work — and why `INC`/`DEC` must never be used on
+a register whose write side effect is not intended.
 
-Writing to `AUDCTL ($D208)` with `INC` or `DEC` increments/decrements the high-frequency timer divisor. On `NMIEN ($D40E)`, `INC` pulls NMI masking bits into the DLI enable (DLI active high), and `DEC` turns them back off.
+### INC / DEC / LSR on NMIEN ($D40E)
 
-**INC NMIRES trick (quick-enable NMI):**
+`NMIEN` is write-only (`$80` = DLI enable, `$40` = VBI enable), and the read
+performed by a read-modify-write instruction returns `$FF` on real hardware. So
+the RMW result is derived from `$FF`, which gives three one-instruction ways to
+change the NMI mask:
 
-Writing any value to `NMIRES ($D40F)` immediately cause NMI to fire if it is not currently masked. Pairing `INC NMIRES` with the NMI/IRQ flip can save one cycle in the ISR for 400/800 event loop needs.
-
-**Practical INC/DEC patterns:**
 ```asm
-        inc   $d40e            ; unblock NMI/DLI
-        dec   $d40e            ; block NMI/DLI
+        inc   $d40e            ; writes $00 -> DLI and VBI disabled (block NMI)
+        dec   $d40e            ; writes $FE -> DLI enabled only
+        lsr   $d40e            ; writes $7F -> VBI enabled only
+```
+
+`INC $D40E` is the compact "block NMIs" idiom; `DEC $D40E` re-enables the DLI,
+and `LSR $D40E` enables only the VBI. These depend on the floating-bus read value
+and on the double write, so treat them as Atari-specific behaviour.
+
+Do not confuse this with `NMIRES ($D40F)`: writing any value there **clears** the
+latched NMI status bits (`NMIST`); it does not raise an NMI.
+
+**Practical patterns:**
+```asm
+        inc   $d40e            ; block DLI/VBI
+        dec   $d40e            ; allow DLI again
 ```
 
 ---

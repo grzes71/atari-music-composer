@@ -1,0 +1,240 @@
+{
+  "envelope": {
+    "attack_ms": 0.0,
+    "confidence": 0.55,
+    "decay_ms": 80.2234,
+    "frames": {
+      "attack": 0,
+      "decay": 4,
+      "release": null
+    },
+    "release_ms": null,
+    "shape": "tremolo",
+    "sustain_level": 1,
+    "sustain_ms": 20.0559
+  },
+  "gesture": {
+    "control_state": {
+      "base_code": "$8",
+      "changes": 0,
+      "codes": [
+        "$8"
+      ],
+      "frames_without_active_volume": 0,
+      "present": false,
+      "runs": [],
+      "unit": "audc_distortion_code"
+    },
+    "modulation": {
+      "definition": "repetition of the pitch and/or volume contour at a measurable rate",
+      "period_frames": null,
+      "periodic": false,
+      "pitch_change_rate_hz": 0.0,
+      "volume_change_rate_hz": 33.2405
+    },
+    "pitch": {
+      "audible_channel": 2,
+      "base_divider": 247,
+      "base_hz": 3491.0374,
+      "change_rate_hz": 0.0,
+      "companion_channel": 1,
+      "direction": "static",
+      "divider_bits": 16,
+      "divider_source": "combined_pair_divider",
+      "mode": "semitones_from_base",
+      "present": false,
+      "quantization": 0.01,
+      "quantization_semitones": 0.01,
+      "quantization_unit": "semitones_relative_to_base_hz",
+      "range_semitones": 0.0,
+      "register_round_trip": {
+        "exact": 6,
+        "frames": 6,
+        "max_divider_miss": 0
+      },
+      "runs": [],
+      "static": true,
+      "unit": "semitones_relative_to_base_hz"
+    },
+    "provenance": {
+      "channel": 2,
+      "end_frame": 35,
+      "frames": 6,
+      "is_representative_segment": true,
+      "role": "audible_channel_of_pair",
+      "segment_index": 4,
+      "song": "Red_Max.sap",
+      "start_frame": 30,
+      "subsong": 0
+    },
+    "resolution": {
+      "audctl_varied_in_span": false,
+      "cannot_express": [
+        "one sample per VBL frame: register writes between two frames are invisible",
+        "AUDCTL is not a gesture series; a span whose AUDCTL changes is flagged, not averaged",
+        "high-pass clocking is not modelled by the generator (existing replay limitation)",
+        "only the profile's own voice is described; other sounding channels are not",
+        "timbre (waveform, distortion family) stays in synthesis; the gesture only carries when it changes"
+      ],
+      "derived_from": "vbl_frame_trace",
+      "duration_ms": 120.3351,
+      "frame_period_ms": 20.0559,
+      "frames": 6,
+      "one_sample_per_frame": true,
+      "samples_per_second": 49.8607
+    },
+    "schema": "pokey-sound-archaeology/gesture/1",
+    "volume": {
+      "change_rate_hz": 33.2405,
+      "changes": 4,
+      "levels": 15,
+      "min_level": 1,
+      "peak_level": 5,
+      "present": true,
+      "runs": [
+        [
+          5,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "silent_frames": 0,
+      "static": false,
+      "unit": "audc_volume_level_0_15"
+    }
+  },
+  "metadata": {
+    "note": "no instrument or role name is assigned here: the archaeology stages established that an observed POKEY sound does not map one-to-one onto a conventional instrument",
+    "producer": {
+      "schema": "2.0",
+      "tool": "pokey-sound-archaeology",
+      "version": "0.1.0"
+    },
+    "source_label": "$8 / coupled16 / 1+2 / audible_ch2 / volume_low / pitch_static / attack_fast"
+  },
+  "pairing": {
+    "audible_channel": 2,
+    "channels": [
+      1,
+      2
+    ],
+    "companion_channel": 1,
+    "divider_bits": 16,
+    "mode": "coupled_pair",
+    "note": "both channels are programmed as one 16-bit divider; the companion carries the other byte and stays silent, so this is not two independent voices"
+  },
+  "pitch": {
+    "audf_range": {
+      "max": 247.0,
+      "min": 247.0
+    },
+    "base_divider": 247,
+    "base_hz": 3491.0374,
+    "behavior": "static",
+    "change_rate_hz": 0.0,
+    "direction_ratio": null,
+    "divider_bits": 16,
+    "divider_range": {
+      "max": 247,
+      "min": 247
+    },
+    "frequency_change_rate_hz": 0.0,
+    "frequency_hz": {
+      "center": 3491.037,
+      "max": null,
+      "min": null
+    },
+    "measured_on": "combined_divider",
+    "range_semitones": 0.0,
+    "reference_source": "gesture_base_hz",
+    "slope_semitones_per_second": 0.0
+  },
+  "playability": {
+    "gesture": {
+      "control_state": {
+        "available": false,
+        "enabled": false
+      },
+      "pitch": {
+        "available": false,
+        "enabled": false
+      },
+      "volume": {
+        "available": true,
+        "enabled": false
+      }
+    },
+    "note": "available means the profile carries that series; enabled is this artefact's default for a consumer that accepts it, not a requirement",
+    "note_relative_pitch": true,
+    "pitch_mode": "semitones_from_base"
+  },
+  "playable_fingerprint": "5ad5d7d4fe87fa56eb1e653f6011c73b6b0b94063afac24a5560d21ed3589870",
+  "pokey": {
+    "channels": {
+      "audible_channel": 2,
+      "audible_channel_role": "divider_msb",
+      "companion_channel": 1,
+      "companion_channel_role": "divider_lsb",
+      "divider_bits": 16,
+      "mode": "coupled_pair",
+      "pair": "1+2",
+      "requires_simultaneous_channels": true
+    },
+    "hardware": {
+      "audctl_mode": "$50",
+      "channel_role": "divider_msb",
+      "clock_base": "1.79MHz",
+      "clock_family": "joined16",
+      "clock_mode": "joined16:1+2:divider_msb:1.79MHz",
+      "coupling": "coupled:1+2",
+      "distortion": "$8",
+      "distortion_name": "poly9/17 direct (ungated noise)",
+      "uses_channel_coupling": true,
+      "waveform": "poly9_17_direct"
+    }
+  },
+  "profile_id": "pokey_ref_db7fe434",
+  "schema": "pokey-playable-sound-profile-1.0",
+  "scope": "PAIR",
+  "source_profile": {
+    "kind": "coupled",
+    "profile_fingerprint": "67da78e9a241ec048398d96f44e041e4fd71e1cf8aa4611b52d8e92d982100c3",
+    "profile_id": "pokey_ref_db7fe434",
+    "schema_version": "2.0"
+  },
+  "timing": {
+    "frame_period_ms": 20.055858,
+    "frame_rate_hz": 49.8607
+  },
+  "volume": {
+    "active_ratio": 1.0,
+    "audc_change_rate_hz": 33.2405,
+    "behavior": "modulated",
+    "change_rate_hz": 33.2405,
+    "dynamic_range": 4.0,
+    "level_distribution": {
+      "1": 0.3333,
+      "2": 0.1667,
+      "3": 0.1667,
+      "4": 0.1667,
+      "5": 0.1667
+    },
+    "mean_level": 2.6667,
+    "peak_level": 5
+  }
+}

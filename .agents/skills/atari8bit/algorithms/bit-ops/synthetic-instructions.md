@@ -2,7 +2,10 @@
 
 ## 11.7 Synthetic Instructions and Pseudo-Ops
 
-These are reusable instruction idioms from `articles/6502-synthetic-instr.md`. Turn them into MADS macros when used repeatedly, but keep the flag clobbers visible in timing-critical code.
+These are reusable instruction idioms from the MADS distribution's
+`examples/tips/6502_tips.txt` and `examples/tips/negate*.txt` notes. Turn them
+into MADS macros when used repeatedly, but keep the flag clobbers visible in
+timing-critical code.
 
 ### Negate and Reverse Subtract
 
@@ -28,7 +31,7 @@ If carry is known clear before negation, `EOR #$FF / ADC #1` also works.
 Generate the high byte for an 8-bit signed value in A:
 
 ```asm
-        asl   a             ; sign bit -> C
+        asl             ; sign bit -> C
         lda   #$00
         adc   #$ff          ; A=$00 if C=1, A=$ff if C=0
         eor   #$ff          ; A=$ff for negative, $00 for positive
@@ -54,11 +57,11 @@ carry, then EOR the same top-bit mask back into place.
 ```asm
 ; A = signed A / 2
         cmp   #$80          ; C = sign bit
-        ror   a
+        ror
 
 ; memory operand
         lda   value
-        asl   a             ; sign bit -> C
+        asl             ; sign bit -> C
         ror   value
 ```
 
@@ -84,28 +87,28 @@ For multi-byte signed values, shift low/intermediate bytes normally, then use
 ```asm
 ; 8-bit rotate left A
         cmp   #$80
-        rol   a
+        rol
 
 ; alternate rotate left
-        asl   a
+        asl
         adc   #0
 
 ; 8-bit rotate right A
         pha
-        lsr   a             ; bit0 -> C
+        lsr             ; bit0 -> C
         pla
-        ror   a
+        ror
 ```
 
 Nybble swap is two double-left rotates:
 
 ```asm
-        asl   a
+        asl
         adc   #$80
-        rol   a
-        asl   a
+        rol
+        asl
         adc   #$80
-        rol   a
+        rol
 ```
 
 ### 16-Bit Increment and Decrement
@@ -139,10 +142,10 @@ Use a 256-byte identity table when X or Y must be used as an operand without sto
 ### Carry, Overflow, and NZ Helpers
 
 ```asm
-; toggle carry, clobbers N/Z
-        rol   a
+; toggle carry, clobbers N/Z (4 bytes)
+        rol
         eor   #$01
-        ror   a
+        ror
 
 ; set V using BIT on any byte with bit6 set, e.g. RTS opcode $60
         bit   v_source
@@ -172,6 +175,11 @@ Unsigned inclusive range test, result in carry, A destroyed:
         sbc   #min
         sbc   #max-min+1
 ```
+
+The `C=1` form reports "in range" for `A = $FF` when `min = 0` and
+`max < $FF`, so add an explicit check if `min` can be zero (verified by
+exhaustive test). `min = 0, max = $FF` cannot be encoded this way at all because
+`#max-min+1` would be `$100`.
 
 ### Count Set Bits
 

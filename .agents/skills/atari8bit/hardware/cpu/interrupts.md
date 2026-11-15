@@ -4,14 +4,25 @@
 
 ### IRQ (maskable)
 
-- **Level triggered** — IRQ line must remain asserted; the 6502 responds when I-flag is clear.
+- **Level-sensitive** — the IRQ line must remain asserted until the CPU starts
+  the interrupt sequence and the source is cleared.
 - The IRQ must be **cleared at the device** before `CLI`, else IRQ handler re-enters immediately.
-- **Branch delay:** a taken non-page-crossing branch delays IRQ acknowledge by 1 cycle. Cross-page branch = 4 cycles, no extra delay.
-- **Overlapping IRQ + NMI:** IRQ acknowledged at cycle 4–8 can be hijacked by NMI; NMI executes with B flag set on stack if overlapping a BRK.
+- On the 6502/65C02, **IRQ and BRK share vector `$FFFE/$FFFF`**.
+- IRQ, NMI, and BRK all take **7 cycles** from recognition to vector fetch.
+
+### Vector table
+
+| Vector | Address |
+|---|---|
+| NMI | `$FFFA/$FFFB` |
+| RESET | `$FFFC/$FFFD` |
+| IRQ / BRK | `$FFFE/$FFFF` |
 
 ### NMI (edge‑triggered, non‑maskable)
 
-On the 400/800: `RNMI` asserted only once on leading edge of VBLANK → OS warm-start handler (`$FED6`). On XL/XE: RESET button asserts `RESET` line directly (not RNMI); NMIST bit 5 stays latched until NMIRES write.
+NMI is edge-triggered on the 6502 family. On Atari systems, ANTIC uses NMI for
+DLI and VBI. On the 400/800, the RESET button also appears through the NMI
+status bit; on XL/XE, RESET is a separate CPU reset input.
 
 **NMIST (`$D40F`) bit layout**:  
 - bit 7 = DLI occurred  
@@ -19,7 +30,8 @@ On the 400/800: `RNMI` asserted only once on leading edge of VBLANK → OS warm-
 - bit 5 = RNMI / SYSTEM RESET (400/800 only)  
 - bit 4–0 = unused / reserved
 
-DLI and VBI bits are mutually exclusive; DLI bit is cleared at scan line 248; VBI bit cleared whenever a DLI fires. NMIRES write does NOT suppress the pending interrupt — it only resets the status bit.
+Write any value to `NMIRES` (same address, write side) after servicing the
+interrupt to clear the latched status bits.
 
 **Critical: never set NMIEN bit 7 before `VDSLST` is valid:**
 
@@ -34,41 +46,19 @@ DLI and VBI bits are mutually exclusive; DLI bit is cleared at scan line 248; VB
 
 ### BRK edge case
 
-BRK = 7-cycle interrupt sequence, B-flag set on stack. If an NMI fires during cycles 4–8 of the BRK sequence, the NMI vector executes **with B-flag set**. Therefore a robust NMI/IRQ handler must check BRK first, then fall through to VBI in both:
-
-```asm
-dli_handler
-        pha                  ; save A
-        txa
-        pha
-        tya
-        pha
-        lda NMIST
-        bpl ?vbi             ; B clear → IRQ/BRK
-        ; BRK path: check RTI return
-        bne ?dli             ; don't care about BRK here, VBI applies or DLI
-?dli    lda NMIST
-        and #$80
-        beq ?end             ; no DLI
-        ; ... DLI handler body ...
-?end    pla
-        tay
-        pla
-        tax
-        pla
-        rti
-```
+BRK uses the IRQ/BRK vector and pushes **PC+2** plus a status byte with the
+stacked **B bit set**. A hardware IRQ pushes the same format byte with **B=0**.
+If an NMI arrives while a BRK sequence is already stacking state, the NMI
+handler may observe that stacked BRK-format status byte.
 
 ---
 
-## 1.6  DLI Interrupt Hierarchy (Summary)
+## 1.6  DLI / VBI practical rules
 
-| Event | Effect on In-Progress DLI | Notes |
-|---|---|---|
-| **DLI while another DLI running** | First DLI saved; second executes; first resumes several lines later → artifacts if too slow | DLI stack: max 25 DLI frames before VBI |
-| **WSYNC + interrupt gotcha** | Interrupt processing + ANTIC font cycles consume the first WSYNC → extra scan line of old color | Don't put WSYNC at top of DLI if already behind |
-| **VBI while DLI running** | DLI resumes on first scan line of the *next frame* after VBI completes | VBI is highest priority |
-| **DLI while VBI running** | VBI resumes; DLI fires on scan line 24 of *following* frame | Delayed delivery |
-| **JVB `$C1` + DLI** | DLI on *every* scan line 224–248; up to 24 DLIs stack; unwind after VBI | DLI must be extremely short (~12-20 cycles) |
+* DLI and VBI are **NMI sources from ANTIC**, not POKEY IRQs.
+* Install `VDSLST` before enabling DLI in `NMIEN`.
+* Keep DLI handlers short enough to complete before the next enabled DLI.
+* If both NMI and IRQ are pending at an instruction boundary, **NMI wins**;
+  the IRQ remains pending if its source is still asserted.
 
 ---

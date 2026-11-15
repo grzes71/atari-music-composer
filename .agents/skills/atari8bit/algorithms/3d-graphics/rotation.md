@@ -46,14 +46,16 @@ M = Ry·Rx = [ cy      sy·sx     -sy·cx ... ]   (9 signed coefficients)
 ```
 
 Build `M` once per frame from the two angles using sine lookups and a few
-signed multiplies (`SMult8` + renormalize). This is ~200 cycles of setup.
+signed multiplies (`SMult8` + renormalize) — four products (`sy·sx`,
+`sy·cx`, `cy·sx`, `cy·cx`), so ~400 cycles of setup at `math.md`'s ~98
+cycles per signed multiply.
 Then per vertex:
 
 ```asm
 ; x' = m00*x + m01*y + m02*z   (and similarly y', z')  — 9 SMult8 total
 ```
 
-**Cost:** cheap to *build* (constant, ~200 cyc), but ~9 multiplies per
+**Cost:** cheap to *build* (constant, ~400 cyc), but ~9 multiplies per
 vertex. **Use when** you have few vertices, or want a general engine where
 the mesh can change — nothing about `M` depends on the model.
 
@@ -92,21 +94,21 @@ halves as separate ramps from zero (each seeds cleanly at `m·0`):
 ; m = signed 8.8 in melem_lo/hi.
 ; Positive coords 0..127 land at indices 0..127; negatives -1..-128 at 255..128.
 buildRotTab
-        lda #0 : sta lo : sta hi          ; acc = m*0
+        lda #0 \ sta lo \ sta hi          ; acc = m*0
         ldy #0                            ; --- positive half: 0..127 ---
-@pos    lda hi : sta ROT_M,y              ; integer part of m*v
+@pos    lda hi \ sta ROT_M,y              ; integer part of m*v
         clc
-        lda lo : adc melem_lo : sta lo    ; acc += m
-        lda hi : adc melem_hi : sta hi
+        lda lo \ adc melem_lo \ sta lo    ; acc += m
+        lda hi \ adc melem_hi \ sta hi
         iny
         cpy #128
         bne @pos
-        lda #0 : sta lo : sta hi          ; acc = m*0 again
+        lda #0 \ sta lo \ sta hi          ; acc = m*0 again
         ldy #255                          ; --- negative half: -1..-128 ---
 @neg    sec
-        lda lo : sbc melem_lo : sta lo    ; acc -= m  (so index 255 = m*-1)
-        lda hi : sbc melem_hi : sta hi
-        lda hi : sta ROT_M,y
+        lda lo \ sbc melem_lo \ sta lo    ; acc -= m  (so index 255 = m*-1)
+        lda hi \ sbc melem_hi \ sta hi
+        lda hi \ sta ROT_M,y
         dey
         cpy #127
         bne @neg
@@ -118,9 +120,12 @@ mistake — it gives `m·v` for unsigned `v`, so every negative coordinate
 comes out wrong by `256·m`.
 
 **Double-fill micro-optimization.** If the coordinate is effectively 7-bit
-you can store each computed value into two adjacent slots and step by two,
-so 128 additions fill a 256-byte table — halving the build loop. It's a
-minor refinement of the loop above, not a different algorithm.
+signed (−64..63) then index `i` and index `i+128` must hold the same value,
+so each computed value can be written twice — to `y` and to `y+128` — and
+128 additions fill the 256-byte table, halving the build loop (the lookup
+still indexes with the coordinate's plain 8-bit value: −1..−64 land at
+255..192). It's a minor refinement of the loop above, not a different
+algorithm.
 
 **Cost:** higher setup (build 9 tables), zero multiplies per vertex.
 **Use when** vertex count is high enough that the build pays for itself

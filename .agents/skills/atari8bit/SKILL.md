@@ -60,7 +60,7 @@ This skill is self-contained. The topic files below are the available reference 
 - **`algorithms/compression.md`** — RLE, LZ4, Exomizer, DEFLATE decompression patterns.
 - **`algorithms/3d-graphics.md`** — Real-time 3D: fixed-point math, rotation/projection, span-buffer rasterization & fill strategies, Gouraud shading & texturing, GTIA luminance display modes, double buffering, culling & depth sort.
 - **`algorithms/sorting.md`** — 8/16-bit optimal sorts, bucket sort, CombSort, ShellSort, Quicksort.
-- **`algorithms/macros.md`** — Reusable MADS macros for memory, arithmetic, shifting, interpolation.
+- **`algorithms/macros.md`** — Reusable MADS macros for memory block moves, 16/32-bit arithmetic (add/sub/mul/div), shifts and rotates, and comparison.
 
 ## 6. `tooling/` — Build, Examples, Reversing
 
@@ -73,6 +73,14 @@ This skill is self-contained. The topic files below are the available reference 
 - **`exotics/vbxe.md`** — VBXE FX core, detection, XDL, blitter, VRAM, palette, MEMAC windows, examples.
 - **`exotics/sophia-rapidus.md`** — Sophia video upgrades, Rapidus/65C816 notes, APE-Time RTC, LDW/CA-2001 device protocol.
 - **`exotics/fujinet.md`** — FujiNet network programming, N: device CIO handler, TCP/UDP sockets, HTTP requests, SIO protocol, and JSON parsing.
+
+## MADS Syntax Notes (applies to all snippets in these files)
+
+- Statements on one line are separated with `\`, not `:` — `:` only chains mnemonics that share a single argument (`lda:cmp:req 20`).
+- Accumulator addressing is written bare: `asl`, `lsr`, `rol`, `ror` (`ASL A` is rejected with "Undeclared label A").
+- 65816 code requires `opt c+`; register widths are declared with `.a8`/`.a16`/`.i8`/`.i16` (which emit `SEP`/`REP`) or `.longa on|off`/`.longi on|off` (width assumption only, no code emitted).
+- Labels beginning with `?` must start in column 0 (or `opt ?+` for MAE-style locals); other labels are normally written in column 0 too — an indented label must end with `:` (a bare indented name is parsed as a mnemonic/macro). Pseudo-commands like `org`, `dta`, `ins`, `ift` take **no** leading dot.
+- Verify snippets with the project MADS (`Makefile` pins the binary); test files belong in a scratch directory, never in this skill.
 
 ## Navigation Rules
 

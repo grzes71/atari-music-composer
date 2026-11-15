@@ -1,13 +1,13 @@
 ---
 name: atari8bit-memory
 description: >-
-  Atari 8-bit 64 K memory map and chipset register reference. Covers the flat $0000–$FFFF address space, PIA 6520 PORTA/PORTB/PACTL/PBCTL register table, PORTB ROM-banking bits (OS, BASIC, self-test on 400/800/XL/XE), extended RAM windowing (130XE banks 0/1 via ANTIC bit 5, RAMBO 192K/256K/320K/576K, COMPY 320K/576K), zero-page zone maps, ZP idioms (INC/DEC, negative-index loop, fast ISR scratch save), and the inline-parameter JSR trick. Use when the user asks about RAM layout, PIA registers, PORTB banking, extended RAM, zero-page use, stack tricks, or ROM disable.
+  Atari 8-bit 64 K memory map and chipset register reference. Covers the flat $0000–$FFFF address space, key zero-page and page-2/page-3 OS variables, PIA 6520 PORTA/PORTB/PACTL/PBCTL register table, XL/XE PORTB ROM-banking bits, 130XE extended RAM windowing, and safe zero-page/stack idioms. Use when the user asks about RAM layout, OS variables, PIA registers, PORTB banking, extended RAM, zero page, or stack tricks.
 ---
 
 # 02 — Memory Map & System Architecture
 
-> **Scope:** 64K flat map ($0000–$FFFF), PIA 6520, PORTB banking/ROM bits, extended RAM (130XE/RAMBO/COMPY/576K), zero-page idioms, inline-parameter JSR trick
-> **Key items:** PORTA $D300, PORTB $D301, PACTL/PBCTL $D302/$D303, ZP $00–$FF, 130XE ANTIC bank-enable bit 5
+> **Scope:** 64K flat map ($0000–$FFFF), key OS variables and vectors, PIA 6520, PORTB banking/ROM bits, 130XE-style extended RAM, zero-page idioms, stack rules
+> **Key items:** PORTA $D300, PORTB $D301, PACTL/PBCTL $D302/$D303, VDSLST $0200, VVBLKI/VVBLKD $0222/$0224, SDLSTL $0230, HATABS $031A, IOCB $0340
 
 ## Purpose
 
@@ -24,73 +24,112 @@ This file covers the memory map and system architecture for the Atari 8-bit in f
 
 **Tip:** browse the Quick-lookup table below first; the § labels are clickable in most markdown viewers.
 
-Only low 4 address bits decoded at $D300–$D3FF; PIA address bits 0-1 select each 4-register bank. Writes to ROM addresses are silently ignored.
+Only low address bits are decoded across much of the hardware page. In particular, the PIA mirrors through `$D300-$D3FF`, and writes to addresses currently mapped to ROM are ignored.
 
 ## Quick-lookup
 
 | Need | See § |
 |---|---|
 | 64 K memory map | §2.1 |
-| Zero-page zone maps | §2.1 |
-| PIA 6520 register table | §2.2 |
-| PORTB OS/BASIC/self-test ROM bits | §2.3 |
-| Extended RAM 130XE/RAMBO/COMPY and ANTIC bank-enable | §2.3 |
-| Spurious IRQ PBCTL CB2 hazard | §2.2 |
-| Zero-page idioms (INC/DEC, negative-index loop, ISR scratch) | §2.4 |
-| Inline-parameter JSR trick | §2.5 |
+| Zero-page and OS variable examples | §2.1 |
+| PIA 6520 register table | §2.1 |
+| PORTB OS/BASIC/self-test and 130XE banking bits | §2.3 |
+| 130XE / larger XL/XE expansion caveats | §2.3 |
+| Zero-page idioms | §2.4 |
+| Stack and inline-parameter rules | §2.5 |
 
 ---
 
 ## 2.1  Full 64 K Memory Map ($0000 – $FFFF)
 
-The Atari 8-bit has a flat 64 K 16-bit address space. Layout is fixed for all models except where extended RAM windowing and ROM bits apply.
+The Atari 8-bit has a flat 64 K CPU address space. Which ROM or RAM is visible in some ranges depends on the machine family and, on XL/XE machines, `PORTB ($D301)`.
 
 ### Map by region
 
 | Region | Purpose |
 |---|---|
-| `$0000–$00FF` | Zero page — OS, user, FP (floating-point) slots |
-| `$0100–$01FF` | Hardware stack — 256 bytes, grows down |
-| `$0200–$02FF` | DOS control block (buffer pointer etc.) |
-| `$0300–`..| OS screen/line edit buffer, free RAM |
-| `$D000–`..| POKEY (4 mirrors) / GTIA / PIA 6520 / ANTIC / POKEY mirrors |
-| `$E000–$FFFF` | OS ROM — 8 K (400/800) or 16 K (XL/XE); basic ROM at `$A000–$BFFF` |
+| `$0000-$00FF` | Zero page — OS variables, DOS/BASIC work areas, user-reserved bytes if your environment allows them |
+| `$0100-$01FF` | Hardware stack |
+| `$0200-$02FF` | OS database: page-2 vector/IRQ-NMI dispatch table, shadows, timers, color registers, keyboard/display variables — owned by the OS, never by DOS |
+| `$0300-$03FF` | OS page 3: SIO `DCB` (`$0300-$030F`), `HATABS`, `IOCB`s, work buffers |
+| `$0400-$7FFF` | Main RAM; on 130XE-class machines `$4000-$7FFF` can be replaced by banked extended RAM |
+| `$8000-$9FFF` | Cartridge window (`RD4` / right or lower 8K) |
+| `$A000-$BFFF` | BASIC ROM, cartridge window (`RD5` / left or upper 8K), or RAM depending on machine and banking |
+| `$C000-$CFFF` | XL/XE OS ROM or underlying RAM when OS ROM is banked out |
+| `$D000-$D0FF` | GTIA |
+| `$D100-$D1FF` | PBI device select / status / device space |
+| `$D200-$D2FF` | POKEY |
+| `$D300-$D3FF` | PIA 6520 |
+| `$D400-$D4FF` | ANTIC |
+| `$D500-$D5FF` | Cartridge control space (`CCTL`) on cartridge machines |
+| `$D600-$D7FF` | PBI/ECI device register space |
+| `$D800-$FFFF` | Math Pack and OS ROM on computer models unless overlaid / banked out |
 
-### Zero page zones
+### Zero page and early RAM landmarks
 
-| Zone | Range | Notes |
+Zero page is **not** a large free-for-all on Atari systems. The OS, DOS, BASIC, and floating-point package use much of it.
+
+| Address | Name | Purpose |
 |---|---|---|
-| OS numbered vector table | `$00–$1F` | 32 entry points |
-| OS free / unnumbered | `$20–$8F` | Mostly unused on entry; safe for user programs |
-| WSYNC, STICK/PADDL shadows | `$C0–`.. | Altirra hardware calls OS page 2 shadow page |
-| Floating point | `$D4–`.. | FP database on entry from BASIC init |
-| FP private | `$F0–`.. | |
+| `$0008` | `WARMST` | Warm-start flag |
+| `$000A/$000B` | `DOSVEC` | DOS entry vector |
+| `$000C/$000D` | `DOSINI` | DOS initialization vector |
+| `$000E/$000F` | `APPMHI` | Application memory high-water mark |
+| `$0012-$0014` | `RTCLOK` | 24-bit real-time clock |
+| `$0042` | `CRITIC` | Critical I/O section flag |
+| `$004D` | `ATRACT` | Attract-mode counter |
+| `$004E` | `DRKMSK` | Attract darken mask |
+| `$004F` | `COLRSH` | Color-shift state used by attract mode |
+| `$006A` | `RAMTOP` | Top of RAM in pages |
+| `$0080-$00FF` | Application / FP area | OS reserves this 128-byte block for the application and the floating-point package (`FR0` `$D4`, `FRE` `$DA`, `FR1` `$E0`, `FR2` `$E6`, `FRX` `$EC`) |
+
+Use documented free bytes only, or reserve your own workspace according to the DOS / loader environment you are targeting.
+
+### Page 2 and page 3 landmarks
+
+| Address | Name | Purpose |
+|---|---|---|
+| `$0200/$0201` | `VDSLST` | DLI vector |
+| `$0202/$0203` | `VPRCED` | Serial bus PROCEED IRQ vector |
+| `$0204/$0205` | `VINTER` | Serial bus INTERRUPT IRQ vector |
+| `$0206/$0207` | `VBREAK` | BRK instruction IRQ vector |
+| `$0216/$0217` | `VIMIRQ` | Immediate IRQ vector |
+| `$0222/$0223` | `VVBLKI` | Immediate VBI vector |
+| `$0224/$0225` | `VVBLKD` | Deferred VBI vector |
+| `$022F` | `SDMCTL` | ANTIC DMA shadow |
+| `$0230/$0231` | `SDLSTL/SDLSTH` | Display list pointer shadow |
+| `$0244` | `COLDST` | Cold-start flag |
+| `$026F` | `GPRIOR` | `PRIOR ($D01B)` shadow |
+| `$02C4-$02C8` | `COLOR0-COLOR4` | OS color shadows |
+| `$02E0/$02E1` | `RUNAD` | Binary load run address |
+| `$02E2/$02E3` | `INITAD` | Binary load init address |
+| `$02E5/$02E6` | `MEMTOP` | Top of usable RAM pointer |
+| `$02EA-$02ED` | `DVSTAT` | Device/disk status buffer (4 bytes) |
+| `$02FC` | `CH` | Keyboard character buffer |
+| `$0300-$030F` | `DCB` | SIO device control block (`DDEVIC`…`DAUX2`) |
+| `$031A` | `HATABS` | Device handler table |
+| `$0340-$03BF` | `IOCB0-IOCB7` | Eight 16-byte I/O control blocks |
+
+Page 2 belongs to the OS, not to DOS: it is the OS database — the NMI/IRQ dispatch
+vectors above, plus display, color, keyboard and editor shadows. DOS and BASIC keep
+their own control blocks in the RAM they allocate and reach the OS through
+`DOSVEC`/`DOSINI` (`$000A-$000D`). Page 3 starts with the SIO `DCB` at `$0300`
+(`DDEVIC` `$0300`, `DUNIT` `$0301`, `DCOMND` `$0302`, `DSTATS` `$0303`,
+`DBUFLO/HI` `$0304/$0305`, `DTIMLO` `$0306`, `DBYTLO/HI` `$0308/$0309`,
+`DAUX1/2` `$030A/$030B`); see `system/storage.md` for the command set.
 
 ### PIA 6520 (Peripheral Interface Adapter)
 
-Address range: `$D300–$D3FF`, only bits 0–1 decoded → 4 mirrored locations:  
-`$D300/$D301/$D302/$D303` / `$D304/$D305/$D306/$D307` / … / `$D3FC/$D3FD/$D3FE/$D3FF`
+Address range: `$D300-$D3FF`; only the low two address bits are decoded, so the four PIA registers repeat throughout the page.
 
 | Register | Address | Function |
 |---|---|---|
-| PORTA | `$D300` | Joystick directions ports 1/2 (read); data direction chg when DDRA bit2=0 |
-| PORTB | `$D301` | Port data; banking/ROM enable on XL/XE (output: bits 0,1,4,6,7); joystick ports 3/4 on 400/800 |
-| PACTL | `$D302` | Port A control register (data direction + interrupt enable) |
-| PBCTL | `$D303` | Port B control register (same layout as PACTL) |
-| DDRA | bit=write to $D300 when PACTL.bit2=0 | Data direction: 0=input, 1=output |
-| DDRB | bit=write to $D301 when PBCTL.bit2=0 | Data direction: 0=input, 1=output |
+| `PORTA` | `$D300` | Joystick directions for ports 1 and 2; with PACTL bit 2 clear, accesses DDRA instead |
+| `PORTB` | `$D301` | Joystick directions for ports 3 and 4 on 400/800; ROM/RAM/bank control on XL/XE; with PBCTL bit 2 clear, accesses DDRB instead |
+| `PACTL` | `$D302` | Port A control register |
+| `PBCTL` | `$D303` | Port B control register |
 
-**PORTA PACTL X Micro**
-
-```asm
-        ; Typical PACTL/PBCTL init on XL/XE
-        lda #$34             ; CA2 low, CB2 low, interrupts disabled
-        sta PACTL
-        sta PBCTL
-```
-
-**400/800 RESET key:** RNMI asserted on leading edge of VBLANK → OS warm-start.  
-**XL/XE RESET key:** Assert reset lines on CPU, ANTIC, FREDDIE, PIA; cold-restarts at `$FFFC`.
+To write `DDRA` or `DDRB`, clear control-register bit 2, write the corresponding port address, then set bit 2 again to return the address to normal port-data access.
 
 ---
 
@@ -98,197 +137,80 @@ Address range: `$D300–$D3FF`, only bits 0–1 decoded → 4 mirrored locations
 
 | Condition | Behavior |
 |---|---|
-| Warm boot (400/800) | RNMI → OS `$FED6` — warm-start, keeps RAM |
-| Cold boot (all) | RESET line → `$FFFC` vector; all registers undefined |
-| PIA on 400/800 | Only reset on power-on; not by RESET key |
-| PIA on XL/XE | Reset on power-on AND RESET key; all regs cleared to $00 |
+| Power-on | CPU starts through the RESET vector; RAM contents are undefined until initialized |
+| 400/800 RESET key | Raises an NMI reported by ANTIC `NMIST` bit 5 and enters the OS warm-start path; RAM is preserved; PIA is **not** reset |
+| XL/XE RESET key | Hardware reset of the system; RAM is normally preserved on a warm reset, but hardware and OS shadows/vectors must be reinitialized |
 
-**RAM power-up bias:** DRAM decays after power-off → power-on produces block patterns (often `$00/$FF` alternating). Treat RAM as undefined until explicitly initialized.
+Practical rules:
 
-**Floating data bus:** On 800 (secondary I/O bus), on XL/XE without pull-ups: un-decoded reads return the last byte on the data bus (often from the *previous* cycle). On XL/XE with pull-ups: undecoded reads return `$FF`.
+- Use `WARMST ($08)` and `COLDST ($0244)` together with your own RAM signature if you need to distinguish a recoverable warm reset from a cold start.
+- If you own `SDLSTL`, `VDSLST`, or VBI vectors, expect the OS warm-start path to rebuild display/editor state unless you reinstall your values.
+- Power-on RAM patterns are not stable data; always initialize anything you depend on.
 
 ---
 
 ## 2.3  BANK Switching & Extended Memory (XL/XE $4000–$7FFF)
 
-All banking is driven by PORTB (`$D301`).
+On XL/XE computers, `PORTB ($D301)` controls ROM visibility and, on 130XE-class machines, the banked 16K window at `$4000-$7FFF`.
 
-### PORTB bits for ROM / extended RAM window
+### PORTB bits for ROM / 130XE bank control
 
-| Bit | Function | 1 = | 0 = |
-|---|---|---|---|
-| 0 | OS ROM at `$C000–$CFFF` + `$D800–$FFFF` | **enabled** | disabled |
-| 1 | BASIC ROM at `$A000–$BFFF` | disabled | **enabled** (inverted) |
-| 4 | Extended RAM window `$4000–$7FFF` | disabled | **enabled** (inverted) |
-| 6 | XEGS game ROM `$A000–$BFFF` | disabled | **enabled** (inverted) |
+| Bit | Meaning | Common interpretation |
+|---|---|---|
+| 0 | OS ROM control | `1` = OS ROM visible, `0` = underlying RAM visible at `$C000-$CFFF` and `$D800-$FFFF` |
+| 1 | BASIC ROM control | `0` = BASIC visible at `$A000-$BFFF`, `1` = BASIC off / RAM visible |
+| 2-3 | 130XE bank number | Select one of four 16K banks for the banked window |
+| 4 | CPU bank-window select | `1` = main RAM at `$4000-$7FFF`, `0` = selected extended bank for CPU |
+| 5 | ANTIC bank-window select | `1` = ANTIC sees main RAM, `0` = ANTIC sees the selected extended bank |
+| 6 | XEGS built-in game ROM | On XEGS only: `0` = game ROM visible at `$A000-$BFFF` when BASIC is off |
+| 7 | Self-test control | Preserve unless you intentionally enter or leave self-test |
+
+`PORTB` is machine-dependent beyond the stock 130XE definition. XEGS and third-party RAM expansions can reuse additional bits, so save the original value and restore it when you are done.
 
 ```asm
-        ; Disable all system ROMs — full 62 K RAM
+        ; Example: disable OS and BASIC, preserving all other PORTB state
         lda PORTB
-        and #$FE             ; clear bit 0 (OS ROM off)
-        ora #$02             ; set bit 1 = BASIC disabled (inverted)
-        and #$7F             ; clear bit 7 = self-test off
+        pha
+        and #$FE              ; bit 0 = 0 -> OS off
+        ora #$02              ; bit 1 = 1 -> BASIC off
+        sta PORTB
+
+        ; ... RAM-only work here ...
+
+        pla
         sta PORTB
 ```
 
-### Extended RAM window — bits 2–3 for 130XE bank select
+### 130XE extended RAM window
 
-| PORTB[2:3] | 130XE bank |
+The stock 130XE provides **four** extra 16K banks. Bits 2-3 select bank 0-3; bit 4 controls whether the CPU sees banked RAM or the normal `$4000-$7FFF` RAM; bit 5 does the same independently for ANTIC.
+
+| Bits 3:2 | Bank |
 |---|---|
-| `00` / `10` | Bank 0 (`$4000–$7FFF` → RAM) |
-| `01` / `11` | Bank 1 (pseudo-SRAM, visible as `$4000–$7FFF`) |
+| `00` | Bank 0 |
+| `01` | Bank 1 |
+| `10` | Bank 2 |
+| `11` | Bank 3 |
 
-Separate ANTIC access (130XE only): bit 5 enables ANTIC's view of extended RAM independently.
+That separation is what allows 130XE software to keep the CPU in one bank while ANTIC fetches display data from another.
 
-| Total Size | Type | Extra Banks | Separate CPU/ANTIC | Bank Bits | Notes |
-|---|---|---|---|---|---|
-| 128k | Atari | 4 | YES | 2,3 | 130XE standard |
-| 192k | Compy Shop | 8 | YES | 2,3,6 | |
-| 192k | RAMBO | 8 | NO | 2,3,6 | |
-| 256k | Karen | 12 | Partial | 2,3,5,6 | Only 4 of 12 banks visible to ANTIC |
-| 256k | RAMBO (TOMS) | 12 | NO | 2,3,5,6 | Some bit combinations overlap |
-| 256k | RAMBO | 12 | NO | 2,3,5,6 | Some bits map to base RAM (Newell/Wizztronics/ICD) |
-| 320k | RAMBO | 16 | NO | 2,3,5,6 | |
-| 320k | Compy Shop | 16 | YES | 2,3,6,7 | Bit 7 selects banks if bit 4/5 is 0, else SELF TEST |
-| 576k | RAMBO (tf_hh) | 32 | NO | 2,3,5,6,7 | Bit 7 selects banks if bit 4 is 0, else SELF TEST |
-| 576k | RAMBO | 32 | NO | 1,2,3,5,6 | Bit 1 selects banks if bit 4 is 0, else BASIC |
-| 576k | Compy Shop | 32 | YES | 1,2,3,6,7 | Bits 7 & 1 select banks if bit 4/5 is 0 |
-| 1088k | RAMBO | 64 | NO | 1,2,3,5,6,7 | Bits 7 & 1 select banks if bit 4 is 0 |
-| 2112k | RAMBO | 128 | NO | 0,1,2,3,5,6,7 | Bit 0 also used (conflicts with OS ROM enable) |
-| 4144k | RAMBO | 256 | NO | 0,1,2,3,4,5,6,7 | All bits used, BASIC/SELF-TEST cannot be enabled |
+### Larger XL/XE expansions
 
-### Extended RAM Detection Code
+192K, 256K, 320K, 576K, and 1088K expansions typically extend the 130XE idea by reusing more `PORTB` bits. The exact encodings are **expansion-specific**:
 
-The following routine detects the size of extended memory non-destructively. It returns the number of extra 16k banks in `Y` (0 if base 64K only) and populates the `banks` array with valid `PORTB` values.
+- **RAMBO/Newell-style** boards usually keep the 130XE window at `$4000-$7FFF` but extend the bank number with more `PORTB` bits.
+- **Compy Shop / COMPY** boards also provide separate CPU/ANTIC control, but their high-bank encodings differ from RAMBO.
+- **576K / 1088K** schemes reuse bits that on a stock XL/XE also affect ROM state, so software must use an expansion-specific table rather than assume one universal formula.
 
-```asm
-ext_b  = $4000
-portb  = $d301
+If coexistence with DOS or SpartaDOS X matters, do not run a generic raw-probe routine against extended RAM after DOS has allocated RAM-disk or cache banks.
 
-detect_ext
-       lda portb
-       pha
-       lda #$ff
-       sta portb
-       lda ext_b
-       pha
+### Axlon-style extended RAM
 
-       ldx #$0f       ; Save bytes from 16 possible 64k blocks
-_p0    jsr setpb
-       lda ext_b
-       sta bsav,x
-       dex
-       bpl _p0
-
-       ldx #$0f       ; Zero them out
-_p1    jsr setpb
-       lda #$00
-       sta ext_b
-       dex
-       bpl _p1
-
-       stx portb      ; Eliminate base memory (X=$FF)
-       stx ext_b
-       stx $00
-
-       ldy #$00       ; Loop counting 64k blocks
-       ldx #$0f
-_p2    jsr setpb
-       lda ext_b      ; If ext_b != 0, block already counted
-       bne _n2
-       dec ext_b      ; Mark as counted
-       lda ext_b
-       bpl _n2        ; Hardware check
-       lda portb      ; Write PORTB value to array for bank 0
-       sta banks,y
-       eor #%00000100 ; Banks 1, 2, 3
-       sta banks+1,y
-       eor #%00001100
-       sta banks+2,y
-       eor #%00000100
-       sta banks+3,y
-       iny:iny:iny:iny
-_n2    dex
-       bpl _p2
-
-       ldx #$0f       ; Restore memory
-_p3    jsr setpb
-       lda bsav,x
-       sta ext_b
-       dex
-       bpl _p3
-
-       stx portb      ; X=$FF
-       pla
-       sta ext_b
-       pla
-       sta portb
-       rts
-
-setpb  txa            ; Map X index to PORTB bits
-       lsr:ror:ror:ror
-       adc #$01       
-       ora #$01       ; OS ROM enabled
-       sta portb
-       rts
-
-banks  .ds 64
-
-
-> **SpartaDOS X compatibility:** The `detect_ext` routine banks in descending PORTB order,
-stepping X from `$0F` to `$00` via `setpb`. This ordering is the opposite of SpartaDOS X's
-bank allocation, which hands out extended RAM starting from the highest bank. Running
-`detect_ext` inside an SDX session without accounting for SDX's reservation layout can corrupt
-an active RAM disk. For SDX-aware software: use the SDX memory-management API
-(`MXRAM`, `PFCOM`) instead of raw PORTB probing, or call `detect_ext` only before SDX
-has loaded.
-
-bsav   .ds 16
-```
-
-### Axlon-Style Extended RAM
-
-Axlon-style RAM was designed mainly for Atari 400/800 machines. Like 130XE
-memory, it exposes 16K banks at `$4000-$7FFF`, but it does not provide
-separate CPU and ANTIC banking. The bank-control register is write-only at
-`$CFFF`.
-
-Important decode caveat: original-style Axlon hardware incompletely decodes
-the register. It can respond across `$CFC0-$CFFF` and, more dangerously,
-`$0FC0-$0FFF`. Avoid placing code, stack-sensitive data, or unrelated I/O
-there when probing Axlon hardware.
-
-| Write to `$CFFF` | Visible bank |
-|---|---|
-| `$00` | base/home bank |
-| nonzero | one extended 16K bank |
-
-This allows up to 255 extra 16K banks, about 4080K extra RAM. Some XL/XE
-expansions emulate Axlon-style banking with `$CFFF` decoded only in ROM space
-when the OS ROM control bit leaves that address visible.
-
-Axlon detection rules:
-
-- Detection code must run entirely outside `$4000-$7FFF`.
-- Save one byte from each candidate bank, mark banks, count consecutive banks
-  that preserve the marker, then restore all saved bytes.
-- Return `$00` to `$CFFF` before leaving so the base bank is visible again.
-- Under SpartaDOS X, avoid raw probing after DOS has allocated extended RAM;
-  use DOS memory-management calls when coexistence matters.
-
-### PIA port B — spurious IRQ hazard (PBCTL CB2)
-
-> ⚠ **PBCTL-CB2 spurious IRQ:** Writing `$08` (CB2 low output) into `PBCTL ($D303)` then switching CB2 back to input mode (any `0xx` setting) causes bit 6 to be set and an IRQ is requested if the PIA interrupt is enabled (`PBCTL[3]=1`). This firing corresponds to the normal SIO command byte reception transition — every SIO packet on the POKEY serial port carries this same mode-change pattern. Safety rule: disable PIA IRQ before switching PBCTL direction and clear the IRQ flag manually before re-enabling.
-
-Writing `$08` (CB2 low output) into `PBCTL ($D303)` then switching CB2 to input mode (any `0xx` setting) causes bit 6 to be set and an IRQ is requested if PIA interrupt is enabled (`PBCTL[3]=1`).
-This corresponds to the normal SIO protocol command byte reception — the transition is part of every SIO packet on the POKEY serial port.
-**Safety rule**: disable PIA IRQ before switching PBCTL direction; clear the IRQ flag manually before re-enabling.
+Axlon-style expansions for 400/800-class machines bank 16K chunks into `$4000-$7FFF` through a write-only register at `$CFFF`. Original hardware often decodes that register incompletely, so treat it as expansion-specific and restore bank 0 before returning to general code.
 
 ### Writes to ROM are silently discarded
 
-> ⚠ **ROM-write trap:** Writes to any address currently mapped to ROM (OS/BASIC/cartridge/self-test) are silently ignored. The underlying RAM is not accessible at the same address (no write-through as on some other platforms). On the 400/800, only PIA reset-on-power-on clears PIA registers — the RESET key bypasses the PIA, so PBCTL/PACTL must be explicitly reinitialized after warm-boot.
-
-Writes to any address that is currently mapped to ROM (OS / BASIC / cartridge / self-test) are **ignored** — the underlying RAM is not accessible via the same address. It is not possible to write-through ROM as on some other platforms. On the 400/800, only PIA reset on power-on clears PIA registers; the RESET key does not.
+Writes to any address currently mapped to ROM (OS, BASIC, self-test, or cartridge) are ignored. There is no write-through into the hidden RAM at the same address.
 
 ---
 
@@ -296,35 +218,24 @@ Writes to any address that is currently mapped to ROM (OS / BASIC / cartridge / 
 
 | Idiom | Example | Notes |
 |---|---|---|
-| Increment/decrement 16-bit (hi carries if lo overflows) | `INC ptr: INC ptr+1: BNE skip` / `DEC ptr+1: BNE skip` | `INC/DEC ZP` takes 5 cycles, RMW side effect |
-| Bit flag set/clear | `ORA #$80` / `AND #~$80` | LSB/OMSB of bit-index using `:ROL`, `:LSR`, 7 or 0 |
-| Negative-index backwards loop | `LDY #-n: … DEY: BPL loop` | Zero-page table walk backwards wrapped at $00FF |
-| Fast ISR scratch save | `STA save_a: STX save_x: STY save_y` | Hardware stack is fastest; ZP shadow nearby |
-| 16-bit load with skip | `LDA #<val: STA ptr: LDA #>val: STA ptr+1` | Separate LDA avoids page-cross on HIGH byte |
+| Increment 16-bit pointer | `INC ptr` / `BNE skip` / `INC ptr+1` | Increment high byte **only** when low byte wraps |
+| Decrement 16-bit pointer | `LDA ptr` / `BNE skip` / `DEC ptr+1` / `skip DEC ptr` | Borrow propagates from low byte |
+| Bit flag set/clear | `ORA #$80` / `AND #$7F` | Use explicit masks; assembler-specific `~` syntax is not portable |
+| Backward loop | `LDY #n-1` / `...` / `DEY` / `BPL loop` | Standard 0..n-1 reverse walk |
+| Fast ISR save | `PHA / TXA / PHA / TYA / PHA` | Stack save is the normal DLI/VBI pattern |
 
 ---
 
 ## 2.5  Stack & Subroutine Parameters
 
-6502 stack: 256 bytes at `$0100–$01FF`, `TSX/TXS` to read/write pointer.
+6502 stack: 256 bytes at `$0100-$01FF`, manipulated with `PHA/PLA`, `PHP/PLP`, `TSX`, and `TXS`.
 
-**Parameter-inline trick:** A subroutine can read own return-address off the stack to find embedded data tables after the JSR, avoiding zero-page allocation:
+Rules:
 
-```asm
-        ; Caller:
-        jsr my_routine
-        .byte $01, $02, $03   ; data table after JSR
-
-        ; Callee:
-my_routine
-        pla                  ; pop low byte of return PC
-        sta data_ptr
-        pla                  ; pop high byte
-        sta data_ptr+1
-        ; Now data_ptr → .byte table past JSR
-        rts
-```
+- `JSR` pushes the return address minus one; any inline-parameter trick must adjust that address and put a valid return address back before `RTS`.
+- A bare `PLA/PLA` pair that consumes the return address is **not** a complete inline-parameter routine; if you do that, you must also provide an alternate way back to the caller.
+- If you need self-relative data, a stack-relative `TSX`/indexed read pattern is often safer than destroying the return address.
 
 ---
 
-*Content fully self-contained. All key facts are present in this file.
+*Content fully self-contained. All key facts are present in this file.*

@@ -1,105 +1,182 @@
 ---
 name: atari8bit-character-modes
 description: >-
-  Atari ANTIC character modes: character-set memory, CHBASE/CHACTL, text and
-  multicolor layouts, sub-cell plotting, smooth scrolling, and DLI charset swaps.
+  Atari ANTIC character (text) modes 2-7: mode geometry, glyph formats,
+  character-set memory, CHBASE/CHACTL, mode 3 descenders, multicolor modes 4/5,
+  DLI charset swaps, and soft-pixel plotting via character cells.
 ---
 
 # Character Modes
 
+> Sources: Wikipedia "ANTIC" (registers CHACTL/CHBASE, Glyph Rendering),
+> De Re Atari ch. 2-3, Altirra Hardware Reference Manual (ANTIC chapter).
+
 ## Overview
 
-ANTIC character modes render a grid of glyph cells selected from a character set decoded directly to pixel rows. Modes 2, 3, 4, 5, 6, and 7 use four scan-lines per cell; modes 0, 1, F use two scan-lines. Each mode supports a specific bit width per pixel row within the cell; 2/3/4/5/6 encode between two and four pixels from every byte written, while 0/1/F need one pixel every two code points. The result is resolution compression with a high colour density.
+ANTIC character modes are **2, 3, 4, 5, 6, 7** (there are no character modes
+0, 1 or F — `$0`/`$1` are blank-line/jump instructions, `$F` is a bitmap mode).
+Screen memory holds one **character code byte per cell**; ANTIC uses that code
+to fetch glyph rows from the character set pointed to by `CHBASE`.
 
-NTSC scan-lines divide the horizontal length of 3.5 MHz dot clock into a one-dimensional character scan. The glyph byte is decoded as per the mode — four successive bytes represent four pixels each for example in mode 2, meaning 12 pixels per four-cell span; in mode 4 only eight pixels per four-cell span. The colour byte written to COLPF0–COLPF3 writes the same line colour all four pixels — so text colour and background colour refer to one bit-width per each, zero cross-border.
+Every glyph is **8 bytes** (one byte per glyph row, row 0 first) regardless of
+mode. Glyph address = `CHBASE*256 + code*8` (code masked to 7 bits for modes
+2-5, 6 bits for modes 6/7).
 
-Line-by-line character decode: on NTSC each scan-line generates sixteen bytes for GR.8 text rows — four bytes per pixel across every glyph, generating four groups of four bits each point to a single 4-colour display output. Activates bit-coded pixel set, colour is single palette cell base encoding, max eight-per-pixel band per mode drawing 80×48 text formatted display columns. The most frequent error is that in mode 2 picture memory writes 80 bytes per line; in mode 4 picture memory writes 40 bytes; the programmer must choose a display list that matches the chosen resolution.
+## Mode Table
 
-## Character Set Design Constraints
+Bytes per mode line = characters per line (one screen byte per cell).
+Widths given as narrow / normal / wide playfield (`DMACTL` bits 0-1).
 
-ANTIC character-set glyphs are monochrome bitmaps supplied by the programmer. Each glyph is eight pixels wide by one scan-line tall. Eight consecutive rows form a complete glyph. The attribute byte (value in character cell) selects which glyph to render — 128 entries per character set (ANTIC definition range = $00–$7F standard set). Single character cell row height is equal to: the glyph contains eight vertical pixels tall — there is no variable row height in normal modes. Some MADS-mode tricks can map per-glyph skip lines.
+| ANTIC | OS GR. | Chars (bytes) per line | Scan lines / mode line | Glyph pixel (color clocks × scan lines) | Bits / glyph pixel | Cell (pixels) | Chars in set | Set size / alignment |
+|-------|--------|------------------------|------------------------|------------------------------------------|--------------------|---------------|--------------|----------------------|
+| 2     | 0      | 32 / 40 / 48           | 8                      | ½ × 1                                    | 1                  | 8 × 8         | 128          | 1 KB / 1 KB          |
+| 3     | —      | 32 / 40 / 48           | 10                     | ½ × 1                                    | 1                  | 8 × 10        | 128          | 1 KB / 1 KB          |
+| 4     | 12 (XL)| 32 / 40 / 48           | 8                      | 1 × 1                                    | 2                  | 4 × 8         | 128          | 1 KB / 1 KB          |
+| 5     | 13 (XL)| 32 / 40 / 48           | 16                     | 1 × 2                                    | 2                  | 4 × 8         | 128          | 1 KB / 1 KB          |
+| 6     | 1      | 16 / 20 / 24           | 8                      | 1 × 1                                    | 1                  | 8 × 8         | 64           | 512 B / 512 B        |
+| 7     | 2      | 16 / 20 / 24           | 16                     | 1 × 2                                    | 1                  | 8 × 8         | 64           | 512 B / 512 B        |
 
-## Custom Character Mode Layout
+Derived (normal width): mode 2 = 320 hi-res pixels/line, mode 4 = 160
+pixels/line (40 chars × 4), mode 6 = 160 pixels/line (20 chars × 8).
+A full 24-row mode 2 or mode 4 screen = 960 bytes of screen memory.
+Modes 5 and 7 show each glyph row on two scan lines (double height).
 
-The programmer must build the character set RAM before the first display line that needs it. A safe pattern for custom fonts is:
+## Glyph Rendering
 
+### Mode 2 — Standard (hi-res, 1 bpp)
+- Bit = 1: pixel shows **luminance of COLPF1** on hue of COLPF2.
+- Bit = 0: background **COLPF2**. COLBK is only the border.
+- Pixel = ½ color clock → NTSC/PAL artifacting on single-pixel columns.
+- Code bit 7 = "inverse" character, handled by `CHACTL` (see below).
+
+### Mode 3 — Descenders (10 scan lines)
+Same colors as mode 2; glyph still 8 bytes, mode line is 10 scan lines:
+
+| Codes (bits 0-6) | Scan lines 0-1 | Scan lines 2-7 | Scan lines 8-9 |
+|------------------|----------------|----------------|----------------|
+| `$00`–`$5F`      | glyph rows 0-1 | glyph rows 2-7 | blank          |
+| `$60`–`$7F`      | blank          | glyph rows 2-7 | glyph rows 0-1 |
+
+So for lowercase descenders, store the descender part in glyph bytes 0-1.
+
+### Modes 4/5 — Multicolor (2 bpp)
+Each bit pair of the glyph byte = one pixel, 1 color clock wide
+(bits 7-6 = leftmost pixel). Up to 4 colors per cell, 5 per screen:
+
+| Bit pair | Code bit 7 = 0 | Code bit 7 = 1 |
+|----------|----------------|----------------|
+| `00`     | COLBK          | COLBK          |
+| `01`     | COLPF0         | COLPF0         |
+| `10`     | COLPF1         | COLPF1         |
+| `11`     | COLPF2         | **COLPF3**     |
+
+CHACTL inverse/blank bits have **no effect** in modes 4/5.
+
+### Modes 6/7 — Single color (1 bpp, 64 chars)
+Code bits 0-5 select the glyph; bits 7-6 select the foreground color.
+Bit = 0 → COLBK.
+
+| Code bits 7-6 | Range       | Foreground |
+|---------------|-------------|------------|
+| `00`          | `$00`–`$3F` | COLPF0     |
+| `01`          | `$40`–`$7F` | COLPF1     |
+| `10`          | `$80`–`$BF` | COLPF2     |
+| `11`          | `$C0`–`$FF` | COLPF3     |
+
+## CHBASE — Character Set Base
+
+| Register | Address | Access | OS shadow     |
+|----------|---------|--------|---------------|
+| `CHBASE` | `$D409` | write  | `CHBAS $02F4` |
+
+- **Single byte** = high byte (page) of the character set address.
+- Modes 2-5: set must be 1 KB aligned (low 2 bits ignored).
+  Modes 6/7: 512 B aligned (bit 0 ignored).
+- OS default `$E0` → ROM set at `$E000` (GR.1/2 commonly use `$E2` for the
+  lowercase/graphics half).
+- The OS VBI copies `CHBAS → CHBASE` every frame. With OS running, write the
+  shadow; write `CHBASE` directly only in a DLI (it is restored next VBI).
+- A custom set must be fully written to RAM before pointing `CHBAS` at it,
+  otherwise garbage is displayed for the frames in between.
+
+```asm
+        ; copy 1 KB font to FONT (1 KB aligned), then:
+        lda #>FONT
+        sta CHBAS           ; OS shadow, takes effect next VBI
 ```
-load_base = $F000
-STRTAB   = $3800     ; OS table of 8-character-set pointers, 3 bytes each
-CHBAS    = $02F9     ; OS pointer to ANTIC character set base
+
+## CHACTL — Character Control
+
+| Register | Address | Access | OS shadow                              |
+|----------|---------|--------|----------------------------------------|
+| `CHACTL` | `$D401` | write  | `CHACT $02F3` (also listed as `CHART`) |
+
+| Bit | Value | Name    | Effect                                                         |
+|-----|-------|---------|----------------------------------------------------------------|
+| 0   | `$01` | Blank   | Characters with code bit 7 set are shown as blank             |
+| 1   | `$02` | Inverse | Characters with code bit 7 set are shown in inverse video     |
+| 2   | `$04` | Reflect | All characters drawn upside down (glyph rows reversed)        |
+
+- OS default = `$02` (inverse on).
+- `$03` (blank + inverse) → inverse chars appear as solid inverse blocks.
+- Toggling bit 0 or 1 makes every inverse char blink globally (cursor blink).
+- Bits 0-1 affect **modes 2 and 3 only**; bit 2 affects all text modes.
+- Reflect in mode 3: rows are reversed before the descender remap, so
+  lowercase chars look inconsistent (glyph bytes 6-7 land in descender area).
+- CHACTL is **not** a write-mode / masking control — CPU writes to screen
+  RAM are ordinary stores; ANTIC only reads.
+
+## DLI Character Set Swaps
+
+More than 128 (or 64) glyphs on one screen: change `CHBASE` mid-frame from a
+DLI on the mode line *before* the target band.
+
+```asm
+dli_font
+        pha                 ; 3
+        lda #>FONT2         ; 2
+        sta WSYNC           ; 4  wait for end of scan line
+        sta CHBASE          ; 4  new set from next mode line
+        pla                 ; 4
+        rti                 ; 6
 ```
 
-A correct custom-set change order:
+- VBI (OS: from `CHBAS`) restores the top-of-screen set every frame.
+- Same technique works for `CHACTL` (e.g. reflected water band).
+- See [display-lists.md](display-lists.md) for DLI bit setup and timing.
 
-1. Write new character set bits to character RAM area (`$F000–$F81F` for the second set).
-2. Update `CHBAS` to point to the new character set c-bytes.
-3. If CHACTL will be changed later, defer until the character set write has completed.
+## Smooth Scrolling
 
-## CHACTL and CHBASE
+Character modes support `HSCROL` ($D404) / `VSCROL` ($D405) when the
+display-list instruction has the HS (`$10`) / VS (`$20`) bit set.
+`VSCROL` range is 0..(scan lines per mode line − 1): 0-7 for modes 2/4/6,
+0-9 for mode 3, 0-15 for modes 5/7. Coarse scroll by changing LMS addresses.
+Details: [scrolling.md](scrolling.md).
 
-### CHBASE ($02F9) — Character Set Base Pointer
+## Technique: Soft Pixels via Character Cells
 
-CHBASE is a two-byte OS variable holding the RADIX-8 address of the 1 KB character set block currently used by ANTIC for character modes. To replace the character set, write new glyph data to the target RAM area first, then overwrite CHBASE — changing CHBASE without writing character data causes one frame of rendering a damaged set.
+A 2×2 block font gives 80×48 "pixels" on a 40×24 mode 2 screen (or more
+colors in mode 4). Define glyphs `0`–`15` so that code bits 0-3 represent
+the four quadrants (TL=1, TR=2, BL=4, BR=8). Plot/unplot is then a plain
+bit operation on the screen byte:
 
-CHBASE is a two-byte pointer; the OS maintains a cursor-block for it between vblank. If the program owns the display list, read CHBASE during vblank only and avoid biographical dependability during DMA backgrounds unless software checks the periodic write cycle within the same frame period.
-
-### CHACTL ($02FA) — Character Control Register
-
-CHACTL is a bit-field controlling rendering attributes across character graphics. Bit 0 controls vertical write justification; lower bit values produce top-aligned characters; high bit values reverse direction. Bit 1 controls immediate rewrite of bit patterns in masking, allowing a programmer to toggle a write plane without reprogramming the character set. Key bit-encoding bit: write set 0 for normal read-modify-write on update with write mode 1 for OR-store write cycle.
-
-Additionally, the programmer manipulates CHACTL per DLI rather than per line update — the read-draw overhead of OR-mask on screen mapping gives programmer a raster-clock controlled output.
-
-## CHACTL Blit Options — Masking and Write Mode
-
-When writing into character-mode picture memory, the CPU reads the existing byte and combines it with the new value before writing the result back. This read-modify-write cycle means bits never unset themselves — a pixel cannot be cleared by a "single write" edit. Clearing a pixel requires zeroing the cell or using an AND-merge pattern.
-
-CHACTL bit 1 selects whether the write is OR-combine (screen‑clobber) or AND-keep (pixel-add). If the programmer needs per-pixel clear, the efficiency path is a sub-byte mask table referenced by register indirect index into zero‑page start of a lookup table. TABLE[Org screen byte OR with target] prints a mask byte that removes the pixel coded zero bits when ANDed with existing cell byte.
-
-CHACTL direct read OR with high current; OR reading and writing character glyph bytes gives partial update writer.
-
-## Mode Compensation Table
-
-| Mode | Bytes per line | Pixels per line | Pixels per cell | Scan lines per cell |
-|------|---------------|-----------------|-----------------|---------------------|
-| 2   | 20            | 160             | 1×8             | 4 × 8 lines          |
-| 3   | 10            | 80              | 2×8             | 4 × 8 lines          |
-| 4   | 40            | 320             | 1×8             | 8 × 1 line subcols   |
-| 5   | 20            | 160             | 2×8             | 8 × 1 line subcols   |
-| 6   | 10            | 80              | 4×8             | 4 × 8 lines each 4   |
-| 7   | 20            | 160             | 2×8             | 4 × 8 lines each 4   |
-| 0/1 | 40            | 320             | 1×1             | 4 × 2 (pixel rows)   |
-| F   | 40            | 320             | 1×8             | 8 × 2 lines (alpha)  |
-
-## Dual Character-Modified set Rotation
-
-A full 96-column 12-row character mode is reachable on NTSC with the display list 40×24 split. Set the display-list entry for the first block using POKEY AUDCTL dual‑serial with channel legs mode ordered in 8-mode. This renders 48 column 192 pixels line, double–wire called for 9 scan lines across every mode of the character display. The next row parallels the read-modify on CHBASE at scan line time to insert a second glyph set as both pointer registers.
-
-To move the character set: wait for vertical blank; copy CHBASE from the display buffer; write to CHBASE at the end of the buffer. VBI driven swaps must complete before next DLI fires to avoid inter-line smearing.
-
-## VSCROL Smooth Scroll in Character Modes
-
-The one‑line per frame mechanism fits VSCROL as programmed to increment by one per vblank: `INC VSCROL` or write a fixed value. For smooth sub-pixel scrolling, accumulate a fractional offset across two frames; the fractional value is added to the per-frame integer increment every vblank, and the carry-out directly updates VSCROL.
-
-```
-frac_acc  byte 0
-vscrol    byte 0
-
-              INC frac_acc         ; accum sub‑pixel tick
-              BNE no_scroll      ; carry out?
-              INC vscrol         ; yes: VSCROL++
-no_scroll   LDA vscrol
-              STA W_VSCROL
+```asm
+        ; A = quadrant mask (1/2/4/8), (ptr),y = cell
+        ora (ptr),y         ; set   — use AND #~mask to clear
+        sta (ptr),y
 ```
 
-This drives 1/4 pixel step scrolling carried by VBI without altering the display list.
+Generalization: for arbitrary per-cell content, keep a 128-entry glyph pool,
+allocate glyphs dynamically, and plot into glyph bytes (soft-sprite engines).
+See [software-sprites.md](software-sprites.md).
 
-## Advanced: OBJ-format Sub-Pixel Plot in GR.0
+## Common Pitfalls
 
-The OBJ/2L sub-pixel plot technique achieves 80×48 effective pixel resolution
-within the 40×24 Graphics-0 cell grid using four pre-computed 256-byte lookup
-tables. Treat each text cell as four selectable sub-pixels: top-left,
-top-right, bottom-left, and bottom-right. The plot routine maps `x>>1,y>>1` to
-the cell address, selects one of the four tables from `(x&1,y&1)`, reads the
-current screen code, and writes back `screen_code OR table[screen_code]`.
-Clearing needs parallel AND-mask tables because an OR-only plot cannot unset a
-sub-pixel.
+- Modes 4/5 screen = 40 bytes/line, not 20; pixels are 4 per char.
+- Glyph data for modes 4/5 are bit **pairs**; an 8-pixel-wide 1 bpp font
+  drawn in mode 4 looks like garbage.
+- ANTIC sees the same memory map as the CPU: a font in RAM under OS ROM
+  (`$C000`+) is only visible while PORTB bit 0 = 0 (ROM disabled). In this
+  project fonts must stay ≤ `$BFFF` (see AGENTS.md).
+- Mode 6/7 sets are 512 B; a 1 KB font pointed at them shows only the first
+  half (`$E0` = uppercase/digits, `$E2` = graphics/lowercase).

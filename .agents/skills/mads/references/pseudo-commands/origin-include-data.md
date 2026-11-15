@@ -42,11 +42,11 @@ The `INS` pseudo-command allows including an additional binary file. The include
 Additionally, the following operations can be performed on the included binary file:
 
 ```
-*          invert the bytes of the binary file
+*          invert the bytes (XOR $80, i.e. inverse video)
 +-VALUE    increase/decrease the byte values of the binary file by the value of the VALUE expression
 
 +OFSET     skip OFFSET bytes from the beginning of the binary file (SEEK OFFSET)
--OFSET     read the binary file from its end (SEEK FileLength-OFFSET)
+-OFSET     read only the last OFFSET bytes of the binary file (SEEK FileLength-OFFSET)
 
 LENGTH     read LENGTH bytes of the binary file
 ```
@@ -58,6 +58,15 @@ If the `LENGTH` value is not specified, the binary file will be read until the e
 ### ICL 'filename'["filename"]
 
 The `ICL` pseudo-command allows including an additional source file and assembling it. The included file does not have to be in the same directory as the main assembly file. It is enough to have specified the search paths for **MADS** using the `/i` switch (see [Assembler Switches](../usage.md#assembler-options)).
+
+**Gotcha - the opcode field matters:** the classic pseudo-commands (`ICL`, `INS`, `ORG`, `DTA`) are recognised only in the **opcode field**. Flush left, the first token is parsed as a label and the rest as an instruction, so a column-0 `icl` fails with `ERROR: Illegal instruction` reported *at the `ICL` line* - which makes it look like the included file is broken even though it assembles fine on its own. Always indent them (or give them a label):
+
+```asm
+    icl 'engine/sfx_secret.asm'   ; OK - pseudo-command in the opcode field
+icl 'engine/sfx_secret.asm'       ; ERROR: Illegal instruction (icl parsed as a label)
+```
+
+The dot-directives (`.proc`, `.byte`, `.endp`, ...) are accepted anywhere, which is why both `label .byte 0` and a flush-left `.proc` work.
 
 ### DTA
 
@@ -88,5 +97,3 @@ The `DTA` pseudo-command is used to define data of a specific type. If no type i
   dta  c  'file' , $9b
   dta c'invers'*
 ```
-
-<a name="sin"></a>

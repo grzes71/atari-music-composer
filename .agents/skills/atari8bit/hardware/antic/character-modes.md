@@ -4,44 +4,48 @@
 
 | Mode | Scan lines | Characters/line | Character memory | Colors |
 |---|---|---|---|---|
-| 2 | 8 | 40 | 1 KB @ 1K boundary | 2 |
-| 3 | 10 | 40 | 1 KB | 2 (descenders) |
-| 4 | 8 | 40 | 1 KB | 4+1 |
-| 5 | 16 | 40 | 1 KB | 4+1 |
-| 6 | 8 | 20 | 512 B @ 512B boundary | 5 |
-| 7 | 16 | 20 | 512 B | 5 |
-### 3.2.1  Complete ANTIC Mode Table (Modes 2–F)
+| 2 | 8 | 40 | 1 KB @ 1 KB boundary | 2 |
+| 3 | 10 | 40 | 1 KB @ 1 KB boundary | 2 (descenders) |
+| 4 | 8 | 40 | 1 KB @ 1 KB boundary | 4+1 |
+| 5 | 16 | 40 | 1 KB @ 1 KB boundary | 4+1 |
+| 6 | 8 | 20 | 512 B @ 512 B boundary | 5 |
+| 7 | 16 | 20 | 512 B @ 512 B boundary | 5 |
 
-| Mode | Lines/cell | Chars/line | Memory | Align | Colors | Pixel size |
-|---|---|---|---|---|---|---|
-| 2 | 8 | 40 | 1 KB | 1 KB | 2 | 8×8 bit |
-| 3 | 10 | 40 | 1 KB | 1 KB | 2 | 8×8 (descenders) |
-| 4 | 8 | 40 | 1 KB | 1 KB | 4+1 | 4×8 |
-| 5 | 16 | 40 | 1 KB | 1 KB | 4+1 | 4×8 (double height) |
-| 6 | 8 | 20 | 512 B | 512 B | 5 | 8×8 (1-color-clock) |
-| 7 | 16 | 20 | 512 B | 512 B | 5 | 8×8 (double height) |
-| 8 | 4 | 40 | 2 KB | 2 KB | 4 | 4×4 |
-| 9 | 4 | 80 | 2 KB | 2 KB | 2 | 2×4 |
-| A | 4 | 80 | 2 KB | 2 KB | 4 | 2×4 |
-| B | 2 | 160 | 4 KB | 4 KB | 2 | 1×2 |
-| C | 1 | 160 | 4 KB | 4 KB | 2 | 1×1 |
-| D | 2 | 160 | 4 KB | 4 KB | 4 | 1×2 |
-| E | 1 | 160 | 4 KB | 4 KB | 4 | 1×1 |
-| F | 1 | 320 | 8 KB | — | 2 hires | 1×1 (PF2 luminance) |
+- **Modes 2/3** use 128 characters. Bit 7 of the screen code is handled by
+  `CHACTL` (inverse/blank).
+- **Modes 4/5** are 2-bits-per-pixel character modes. Bit pairs map to
+  `COLBK`, `COLPF0`, `COLPF1`, and `COLPF2`; when screen-code bit 7 is set,
+  the `11` pair uses `COLPF3` instead of `COLPF2`.
+- **Modes 6/7** use 64 characters. Screen-code bits 7–6 select foreground
+  color `COLPF0`–`COLPF3`; bit 0 in the glyph data is background `COLBK`.
 
-Key: **Lines/cell** = scan lines per character row. **Aligned** = address must be 512B/1K-aligned for char modes; bitmap modes require every-row LMS (`$40`+LMS on every scan-line instruction) for playfield widths >4K. `+1` color in modes 4/5 = background color. Mode F background = PF2 colour. Hardware P/M graphics are available over standard playfield modes when `DMACTL` missile/player DMA and `GRACTL` display bits are enabled; PMG DMA steals cycles but does not change the playfield mode.
+### CHBASE
 
-**Dynamic CHBASE switching:** write to `CHBASE = $D409`; takes effect two cycles after write. For Mode 6/7, use CHBASE bits 0 used as mode-selection: CHBASE bit 1 must match the mode's alignment boundary for correct color-clock pipeline.
+| Register | Address | Access | OS shadow |
+|---|---|---|---|
+| `CHBASE` | `$D409` | write | `CHBAS $02F4` |
 
-**Blink/inversion:** CHACTL bits 0–1. Bit 1 = invert cells where char-name bit 7=1; bit 0 = blank cells where char-name bit 7=1; both = inverted space.
+- Modes 2–5 require a **1 KB-aligned** character set.
+- Modes 6/7 require a **512 B-aligned** character set.
+- With the OS running, write `CHBAS`; the VBI copies it to `CHBASE`.
 
-```asm
-        lda #$00            ; no blink, no invert
-        sta CHACTL
-        lda #$02            ; invert bit 7 characters
-        sta CHACTL
-```
+### CHACTL
 
-**Vertical reflection:** CHACTL bit 2 = flip character upside-down (row 7 displayed first). Affects all modes.
+| Register | Address | Access | OS shadow |
+|---|---|---|---|
+| `CHACTL` | `$D401` | write | `CHACT $02F3` (also listed as `CHART`) |
 
----
+| Bit | Value | Effect |
+|---|---|---|
+| 0 | `$01` | Characters with code bit 7 set display as blanks |
+| 1 | `$02` | Characters with code bit 7 set display in inverse video |
+| 2 | `$04` | All character glyphs are vertically reflected |
+
+- Bits 0–1 affect **modes 2 and 3 only**.
+- Bit 2 affects **all character modes**.
+
+### DLI charset swaps
+
+A DLI on the mode line before a band can change `CHBASE` for the next band.
+Write the hardware register inside the DLI; if the OS is running, the next VBI
+restores the top-of-screen value from `CHBAS`.

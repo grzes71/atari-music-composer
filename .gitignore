@@ -3,6 +3,7 @@
 # =============================================================================
 
 # --- User Specified Exclusions ---
+/build/
 /music/
 /generator_comparison.md
 /listening_test/answer_key.json
@@ -12,6 +13,9 @@ poc_output/
 /inventory.csv
 /inventory.json
 /HISTORY.md
+/reports/
+/measure.bin
+*.bin
 /report*.md
 /stage*.md
 /stage*.json
@@ -96,3 +100,11 @@ ehthumbs.db
 .env
 .env.local
 .env.*.local
+
+# --- Rust & Maturin Build Artifacts ---
+target/
+**/target/
+*.pyd
+*.pdb
+*.dll
+*.dylib

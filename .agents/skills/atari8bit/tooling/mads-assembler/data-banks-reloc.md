@@ -9,9 +9,10 @@
     y   .byte
 .ends
 
-; Instantiate
-player     dta   point [1]    ; allocate one point struct
-enemies    dta   point [8]    ; array of 8 point structs
+; Instantiate — COUNT is the maximum element index, so [n] reserves n+1 elements
+player     dta   point [0]    ; 1 struct (point = 2 bytes here)
+enemies    dta   point [7]    ; 8 structs
+other      point              ; shorthand for `dta point`, one struct
 
 ; Enumeration
 .enum color_set
@@ -37,22 +38,36 @@ enemies    dta   point [8]    ; array of 8 point structs
 
 ## 13.8 Memory Banks — Virtual vs Hardware
 
-### Virtual 64 KB bank mode (`OPT B-`, default)
+### Virtual bank mode (`OPT B-`, default)
 
-MADS supports virtual 64 KB memory banks — each bank is independently addressable but memory model does not include bank-switching hardware.
+The MADS bank counter is a label-scope tool, not hardware: labels tagged with counter `0` are global,
+labels tagged `>0` are local, and `=label` reads the counter while a leading `:` bypasses scope.
+`.RELOC` blocks increment the counter automatically (`$0001..$FFF7`) and cannot be changed by hand.
 
 ### Hardware 16 KB bank mode (`OPT B+`) — Atari 130XE / banked cartridges
 
 ```asm
-opt    b+                    ; activate 16 KB hardware banks
-        .LMB $80             ; load memory bank counter (D301 bit 6)
-        .NMB $a0             ; next-memory-bank label:
-        .RMB $b0             ; run-memory-bank label:
+opt    b+                    ; bank-sensitive mode
+        lmb #1               ; load bank counter (also calls @BANK_ADD -> new ORG)
+        nmb                  ; bank counter +1
+        rmb                  ; bank counter = 0, back outside the window
+        lmb #5 , $6500       ; bank 5, next assembly address $6500 (OPT B+)
 ```
 
-Bank identifiers: writing to `PORTB ($D301)` bits 1-4 selects 16 KB memory bank. `:a` and `:b` operators allow direct switching per access in MADS expressions. The `LMB`/`NMB`/`RMB` pseudo-ops emit hardware bank-select code at assembly time.
+- `OPT B+` requires the macros `@BANK_ADD` (`MACROS\@BANK_ADD.MAC`) and `@BANK_JMP`
+  (`MACROS\@BANK_JMP.MAC`) plus the labels `@TAB_MEM_BANKS` (table of PORTB values,
+  e.g. filled by `PROCEDURES\@MEM_DETECT.ASM`) and `@PROC_ADD_BANK` (address of the
+  bank-switch helper, which must live outside `$4000-$7FFF`).
+- `LMB`/`NMB`/`RMB` change the MADS bank counter, force the `@BANK_ADD` macro (which emits
+  the bank switch through `@PROC_ADD_BANK`) and set a new assembly address — default `$4000`
+  for `LMB`/`NMB`, `$8000` for `RMB`.
+- `=label` reads the bank counter of a label; a leading `:` bypasses bank scope
+  (`lda :label5`, `@bank_jmp :bank2`). With counter `0` code must be outside `$4000-$7FFF`
+  and labels are global; with counter `>0` code must be inside the window and labels are local.
+- Runtime PORTB discipline is still yours: save/restore `PORTB` if DOS, SDX, BASIC or the OS
+  ROM must survive, and keep NMI/VBI code and its return path outside the banked window.
 
-Practical 130XE bank layout, from the MADS example usually named `xms_banks.asm`:
+Practical 130XE layout, from the MADS example `xms_banks.asm`:
 
 ```asm
         opt b+
@@ -66,93 +81,84 @@ detect  jsr @mem_detect
 
 * bank #1 in the $4000-$7FFF window
         lmb #1
-        .pages $40           ; assert a 16 KB page budget
-bank1   ; code/data assembled for the banked window
-        @bank_jmp :bank2
+        .pages $40           ; assert a 64-page (16 KB) budget
+bnk1    mva #"1" $bc40
+        @bank_jmp :bnk2
         .endpg
 
 * bank #2
         lmb #2
         .pages $40
-bank2   @bank_jmp :bank1
+bnk2    mva #"2" $bc40
+        @bank_jmp :bnk1
         .endpg
 
 * resident RAM, outside $4000-$7FFF
         rmb
-main    @bank_jmp bank1
-
         icl 'macros/@bank_jmp.mac'
-        run main
         icl 'macros/@bank_add.mac'
-```
-
-Rules for generated code:
-- Keep `@BANK_JMP_PROC`, NMI/VBI code, and any bank-switch return path outside `$4000-$7FFF`.
-- Save and restore `PORTB` if DOS, SDX, BASIC, or OS ROM must survive.
-- Use `.PAGES $40` or explicit `ERT` checks so a bank cannot silently overflow the 16 KB window.
-- Treat `LMB/NMB/RMB` as assembly-layout tools; they do not replace runtime `PORTB` discipline.
-
-### MEMAC B ↔ PORTB conversion (VBXE, chapter02)
-
-```asm
-; VBXE bank register MACRO B ->_PORTB
-        ; MEMAC B = 32 KB address window
-; PORTB desired = (MEMAC B / 2) >>> 3
 ```
 
 ---
 
 ## 13.9 Relocatable Code (MADS Format + SDX)
 
-### MADS `.RELOC` format
+### MADS `.RELOC` / SDX relocatable output
 
 ```asm
-.reloc
-    lda   ptr             ; relocatable reference
-ptr  .word $0000           ; label: will be patched by linker
-
-; .PUBLIC / .EXT / .LINK
-.public  exported_sym
-.extrn   imported_sym .word
-.link     lib_file
+        .reloc [.byte|.word]     ; start a relocatable block (bank counter auto-increments)
+        .public main             ; exported symbol (aliases .global, .globl)
+        .extrn  imported .word   ; external symbol (.ext type)
+        .link   'module.obx'     ; link a previously assembled DOS/reloc file
 ```
 
-`BLK UPDATE` chain produces the relocatable segment. `.PUBLIC` labels appear in the SDX symbol block (`$FFFB`).
+- `.RELOC` emits a DOS-style header extended by 10 bytes; labels defined before the block must use
+  `EQU`, and new labels inside the block must be indented (or MADS reads them as instructions).
+- Relocatable references must be stored as data (`LDA _something` + `_something dta a(target)`),
+  because a `lda <label` page-byte trick cannot be relocated.
+- Blocks are merged with the `BLK UPDATE ...` pseudo-commands: `BLK UPDATE ADDRESS`,
+  `BLK UPDATE SYMBOLS`, `BLK UPDATE EXTERNAL` (MADS extension, `$FFEE` header) and
+  `BLK UPDATE NEW addr 'SYM'`. Public symbols get their own `BLK UPDATE PUBLIC` block —
+  the `$FFFB` block is the *SDX-symbol* variant, not the public-symbol one.
 
-Host-link pattern, from the MADS examples usually named `tetris_reloc.asm` and `tetris_reloc_example.asm`:
+Host-link pattern (from `tetris_reloc.asm` + `tetris_reloc_example.asm`):
 
 ```asm
 ; library/module source
         .reloc
         .public main
-
 main    jsr init
         rts
 
 ; host program
         org $3127
-        .link 'module.obx'
+        .link 'tetris_reloc.obx'
         run main
 ```
 
-Use this when an example should be relocatable without manually rewriting every absolute reference. Export only the entry points needed by the host and keep fixed hardware/register addresses as constants, not relocatable symbols.
+Export only the entry points the host needs and keep hardware registers as constants, not relocatable symbols.
 
-### SpartaDOS X integration
+### SpartaDOS X block types (MADS SDX documentation)
 
 ```asm
-blk     sparta     $2000  ; SDX binary, loaded at $2000
-        ; code here
-blk     reloc      0     ; relocatable block (SDX chunks)
-        ; further code here
+        blk  sparta  $2000   ; fixed-address SDX block, code at $2000
+        blk  reloc   main    ; relocatable block in MAIN memory (EXTENDED = banked)
 ```
 
-SDX block types in the binary:
+`BLK` is a pseudo-command, so it must be indented — in column 1 MADS reads `blk` as a label. Its forms are
+`BLK N[one] addr`, `BLK D[os] addr`, `BLK S[parta] addr`, `BLK R[eloc] M[ain]|E[xtended]`,
+`BLK E[mpty] n M|E`, `BLK U[pdate] S[ymbols|E[xternal]|A[ddress]|N[ew]`.
+
 ```
-$FFFE  end-of-segment marker
-$FFFA  start (run) address
-$FFFC  INI (initialisation code) block
-$FFFB  symbol table (PUBLIC .EXT)
-$FFFD  switch block (bank IDs for 16 KB banks)
+$FFFF  first block header (DOS compatible): start, end
+$FFFA  fixed-address block header — identical to $FFFF, only marks the file as SDX
+$FFFE  relocatable block: blk_num, blk_id (bit7 = reserve, no data), blk_off, blk_len
+$FFFD  update block: blk_num, blk_len; payload = offsets plus $fc (end), $fd,a(ADDR),
+       $fe,b(blk_num) and $ff (+$fa) commands
+$FFFB  update block addressed by an SDX symbol name (8 ATASCII chars)
+$FFFC  symbol definition block: blk_num, smb_off, SMB_NAME
 ```
+
+`$FFFB`, `$FFFC` and `$FFFD` are consumed at load time and are not kept in memory.
 
 ---

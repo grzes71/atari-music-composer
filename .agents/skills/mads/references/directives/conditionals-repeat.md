@@ -1,5 +1,7 @@
 # Conditionals Repeat
 
+<a name="rept"></a>
+
 ### .REPT expression [,parameter1, parameter2, ...]
 The `.REPT` directive is an extension of `:repeat`, with the difference that it repeats a designated program block instead of a single line. The beginning of the block is defined by the `.REPT` directive, followed by a value or arithmetic expression specifying the number of repetitions in the range <0..2147483647>. After the number of repetitions, parameters may optionally occur. Unlike macros, parameters for `.REPT` are always evaluated first, and only then is their result substituted (this property can be used to define new labels). Parameters in a `.REPT` block are used similarly to parameters in a `.MACRO` block. The end of a `.REPT` block is defined by the `.ENDR` directive, before which no label should be placed.
 
@@ -16,7 +18,7 @@ label:1 mva #0 $d012+#
  .endr
 ```
 
-<a name="pages"></a>
+<a name="ifdef"></a>
 
 ### .IFDEF label
 The `.IFDEF` directive is a shorter equivalent of the `.IF .DEF LABEL` condition.

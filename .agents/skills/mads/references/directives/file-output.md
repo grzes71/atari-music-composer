@@ -1,5 +1,7 @@
 # File Output
 
+<a name="print"></a>
+
 ### .PRINT [.ECHO]
 Causes the value of the expression or the character string provided as a parameter (enclosed in single `' '` or double `" "` quotes) to be printed on the screen, e.g.:
 
@@ -57,7 +59,7 @@ The `.FILEEXISTS` directive returns `'1'` when the file `'filename'` exists; oth
   eif
 ```
 
-<a name="define"></a>
+<a name="get"></a>
 
 ### .GET [index] 'filename'... [.BYTE, .WORD, .LONG, .DWORD]
 

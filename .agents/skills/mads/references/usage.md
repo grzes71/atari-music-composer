@@ -5,6 +5,7 @@
 Syntax: mads source [options]
 
 -b:address      Generate binary file at specific address
+-bc             Activate branch condition test
 -c              Label case sensitivity
 -d:label=value  Define a label
 -f              CPU command at first column
@@ -14,7 +15,7 @@ Syntax: mads source [options]
 -i:path         Additional include directories
 -l[:filename]   Generate listing
 -m:filename     File with macro definition
--ml:value       margin-left property
+-ml:value       Set left margin for listing to value
 -o:filename     Set object file name
 -p              Print fully qualified file names in listing and error messages
 -s              Silent mode

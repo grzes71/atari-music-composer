@@ -1,105 +1,83 @@
 # Optimal Small
 
-## 18.1 Optimal Sort — 8-bit Elements
+## 18.1 Optimal Sort — Small N (8-bit Elements)
 
-Indexed merge variant using a ZP scratch pad and a ZP-indexed lookup to identify the
-minimum directly. The build phase maintains two link fields (nxt/prv array); the
-walk phase simply chains through the linked list.
+For N up to about 8 the cheapest sort is a **sorting network**: a fixed sequence
+of compare-exchange operations with no loop counter, no branches per pass and no
+recursion. The minimum number of comparators needed is known:
+
+| N | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|
+| comparators | 1 | 3 | 5 | 9 | 12 | 16 | 19 |
+
+A 5-element network using the optimal 9 comparators (checked here against every
+zero-one input and on the 6502, where it sorted 400 random cases):
+
+```text
+(0,1) (3,4) (2,4) (2,3) (1,4) (0,3) (0,2) (1,3) (1,2)
+```
+
+Each pair is one compare-exchange. Written inline for two zero-page operands:
 
 ```asm
-; A = key array address; X = N elements (< 128); Y = output pointer
+; CE v1,v2 — order the pair so that v1 <= v2
+; 15 bytes: 9 cycles when already ordered, 20 cycles when it has to swap
+        lda   v1
+        cmp   v2
+        bcc   @ce_ok
+        ldx   v1
+        lda   v2
+        sta   v1
+        stx   v2
+@ce_ok
+```
 
-OptimalSort8
-        sta    key_ptr
-        stx    n_elems
+Repeat that block once per comparator; give each instance its own local label or
+wrap it in a MADS macro. Because the network works on values, the array is in
+place when the last comparator finishes — there is no index list to walk.
 
-        ; Phase 1: initialise linked lists
-        ldx    #$00
-@init   lda    #$FF
-        sta    nxt,x
-        sta    prv,x
-        inx
-        cpx    n_elems
-        bne    @init
+For reusable code instead of inlining, a pointer-based compare-exchange is 27
+bytes and costs 29 cycles when ordered / 46 when it swaps:
 
-        ; Phase 2: build key order (nxt/prv doubly-linked list)
-        ldx    #$00
-@outer  txa
-        tay
-@inner  iny
-        cpy    n_elems
-        beq    @next_outer
-        lda    key_ptr,y
-        cmp    key_ptr,x
-        bcc    @inner           ; key[y] < key[x] -> skip x
-        ; Insert x before y
-        lda    prv,y
-        sta    nxt,x
-        lda    nxt,x
-        sta    prv,y
-        lda    x
-        sta    prv,x
-        lda    y
-        sta    nxt,x
-        jmp    @inner
-@next_outer
-        inx
-        cpx    n_elems
-        bne    @outer
-
-        ; Phase 3: find head (prv = $FF) and walk linked list
-        ldx    #$00
-@head   lda    prv,x
-        bne    @head
-        txa
-        sta    head_idx
-
-        ldx    head_idx
-        ldy    #$00
-@walk   lda    key_ptr,x
-        sta    output,y
-@filled
-        lda    nxt,x
-        cmp    #$FF
-        beq    @done
-        tax
-        iny
-        cpy    #$FF
-        bne    @walk
-@done   rts
+```asm
+; p1, p2 = zero-page pointers to the two bytes
+cx      ldy   #0
+        lda   (p1),y
+        sta   ta
+        lda   (p2),y
+        sta   tb
+        lda   ta
+        cmp   tb
+        bcc   @cx
+        beq   @cx
+        lda   tb
+        sta   (p1),y
+        lda   ta
+        sta   (p2),y
+@cx     rts
 ```
 
 | | |
 |---|---|
-| Workspace | OPTIMAL_W 128 B (nxt + prv arrays) |
-| Key size | 8-bit unsigned, N < 128 |
-| Time | ~6N + fixed build overhead |
-| Stable | yes (insertion preserves key order) |
-| ZP-only | yes; no absolute hot-path access |
+| Workspace | none beyond the array (or `p1`/`p2`/`ta`/`tb` for the reusable CE) |
+| Key size | 8-bit unsigned (16-bit needs two-byte compares per CE) |
+| Comparators | 1/3/5/9/12/16/19 for N = 2..8 (minimum-size networks) |
+| Stable | no — compare-exchange can reorder equal keys |
 
 ---
 
-## 18.2 Optimal Sort — 16-bit Elements
+## 18.2 Optimal Sort — Larger N (index / link chain)
 
-Same structure, 16-bit compare uses high-byte first then low-byte.
+Past N = 8 the comparator count grows quickly (N = 9 needs 25, N = 10 needs 29),
+so switch to an index-linked insertion: keep `next[index]` as the link to the
+next record and insert each new index into the chain, as described in §18.7.
+Nothing in the payload moves, which is what matters when records are wider than
+their keys.
 
-```asm
-; 16-bit swap (in-place, ZP temp)
-        lda    key_ptr,x
-        ldy    key_ptr+1,x
-        lda    key_ptr,y
-        sta    ZP_TEMP
-        sty    ZP_TEMP+1
-        lda    key_ptr,y
-        sta    key_ptr,x
-        sty    key_ptr+1,x
-        lda    ZP_TEMP
-        sta    key_ptr,y
-        lda    ZP_TEMP+1
-        sta    key_ptr+1,y
-```
-
-The PLA stack swap technique (used by §18.4 Quicksort): pop two bytes from the stack
-as virtual X indices, perform the 16-bit swap, then push.
+For 16-bit keys, compare the high byte first and only then the low byte; a
+16-bit compare-exchange is the 8-bit CE above extended with a second byte, or a
+`CMP`/`SBC` pair on `hi`/`lo`. Avoid the temptation to build "6N cycle"
+estimates: an insertion-style chain costs O(N^2) comparisons for random input,
+and only the constant factors are under your control.
 
 ---

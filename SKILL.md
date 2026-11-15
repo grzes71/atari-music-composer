@@ -315,6 +315,41 @@ icl 'player.asm'
 - Music data: **340--750 bytes** (depending on song length)
 - Total RAM consumption: **$< 1.6$ KB**
 
+#### The one hard limit: the player must be strictly smaller than 2048 bytes
+The project's only byte limit applies to the **assembled player** (code + runtime state), and it is
+**exclusive** — a player of exactly 2048 bytes fails. Measured through
+`atari_music.stage15.measure_player_size` (MADS on an `org $6000` wrapper, `-b:$6000 -o:...bin`),
+the player currently assembles to **1016 bytes**.
+
+Three other quantities are *not* bounded by it, and must not be conflated with it:
+
+| quantity | bounded by 2048? |
+| :--- | :--- |
+| assembled player (code + runtime state) | **yes — strictly below** |
+| exported song data (patterns, sequence, instrument table) | no — separate, much smaller POKEY-IR budget |
+| complete `.xex` file (harness + player + song data) | **no — not bounded at all** |
+| loaded segments (`org` addresses and lengths) | no — bounded by the Atari memory map |
+
+Ask `atari_music.stage15.player_size_limit_ok(size)` / `check_player_size(size)` rather than
+comparing against 2048 directly; `reports/stage15/player_size_analysis.json` is the authoritative
+record.
+
+#### XEX memory layout is validated, not the file size
+Because the file's size is not a criterion, `build-xex` parses the container MADS emitted
+(`atari_music.xex_layout`) and judges the **address ranges**:
+
+- user segments must lie entirely inside `$0400-$BFFF` — below is zero page, the hardware
+  stack and the OS/DOS vectors this binary itself uses (RUN `$02E0/$02E1`, IOCBs `$0340-$03BF`,
+  the `$02C6`/`$02C8`/`$02FC` shadows, the player's zero page); above is OS kernel ROM
+  (`$C000-$CFFF`), hardware registers (`$D000-$DFFF`, including POKEY) and OS ROM
+  (`$E000-$FFFF`). `AGENTS.md` §3.1: user code and data must end at or below `$BFFF`;
+- `$A000-$BFFF` (the BASIC ROM window) is permitted on purpose — the project relocates there;
+- two segments may never claim the same memory (the loader writes them in file order);
+- the RUN/INIT vector blocks are loader protocol and are exempt.
+
+A failure removes the binary just written and names the segment, its range and the reason. See
+[docs/xex_memory_layout.md](docs/xex_memory_layout.md).
+
 ---
 
 ## 9. CLI Reference

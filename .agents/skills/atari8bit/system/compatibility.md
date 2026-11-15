@@ -14,29 +14,29 @@ description: >-
 
 | Feature | 400/800 | XL/XE | Agent risk |
 |---|---|---|---|
-| RESET key | ANTIC RNMI path | CPU RESET line | Reset-survival code differs |
+| RESET key | NMI through ANTIC (`NMIST` bit 5) | Hardware reset | Reset-survival code differs |
 | Joystick ports | Four ports on many models | Two ports | Paddle/port assumptions differ |
 | PORTB banking | Joystick ports 3/4 role | ROM/RAM banking on XL/XE | Do not use XL/XE banking on 400/800 |
-| BASIC ROM | Cartridge/ROM model differs | Often controlled by PORTB | Preserve BASIC bit if returning to OS |
-| Self-test ROM | Not XL/XE-style | PORTB-controlled | Can collide with bank switching |
+| BASIC ROM | Cartridge / model dependent | Usually internal ROM under PORTB control | Preserve BASIC state if returning to OS |
+| Self-test ROM | Not XL/XE-style | PORTB-controlled | Preserve self-test state unless you own the machine |
 | ANTIC/GTIA timing | Same family, revision differences | Same family, revision differences | Raster kernels need real target testing |
 
 ## PAL/NTSC
 
-- ANTIC determines frame timing: NTSC is 262 scan lines at ~60 Hz; PAL is 312 scan lines at ~50 Hz.
-- GTIA determines the PAL hardware register result and color encoding.
-- Mixed ANTIC/GTIA systems exist; do not assume frame timing and color standard always match.
-- Detect timing by polling `VCOUNT` over a frame; PAL reaches a higher maximum than NTSC.
-- Avoid equality-only waits on `VCOUNT`; use range/threshold waits so PAL code does not lock on NTSC or vice versa.
+- ANTIC determines frame geometry: NTSC systems are about 262 scan lines / 60 Hz; PAL systems about 312 scan lines / 50 Hz.
+- On GTIA machines, the preferred software test is the `PAL` register at `$D014`: test bits 1-3 with mask `$0E` (zero means PAL, nonzero means NTSC).
+- Early CTIA-only systems do not provide that GTIA PAL-status register; there you must time a frame instead.
+- Avoid equality-only waits on `VCOUNT`; use wrap-aware timing or the PAL register so PAL code does not lock on NTSC and vice versa.
 
 ## RAM and Banking
 
 | Type | Notes |
 |---|---|
-| 48K/64K base | Most XL/XE code should assume no extended RAM unless detected |
-| 130XE | 16K window at `$4000-$7FFF`; selected through PORTB bits |
-| RAMBO/COMPY | Similar windowing, more banks, different PORTB encodings |
-| VBXE RAMBO core | Can expose RAMBO-style memory through VBXE-related banking |
+| 48K/64K base | Most cross-machine code should assume no extended RAM unless detected |
+| 130XE | Four 16K banks selected by `PORTB` bits 2-3; bits 4/5 control CPU and ANTIC access to the `$4000-$7FFF` window |
+| RAMBO / Newell | Extends 130XE-style banking with more `PORTB` bits; high-bank encodings are board-specific |
+| Compy Shop / COMPY | Similar windowing, but bank encodings differ from RAMBO and often preserve separate CPU/ANTIC mapping |
+| 576K / 1088K boards | Reuse additional `PORTB` bits; never assume one universal bit layout across vendors |
 
 Rules:
 
@@ -49,47 +49,22 @@ Rules:
 | CPU | What changes |
 |---|---|
 | 6502 | Baseline target |
-| 65C02 | Adds opcodes; fixes some NMOS quirks |
-| 65C816 | Native/emulation mode, 16-bit A/X/Y widths, 24-bit addressing |
+| 65C02 | Adds instructions and fixes some NMOS quirks |
+| 65C816 | Native/emulation mode, 16-bit registers, 24-bit addressing |
 | Rapidus | Accelerator context; timing-sensitive code needs conservative assumptions |
 
-Use CPU-specific opcodes only after detection or when the target explicitly requires that CPU.
-
-A transparent 65816 probe can use `INC A` to differentiate 6502 behavior,
-then `XBA` to confirm 65816. For portable generated code, hide this behind a
-small routine and return a capability byte instead of assembling 65816 opcodes
-into baseline paths.
-
-```asm
-        opt c+                 ; allow 65C02/65816 mnemonics in MADS
-        lda #0
-        inc @                  ; transparent probe idiom
-        cmp #1
-        bcc is_6502
-        xba                    ; only meaningful on 65816
-        dec @
-        xba
-        inc @
-        cmp #2
-        beq is_65816
-is_6502
-```
+Use CPU-specific opcodes only after detection or when the target explicitly requires that CPU. Detection of 65C02/65C816/Rapidus-class upgrades is hardware- and firmware-specific; do not rely on undocumented "transparent opcode" probes unless the target platform explicitly documents them.
 
 ## Video and Audio Upgrades
 
 | Upgrade | Detection/use |
 |---|---|
-| CTIA/GTIA | GTIA modes require GTIA; very old CTIA lacks them |
-| Stereo POKEY | Detect before writing second POKEY address range |
-| VBXE | Probe FX core at `$D600`/`$D700`; see `exotics/vbxe.md` |
-| Sophia | Detection uses Sophia-specific signature behavior; see `exotics/sophia-rapidus.md` |
+| CTIA/GTIA | GTIA graphics modes require GTIA; old CTIA machines do not support them |
+| Stereo POKEY | Address map and probe method are expansion-specific; use the expansion's documented detection routine |
+| VBXE | Probe only through documented VBXE registers; see `exotics/vbxe.md` |
+| Sophia | Use Sophia-specific detection rules; see `exotics/sophia-rapidus.md` |
 
 If an effect requires an upgrade, code should either fail cleanly, fall back to stock hardware, or state the requirement in the binary/demo notes.
-
-Stereo POKEY detection pattern: silence/prime the second POKEY mirror, arm a
-timer on `$D210-$D21F`, wait with `VCOUNT`, test the IRQ/status bit, then
-restore `IRQEN/NMIEN` and re-enable interrupts. Do not leave `$D20E`,
-`$D40E`, or `IRQEN` modified after probing.
 
 ## Compatibility Checklist
 

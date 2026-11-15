@@ -16,17 +16,17 @@
 | 0 | C — Carry | No-borrow indicator; C=1 for SBC means no borrow in |
 | 1 | Z — Zero | Set when result = $00 |
 | 2 | I — Interrupt mask | Set=IRQs masked; set on reset; NMIs unaffected |
-| 3 | D — Decimal | BC correction active for ADC/SBC only |
+| 3 | D — Decimal | BCD correction active for ADC/SBC only |
 | 4 | B — Break | Pushed set for BRK, cleared for IRQ/NMI; never directly readable |
 | 5 | — | Always reads 1 in P; reused as M flag on 65C816 native |
-| 6 | V — Overflow | Signed overflow during ADC/SBC/CMP |
+| 6 | V — Overflow | Signed overflow during ADC/SBC |
 | 7 | N — Negative | Copy of bit 7 of last result |
 
 **Critical nuance — D flag:** NMOS 6502 does NOT auto-clear D on entry to an interrupt. Always `CLD` in interrupt handlers that use ADC/SBC.
 
 ### Dead memory cycles
 
-These dummy cycles consume time and cannot be overlapped by DMA. Avoid them when racing against DLI timing:
+These extra bus cycles still consume time. Avoid them when touching side-effect I/O registers or racing exact display timing:
 
 ```
 ; ❌ Bad in ISR context: INC abs does a write-back dummy cycle
@@ -36,7 +36,7 @@ INC $D40E         ; NMIEN — two write cycles; risky at exact cycle deadlines
 LDA $07           ; zero-page read — no dead cycle
 ```
 
-Dead cycle sources: second cycle of implied ops (TXA), ALU cycle of RMW opcodes (INC abs, DEC abs, ASL abs…), second-to-last cycle of zp,X or abs,X indexed reads/writes, conditional branches that cross a page boundary.
+Common sources: read-modify-write opcodes (`INC`, `DEC`, `ASL`, `LSR`, `ROL`, `ROR`) and indexed reads that cross a page boundary. Taken branches add one cycle; crossing a page adds one more.
 
 **Dangerous addresses for dead-cycle writes:** PIA `$D300–$D3FF` (reads clear pending IRQs); cartridge control `$D500–$D5FF`; PBI `$D100–$D1FE` and `$D600–$D7FF`.
 
@@ -46,13 +46,36 @@ Abs indexed reads (`LDA abs,X`, `AND abs,Y`, `(zp),Y`) speculate the fetch: read
 
 Branches that cross a page take 4 cycles instead of 3 — even including BEQ issued near the target.
 
-### DMA performance
+ANTIC DMA steals CPU cycles; exact per-mode budgets belong to the ANTIC timing
+tables in `hardware/antic/`.
 
-| Display config | CPU bandwidth |
-|---|---|
-| No display DMA | 100% |
-| GR.0 (narrow, no scroll) | 64% |
-| GR.0 (narrow) max | 92% |
-| PAL (all modes) | faster (DMA 5/6 as often) |
+### Losing the Input Across a Loop
 
----
+A routine documented `Input: A = id` must capture that id **before** any loop that
+clobbers A, otherwise the indexed table read silently uses the wrong index:
+
+```asm
+; WRONG - the clear loop destroys A, so tax indexes id 0's tables
+init            ldx #MAX_ENTRIES-1
+?clr            sta buffer,x        ; A = id on entry, then clobbered
+                dex
+                bpl ?clr
+                tax                 ; A is no longer the id!
+                lda table_lo,x
+```
+
+```asm
+; RIGHT - store the parameter first, index from memory afterwards
+init            sta active_id
+                ldx #MAX_ENTRIES-1
+?clr            lda #0
+                sta buffer,x
+                dex
+                bpl ?clr
+                ldx active_id
+                lda table_lo,x
+```
+
+Symptom: every instance is initialised from the *first* record's tables (e.g. every
+level shows level 0's entities), while single-id tests still pass because only one id
+is ever in play - test such routines with two different ids (`py65/SKILL.md`).

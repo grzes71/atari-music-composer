@@ -42,7 +42,7 @@ Currently only `bit0` of this byte is used; `bit0=0` means the relocatable block
 
 The last 6 bytes contain information about the label values required for the software stack's operation: `@STACK_POINTER`, `@STACK_ADDRESS`, and `@PROC_VARS_ADR`, if they were used during the assembly of relocatable blocks. If individual `.RELOC` blocks were assembled with different values for these labels and they are linked, an **Incompatible stack parameters** warning will occur. If the software stack was not used, the values of these labels will be zero.
 
-The `.RELOC` pseudo-command switches **MADS** to relocatable code generation mode, taking into account the argument sizes for *CPU 6502* and *65816*. Within such code, it is impossible to use pseudo-commands `ORG`, `LMB`, `NMB`, `RMB`, and the `.DS` directive. It is impossible to return **MADS** to non-relocatable code generation mode; however, more than one `.RELOC` block can be generated.
+The `.RELOC` pseudo-command switches **MADS** to relocatable code generation mode, taking into account the argument sizes for *CPU 6502* and *65816*. Within such code, it is impossible to use pseudo-commands `ORG`, `LMB`, `NMB`, `RMB`, and the `.DS` directive. It is impossible to return **MADS** to non-relocatable code generation mode, and only one `.RELOC` block per assembly is accepted (a second `.RELOC` reports *ERROR: ORG specified at RELOC block*). Further relocatable blocks in the **SDX** format can be created with the `BLK` pseudo-command (`blk reloc main`, `blk reloc extended`).
 
 Using the `.RELOC` directive also increments the **MADS** virtual bank counter, making the area local and invisible to other blocks. More information about virtual banks can be found in the Virtual Memory Banks `OPT B-` chapter.
 

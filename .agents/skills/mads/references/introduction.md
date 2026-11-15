@@ -47,7 +47,7 @@ fpc -Mdelphi -v mads.pas
 * **MADS** does not accept the `lda (203),0` syntax.
 * **MADS** supports writing programs for Sparta DOS X.
 * **MADS** supports the generation of relocatable code in its own format.
-* **MADS** distinguishes between single quotes `lda #' '` (ATASCII encoding) and double quotes `lda #" "` (INTERNAL encoding) for characters and strings. **XASM** treats both forms the same (ATASCII encoding). Of course, for `DTA` data, quotes are not distinguished by **MADS**.
+* **MADS** distinguishes between single quotes `lda #' '` (ATASCII encoding) and double quotes `lda #" "` (INTERNAL encoding) for characters and strings. **XASM** treats both forms the same (ATASCII encoding). In `DTA` data an explicit type prefix wins over the quote style (`dta c'A'` and `dta c"A"` are both ATASCII, `dta d'A'` and `dta d"A"` are both INTERNAL), while a bare `dta 'A'` is ATASCII and a bare `dta "A"` is INTERNAL.
 * **MADS** supports the `+` addition to increase and the `-` addition to decrease the index register in indexed addressing modes, e.g.:
 ```
   lda $2000,x+    ->    lda $2000,x

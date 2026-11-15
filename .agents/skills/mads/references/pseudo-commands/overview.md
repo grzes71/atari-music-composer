@@ -2,15 +2,15 @@
 
 ## Pseudo-commands
 
- [IFT _.IF_ expression](generated-data.md#ift)<br>
- [ELS _.ELSE_](generated-data.md#ift)<br>
- [ELI _.ELSEIF_ expression](generated-data.md#ift)<br>
- [EIF _.ENDIF_](generated-data.md#eif)<br>
+ [IFT _.IF_ expression](conditionals.md#ift)<br>
+ [ELS _.ELSE_](conditionals.md#els)<br>
+ [ELI _.ELSEIF_ expression](conditionals.md#eli)<br>
+ [EIF _.ENDIF_](conditionals.md#eif)<br>
 
 <a name="ert"></a>
- [ERT _ERT 'string'_ | ERT expression](#ert)
+ [ERT _ERT 'string'["string"]_ | ERT expression](#ert)
 
- [label SET expression](assembly-options.md#set)<br>
+ [label SET expression](symbols-repeat.md#set)<br>
  [label EXT type](#ext)<br>
  [label EQU expression](#equ)<br>
  [label  =  expression](#equ2)<br>
@@ -27,7 +27,7 @@
  [INI expression](#ini)<br>
  [END _.EN_](#end)<br>
 
- [SIN (centre,amp,size[,first,last])](origin-include-data.md#sin)<br>
+ [SIN (centre,amp,size[,first,last])](generated-data.md#sin)<br>
  [COS (centre,amp,size[,first,last])](generated-data.md#cos)<br>
  [RND (min,max,length)](generated-data.md#rnd)
 

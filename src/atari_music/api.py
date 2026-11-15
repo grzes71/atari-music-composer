@@ -68,6 +68,11 @@ class MusicGenerationMetadata(BaseModel):
     length_intent: Optional[str] = None
     intensity_intent: Optional[float] = None
     variation_intent: Optional[float] = None
+    #: Provenance of any bound POKEY sound profiles (one entry per bound instrument).
+    #: Empty for every composition that was not rendered with a profile binding, which
+    #: is the default. Recorded here because a profile is a rendering-time dependency:
+    #: the composition does not name it, so the result must say which one realized it.
+    sound_profiles: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class MusicGenerationResult(BaseModel):

@@ -10,7 +10,7 @@ description: >-
 
 > **When to load:** The task is to make Atari 8-bit assembly faster, smaller, more constant-time, or easier to fit into a DLI/VBI budget.
 > **Do not use for:** CPU opcode legality or cycle tables; load `hardware/cpu.md`.
-> **Primary sources:** `articles/6502-optimization.md`, `atari-documentation/tips/6502_tips.txt`, `articles/6502-synthetic-instr.md`.
+> **Primary sources:** the MADS distribution's `examples/tips/6502_tips.txt` (cycle-neutral branching, nybble swap, BIT tricks) and `hardware/cpu.md` for timing details.
 
 ## Quick Lookup
 
@@ -108,7 +108,8 @@ than split loads when Y already holds the entry:
         sta   @jmp+1
 @jmp    jmp   (JumpPtrs)
 
-JumpPtrs .word State0, State1, State2
+        .align $100              ; only the low byte is re-patched, so the
+JumpPtrs .word State0, State1, State2   ; table must sit inside one page
 ```
 
 ## 3. Flag-Preserving Tests
@@ -243,10 +244,15 @@ unreadable conditional branch.
 
 Some generic 6502 tricks are unsafe on Atari hardware:
 
-- Do not use RMW instructions on hardware registers unless the double-write side effect is intended.
+- Do not use RMW instructions on hardware registers unless the double-write side effect is intended. The NMOS 6502 writes the old value and then the new value in the modify cycle (CMOS parts do a dummy read and a single write), so a register with a write side effect reacts twice.
 - Do not point `BIT abs` skip operands at read-sensitive hardware addresses.
 - Do not use RMW-on-ROM/table tricks on cartridge/PBI/register ranges with bus conflicts or side effects.
 - In DLI/VBI code, cycle savings matter only if they do not introduce stack depth, page-cross, or hardware-register hazards.
+
+Verified costs used above: replacing `JSR target`/`RTS` with `JMP target` saves
+1 byte and 9 cycles; an RTS jump table needs entries of `target-1`; the BIT-abs
+skip (`$2C`) and the branch-opcode mask (`$90` after `SEC`) both work as
+described, and the identity-table and `EOR`-equality idioms behave as claimed.
 
 ## See Also
 

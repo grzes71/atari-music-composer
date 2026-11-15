@@ -2,81 +2,110 @@
 
 ## 11.2 Bit Rotation Idioms (ROL / ROR / ASL / LSR)
 
-### 8-bit rotate-left through carry
+### 9-bit rotate through carry
+
+`ROL`/`ROR` are 9-bit rotates: carry is the extra bit (1 byte, 2 cycles):
+
+```asm
+        rol                    ; C -> bit0, bit7 -> C
+        ror                    ; C -> bit7, bit0 -> C
+```
+
+Chain the memory forms for multi-byte rotates through carry:
 
 ```asm
         clc
-        asl   a                ; bit7 -> C
-        rol   a                ; C -> bit0
-; 4 bytes, 7 cycles
+        rol   lo               ; 16-bit rotate left through carry
+        rol   hi
+; 5 bytes, 12 cycles
+
+        sec
+        ror   hi               ; 16-bit rotate right through carry
+        ror   lo
 ```
 
-### 8-bit rotate-right through carry
+There is no `ROL X` / `ASL X`: the shift and rotate instructions only have
+accumulator and memory addressing modes, so use a memory byte (or move X out
+first).
+
+### True 8-bit rotate left / right
+
+An 8-bit rotate must not use the incoming carry, so preload it:
 
 ```asm
-        sec
-        lsr   a                ; bit0 -> C
-        ror   a                ; C -> bit7
-; 4 bytes, 7 cycles
+; 8-bit rotate left, A only
+        cmp   #$80             ; C = bit7
+        rol                    ; bit7 -> bit0
+; 3 bytes, 4 cycles
+
+; 8-bit rotate right, A only
+        pha
+        lsr                    ; C = bit0
+        pla                    ; restores A; carry is preserved
+        ror                    ; bit0 -> bit7
+; 4 bytes, 11 cycles
 ```
 
-### Zero-register rotate (A=carry, result=rotate only A)
+### Two-position rotates (the carry-return idiom)
 
-For the case where A alone must act as both source and destination, use `ROR A` or `ROL A` directly (single insn, 2 cycles).
+`CLC` + `ASL` + `ROL` and `SEC` + `LSR` + `ROR` rotate by **two** positions, not
+one: the bit shifted out by the first shift re-enters at the other end after the
+second.
+
+```asm
+        clc
+        asl
+        rol                    ; 8-bit rotate left by 2
+; 3 bytes, 6 cycles
+
+        sec
+        lsr
+        ror                    ; 8-bit rotate right by 2
+; 3 bytes, 6 cycles
+```
 
 ### 9-bit rotate-left via stack
 
-Rotate a 9-bit value with A = low byte, carry = bit9:
+Rotate `carry:A` left and still hand the caller its original carry back:
 
 ```asm
-        php                    ; save P (C is rightmost-bit-of-prior-to)
-        asl   a
-        rol   buffer           ; buffer holds high bit; now 9-bit value complete
-        plp                    ; restore original carry if caller still needs it
-
-; PHP=3, ASL A=2, ROL zp=5, PLP=4: 14 cycles plus zero-page operand cost.
-; If carry does not need to be preserved, drop PHP/PLP and use ASL/ROL only.
+        php                    ; save P, including C
+        asl                    ; bit7 -> C
+        rol   buffer           ; buffer holds the upper bits of the rotated value
+        plp                    ; restore the original carry
 ```
+
+`PHP`=3, `ASL`=2, `ROL zp`=5, `PLP`=4, so 14 cycles in total. If the outgoing bit
+is not needed, drop `PHP`/`PLP` and use `ASL` + `ROL` for a plain 9-bit shift
+left of `buffer:A`.
 
 ### Garth Wilson nybble-swap (8 bytes, 12 cycles, A-only)
 
-Swap high and low 4-bit nibbles without a temp register:
+Each `ASL` + `ADC #$80` + `ROL` triple is a 2-bit rotate left of A, so two triples
+swap the nibbles with no temporary byte, stack use, or table:
 
 ```asm
-nyb_swap   asl   a             ; bit7->C
-            adc   #$80          ; C can be added as LSB of $80
-            rol   a             ; now bit0→bit7 and bit7→bit0 but we need full swap
-            asl   a
-            adc   #$80
-            rol   a             ; result in A — nibbles swapped after 2 iterations
-; 8 bytes, 12 cycles
+nyb_swap
+        asl
+        adc   #$80
+        rol
+        asl
+        adc   #$80
+        rol
+; 8 bytes, 12 cycles; only A and the flags are used
 ```
 
-Aggressive/byte-perfect version:
-```asm
-        asl   a
-        adc   #$80
-        rol
-        asl   a
-        adc   #$80
-        rol
-        asl   a
-        adc   #$80
-        rol
-; this 8-nibble recipe rotates by 4 positions (byte swap) in 24 cycles
-```
-
-### Two-byte rotate-left (16-bit AX)
+### Two-byte rotate (16-bit)
 
 ```asm
         clc
-        rol   a                ; rotate in low byte
-        rol   x                
+        rol   lo               ; rotate C:hi:lo left through carry
+        rol   hi
 
 ; ROR variant:
         sec
-        ror   a
-        ror   x
+        ror   hi
+        ror   lo
 ```
 
 ---

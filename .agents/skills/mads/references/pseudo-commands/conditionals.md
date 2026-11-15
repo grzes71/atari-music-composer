@@ -1,5 +1,7 @@
 # Conditionals
 
+<a name="ift"></a><a name="els"></a><a name="eli"></a><a name="eif"></a>
+
 ### IFT, ELS, ELI, EIF
 
 ```

@@ -4,35 +4,22 @@
 
 | Idiom | Example | Notes |
 |---|---|---|
-| Increment/decrement 16-bit (hi carries if lo overflows) | `INC ptr: INC ptr+1: BNE skip` / `DEC ptr+1: BNE skip` | `INC/DEC ZP` takes 5 cycles, RMW side effect |
-| Bit flag set/clear | `ORA #$80` / `AND #~$80` | LSB/OMSB of bit-index using `:ROL`, `:LSR`, 7 or 0 |
-| Negative-index backwards loop | `LDY #-n: … DEY: BPL loop` | Zero-page table walk backwards wrapped at $00FF |
-| Fast ISR scratch save | `STA save_a: STX save_x: STY save_y` | Hardware stack is fastest; ZP shadow nearby |
-| 16-bit load with skip | `LDA #<val: STA ptr: LDA #>val: STA ptr+1` | Separate LDA avoids page-cross on HIGH byte |
+| Increment 16-bit pointer | `INC ptr` / `BNE skip` / `INC ptr+1` | Increment high byte **only** when low byte wraps |
+| Decrement 16-bit pointer | `LDA ptr` / `BNE skip` / `DEC ptr+1` / `skip DEC ptr` | Borrow propagates from low byte |
+| Bit flag set/clear | `ORA #$80` / `AND #$7F` | Use explicit masks; assembler-specific `~` syntax is not portable |
+| Backward loop | `LDY #n-1` / `...` / `DEY` / `BPL loop` | Standard 0..n-1 reverse walk |
+| Fast ISR save | `PHA / TXA / PHA / TYA / PHA` | Stack save is the normal DLI/VBI pattern |
 
 ---
 
 ## 2.5  Stack & Subroutine Parameters
 
-6502 stack: 256 bytes at `$0100–$01FF`, `TSX/TXS` to read/write pointer.
+6502 stack: 256 bytes at `$0100-$01FF`, manipulated with `PHA/PLA`, `PHP/PLP`, `TSX`, and `TXS`.
 
-**Parameter-inline trick:** A subroutine can read own return-address off the stack to find embedded data tables after the JSR, avoiding zero-page allocation:
+Rules:
 
-```asm
-        ; Caller:
-        jsr my_routine
-        .byte $01, $02, $03   ; data table after JSR
-
-        ; Callee:
-my_routine
-        pla                  ; pop low byte of return PC
-        sta data_ptr
-        pla                  ; pop high byte
-        sta data_ptr+1
-        ; Now data_ptr → .byte table past JSR
-        rts
-```
+- `JSR` pushes the return address minus one; any inline-parameter trick must adjust that address and put a valid return address back before `RTS`.
+- A bare `PLA/PLA` pair that consumes the return address is **not** a complete inline-parameter routine; if you do that, you must also provide an alternate way back to the caller.
+- If you need self-relative data, a stack-relative `TSX`/indexed read pattern is often safer than destroying the return address.
 
 ---
-
-*Content fully self-contained. All key facts are present in this file.

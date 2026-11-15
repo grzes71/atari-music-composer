@@ -1,188 +1,111 @@
 ---
-name: atari8bit-scroll-detail-ref
+name: atari8bit-scrolling
 description: >-
-  Detailed Atari 8-bit scrolling patterns supplementary to antic.md — hardware-assisted vertical parallax DLI, GTIA 9++ pixel-half-scroll, MWP minimum-wrapping-principle, and DLI-with-wide-playfield timing cross-references from scrolling.md and ironman.md.
+  Atari hardware scrolling: HSCROL/VSCROL, display-list HS/VS bits, coarse+fine
+  scroll patterns, bitmap/character-mode ranges, and DLI timing notes.
 ---
 
-# references/scroll-detail — Scrolling Deep Reference
-
----
-
-## Purpose
-
-This file is a tier-3 supplement to antic.md §3.3 and master index §§62–72. Covers patterns not in the main file: hardware-assisted pixel-half scrolling and MWP screen-wrapping schemes. Input decoding, OS VBI return rules, and deep DLI timing are cross-referenced instead of duplicated here.
-
----
+# Scrolling
 
 ## Quick-Lookup
 
-| Need | See § |
+| Need | See |
 |---|---|
-| HW-assisted parallax scroll (DLI band chain, rate LUTs) | §1.1–§1.3 |
-| Half-step pixel scroll (ANTIC-F soft sprite + char-set flip) | §2 |
-| MWP screen-wrapping (one row/col-buffer, 2 LMS) | §3 |
-| Input decoders used by scroll engines | `system/input.md` |
-| DLI wide+VSCROL=0 DLI-timing gotcha | `graphics/display-lists.md` §2.2 |
-| NVBL deferred VBI RETURN (`SETVBV/XITVBV`) | `system/os-vectors-handlers.md` §1 |
+| Registers and DL bits | §1 |
+| Horizontal fine scroll | §2 |
+| Vertical fine scroll | §3 |
+| Useful VSCROL ranges by mode | §4 |
+| Coarse+fine scroll pattern | §5 |
+| DLI timing notes | §6 |
 
----
+## §1 Registers and Display-List Bits
 
-## §1  Hardware-Assisted Vertical Parallax Scrolling
+- `HSCROL ($D404)` = horizontal fine scroll, **0-15 color clocks**
+- `VSCROL ($D405)` = vertical fine scroll, **0-15 scan lines**
+- Display-list **bit 4** enables horizontal scrolling on that mode line
+- Display-list **bit 5** enables vertical scrolling on that mode line
 
-### §1.1  Concept
+There are **no OS shadow registers** for `HSCROL` or `VSCROL`; write the
+hardware registers directly.
 
-Three screen layers with different scroll speeds (high/low/nil) implemented without double/triple buffer: VBI accumulates each band's scroll accumulator separately; DLI band-i changes `HPOSn` for player used as that band's scroll-sprite for the scan line the DLI fires on.
+## §2 Horizontal Fine Scroll
 
-Unlike "full" parallax (which doubles display memory), this uses the same screen memory twice, offset by `HPOSn` per band.
+When HSCROL is enabled for a line, ANTIC fetches one wider playfield buffer:
 
-### §1.2  VBI Rate-LUT Pattern
+- narrow display fetches enough data for normal width
+- normal display fetches enough data for wide width
 
-```asm
-; Each band i has band_rate[i] = 0 (no scroll), 1, 2, or 4 pixels/frame
-; The LUT lives in ROM or locked page-zero
-band_rate_low
-        .byte 0,1,2,4,0,1,2,4    ; bands 0..7
+`HSCROL` then selects which 0-15 color clocks from that buffer appear at the
+left edge of the screen.
 
-vbi_parallax
-        pha
-        txa
-        pha
-        tya
-        pha
+Important consequences:
 
-        ldx #8                  ; 8 parallax bands (half the screen lines each)
-?bands  lda band_off x            ; offset-accumulator for band i
-        clc
-        adc band_rate_low,x     ; add this band's speed
-        sta band_off,x
+- `HSCROL` counts **color clocks**, not logical pixels
+- ANTIC mode F therefore scrolls in **2 hi-res pixels per step**
+- GTIA 9/10/11 should use **even HSCROL values only**, because their pixels are
+  2 color clocks wide
 
-        pla
-        tay
-        pla
-        tax
-        pla
-        rti                     ; do NOT use XITVBV — bands need bare-metal/VDSLST path
-```
+As `HSCROL` increases, the display contents appear to move **right**; to keep a
+continuous scroll, you also update the coarse screen address when the fine
+scroll wraps.
 
-**Typical band counts and speed selections:**
-- Sky band (8 lines): band_rate=0 (table still; no CPU cost)
-- Mid-ground (12 lines): band_rate=1 (~3.6 px drift between VBIs)
-- Foreground (8 lines): band_rate=2 (faster parallax offset)
-- Player sprite (8 lines): band_rate=0 (counter-scroll for sprite shadow)
+## §3 Vertical Fine Scroll
 
-### §1.3  Five DLI Charge-LUT for Character Mode Flip-Flop
+Vertical fine scrolling works over a **region**:
 
-Character-set flick technique without page flip: two character sets (`$E000` vs `$E800`), DLI swaps `CHBASE` mid-screen while HSCROLL steps 1 color clock at a time:
+1. one or more consecutive display-list instructions with the VS bit set
+2. followed by one instruction with VS clear, which acts as the **buffer line**
 
-```asm
-; DLI flips char-set AND triggers HSCROL step simultaneously
-parallax_dli
-        pha
-        txa
-        pha
-        tya
-        pha
+If `VSCROL = n`:
 
-        sta WSYNC
-        lda font_bank_flag     ;0=$E000, 1=$E800
-        eor #$01
-        sta font_bank_flag
-        sta CHBASE             ; $D400 — swap character set mid-screen
+- the first scrolled mode line begins display at scan line `n`
+- middle scrolled lines display normally
+- the first non-VS line after the region contributes only scan lines `0..n`
 
-        lda #$01               ; advance HSCROL by 1 (= ~half a character shift)
-        sta HSCROL              ; $D404
+So the buffer line is part of the mechanism, not just padding.
 
-        pla
-        tay
-        pla
-        tax
-        pla
-        rti
-```
+## §4 Useful VSCROL Ranges by Mode
 
-Half-step scroll sequence per frame: flip char-set → HSCROL+1 → flip char-set → HSCROL+1 → repeat for `{16/HSCROL_max}` steps, then coarse scroll increments LMS low byte by 0x28 = 40. Total polish rate = same CPU cost as traditional fine-scroll but fullXMAL80-px resolution.
+The useful VSCROL range is always `0 .. (scan lines per mode line - 1)`.
 
-**Half-step and fractional scroll direction note:** HSCROL increment scrolls the viewport LEFT (adds 1 col-clock buffer from the left); HSCROL decrement scrolls RIGHT. The bitmap material is read further right when HSCROL grows, so pixels appear to move left.
+| Modes | Scan lines per mode line | Useful `VSCROL` values |
+|---|---:|---|
+| 2, 4, 6, 8 | 8 | `0-7` |
+| 3 | 10 | `0-9` |
+| 5, 7 | 16 | `0-15` |
+| 9, A | 4 | `0-3` |
+| B, D | 2 | `0-1` |
+| C, E, F | 1 | only `0` |
 
----
+Modes C, E, and F have one scan line per mode line, so they do not provide a
+useful vertical fine-scroll range by themselves.
 
-## §2  MWP (Minimum Wrapping Principle) Scrolling
+## §5 Coarse + Fine Scroll Pattern
 
-### §2.1  Concept
+### Horizontal
 
-Screen memory wraps **onto itself** by duplicating one buffer row at bottom/top (or one column at left/right). Only 2 LMS instructions required. No full-screen copy.
+Pick one direction convention and keep the fine and coarse steps consistent:
 
-### §2.2  Memory arrangement (vertical wrap)
+1. change `HSCROL` by one step
+2. when it wraps past the useful range, reset it and do the next coarse step
+3. reverse both operations for the opposite direction
 
-Assume Mode 4 (40 bytes × 24 lines). Allocate 25 visible rows:
+### Vertical
 
-```
-Row 0: $6000–$6027  40 bytes
-Row 1: $6028–$604F
-...
-Row 22: $68B8–$68DF   (22 is last visible line)
-Row 23: $68E0–$690F   DUPLICATE of Row 0 = wrap buffer
-```
+In an 8-scan-line mode:
 
-DLIST has LMS at the top (Row 0) and ALSO at scan line 22 (Row 23). When row 22 scrolls off the bottom, new data is blitted into Row 23, and the DLIST LMS for scan line 22 wraps back to Row 0. BLIT only one 40-byte row per scroll step.
+1. change `VSCROL`
+2. when it wraps, advance or rewind the coarse row pointer / LMS address
+3. update the buffer line with the new incoming row
 
-The flag-check after each scroll step: **did we write to row 0 or row 23?** if yes, mirror to the other row immediately.
+For ANTIC E/F full screens, remember that a 7,680-byte display crosses a 4 KB
+boundary, so a custom display list usually needs a second LMS near mid-screen.
 
-### §2.3  Memory arrangement (horizontal wrap)
+## §6 DLI Timing Notes
 
-Same principle, but with page-per-line layout (256 bytes/line). Only one column (usually byte 0 / byte 255) needs double-copy. Scroll steps: blit 1 column from off-screen into column 255, mirror column 255 → column 0 if modified:
-
-```asm
- mwp_scroll_left_buffer
-        ldx col_ptr            ; current column (0–255 page-wide)
-        lda screen_row_0,x     ; read from buffer line
-        sta screen_row_0+255,x ; mirror if 255 changed
-        dex
-        stx col_ptr
-
- mwp_update_dlist_lms
-        ldy #n_lines
-?loop   lda dlist_lms_low,y
-        dec dlist_lms_low,y    ; scroll left = decrement low byte
-        bne ?skip
-        dec dlist_lms_high,y   ; page boundary carry
-?skip   dey
-        bpl ?loop
-```
-
-**MWP total CPU per step:** ~80 cycles (blit one row) + ~1200 cycles for 30 lines × 4 = ~1.3 ms on a 1.79 MHz machine. Entire 60-frame cycle = ~78 ms ≈ 13 FPS at single-row scroll — suitable for isometric / puzzle scrolling.
-
----
-
-## §3  Related Engine Inputs and Timing
-
-Scrolling engines often consume input deltas and run from VBI/DLI paths, but those details belong to narrower references:
-
-- Joystick and mouse decode: `system/input.md`
-- Deferred VBI install/return: `system/os-vectors-handlers.md`
-- DLI timing edge cases for wide playfields, HSCROL, and VSCROL: `graphics/display-lists.md`
-
----
-
-## §4  MWP One-Row/Single-Column Blit Pattern (Full Code)
-
-```asm
-; mode 4 per-row blit + DLIST pair  — update BLIT after each scroll step
-mwp_scroll_step_v
-        ldy #scroll_row_count   ; 24 visible lines
-?loop   lda blit_row_00,y       ; read which source row maps to line i
-        sta blit_row_00+25,y     ; mirror to bottom buffer
-        bne ?no_mirror
-        lda blit_row_24,y       ; also read from bottom buffer
-        sta blit_row_00,y       ; mirror to top (only if col 24 was modified)
-?no_mirror
-        dey
-        bpl ?loop
-
-        ; LMS pointers handled in dlist_blit array — no full-page copy needed
-        rts
-```
-
----
-
-*This file is references/scroll-detail.md — tier-3 supplement for antic.md §3.3 and master index §§62–72. MWP and half-step scroll details remain here; input, OS VBI, and DLI timing details are linked to their narrower reference files.*
+- Use `WSYNC` when a scroll-register change must land cleanly on the next scan line.
+- DLI routines should save/restore registers and stay short.
+- If the OS is active, update `SDLSTL/SDLSTH` or other shadows in VBI-driven
+  setup code; `HSCROL`/`VSCROL` themselves are direct hardware writes.
+- For complex kernels, especially ones mixing scroll and colour changes, verify
+  timing in Altirra or on real hardware.

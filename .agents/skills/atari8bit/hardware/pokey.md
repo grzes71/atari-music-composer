@@ -1,12 +1,13 @@
 ---
 name: atari8bit-pokey
 description: >-
-  Atari 8-bit POKEY — register map, timer/DLI audio, SIO serial protocol, polynomial counters, stereo POKEY, 4-bit digital sample playback (VCOUNT-sync).
+  Atari 8-bit POKEY — register map, timer/DLI audio, SIO serial protocol,
+  polynomial counters, stereo POKEY, 4-bit digital sample playback (VCOUNT-sync).
 ---
 
 # 05 — POKEY — Sound & I/O Chip
 
-> **Key items:** AUDF1-4, AUDC1-4, AUDCTL $D208, STIMER $D209, RANDOM/SKRES $D20A, POTGO $D20B, IRQEN/IRQST $D20E, SKCTL/SKSTAT $D20F
+> **Key items:** AUDF1-4, AUDC1-4, AUDCTL $D208, STIMER $D209, RANDOM/SKREST $D20A, POTGO $D20B, IRQEN/IRQST $D20E, SKCTL/SKSTAT $D20F
 > **Scope:** POKEY ($D200-$D20F, mirrored through page $D2): timers, sound, SIO serial, polynomial counters, stereo POKEY, 4-bit digital samples
 
 ---
@@ -16,39 +17,42 @@ description: >-
 | Need | See § |
 |---|---|
 | Register map ($D200–$D20F) | §5.1 |
-| Clock paths + timer-period table | §5.2 |
-| Linked 16-bit AUDF1+2 / AUDF3+4 | §5.2 |
-| AUDCx distortion/waveform bits 4–7 table | §5.3 |
-| SIO base timing (async receive + 960 Hz disk beep) | §5.8 |
-| SIO protocol ACK/NACK/COMPLETE/ERROR | §5.4 |
-| RMT / TMC2 tracker ISR boilerplate | §5.5 |
-| Stereo POKEY (second chip at $D210-$D21F) | §5.6 |
-| Polynomial counter widths table | §5.7 |
-| **4-bit digital sample playback (VCOUNT-sync, Space Harrier pattern)** | §5.9 |
+| Clock paths, `+1/+4/+7` divisors | §5.2 |
+| Linked 16-bit channels | §5.2 |
+| SIO overwriting AUDCTL/AUDC during I/O | §5.2.1 |
+| AUDC distortion / volume-only mode | §5.3 |
+| SIO byte-level registers | §5.4 |
+| RMT / TMC2 coexistence rules | §5.5 |
+| Stereo POKEY address map | §5.6 |
+| Polynomial counter roles | §5.7 |
+| ALLPOT / RANDOM / IRQ / SKCTL / SKSTAT | §5.8 |
+| 4-bit digital sample playback | §5.9 |
 
 ---
 
 ## §5.1  Register Map ($D200–$D20F)
 
-Only low 4 address bits are decoded, so the canonical registers at `$D200-$D20F` mirror through page `$D2`.
+Only low 4 address bits are decoded, so the canonical registers at
+`$D200-$D20F` mirror through page `$D2`.
 
-| Register | Address | R/W | Description |
-|---|---|---|---|
-| POT0/AUDF1 | `$D200` | R/W | Paddle 0 read / channel 1 frequency divisor |
-| POT1/AUDC1 | `$D201` | R/W | Paddle 1 read / channel 1 control |
-| POT2/AUDF2 | `$D202` | R/W | Paddle 2 read / channel 2 frequency divisor |
-| POT3/AUDC2 | `$D203` | R/W | Paddle 3 read / channel 2 control |
-| POT4/AUDF3 | `$D204` | R/W | Paddle 4 read / channel 3 frequency divisor |
-| POT5/AUDC3 | `$D205` | R/W | Paddle 5 read / channel 3 control |
-| POT6/AUDF4 | `$D206` | R/W | Paddle 6 read / channel 4 frequency divisor |
-| POT7/AUDC4 | `$D207` | R/W | Paddle 7 read / channel 4 control |
-| ALLPOT/AUDCTL | `$D208` | R/W | Paddle completion bits / audio control |
-| KBCODE/STIMER | `$D209` | R/W | Keyboard code / reset all four audio timers |
-| RANDOM/SKRES | `$D20A` | R/W | Polynomial random value / reset SKSTAT latch bits |
-| POTGO | `$D20B` | W | Strobe: start new paddle scan sequence |
-| SERIN/SEROUT | `$D20D` | R/W | Serial input / serial output |
-| IRQST/IRQEN | `$D20E` | R/W | IRQ status / IRQ enable mask |
-| SKSTAT/SKCTL | `$D20F` | R/W | Keyboard/serial status / keyboard-serial control |
+| Address | Read | Write |
+|---|---|---|
+| `$D200` | `POT0` | `AUDF1` |
+| `$D201` | `POT1` | `AUDC1` |
+| `$D202` | `POT2` | `AUDF2` |
+| `$D203` | `POT3` | `AUDC2` |
+| `$D204` | `POT4` | `AUDF3` |
+| `$D205` | `POT5` | `AUDC3` |
+| `$D206` | `POT6` | `AUDF4` |
+| `$D207` | `POT7` | `AUDC4` |
+| `$D208` | `ALLPOT` | `AUDCTL` |
+| `$D209` | `KBCODE` | `STIMER` |
+| `$D20A` | `RANDOM` | `SKREST` |
+| `$D20B` | — | `POTGO` |
+| `$D20C` | — | — |
+| `$D20D` | `SERIN` | `SEROUT` |
+| `$D20E` | `IRQST` | `IRQEN` |
+| `$D20F` | `SKSTAT` | `SKCTL` |
 
 ---
 
@@ -56,71 +60,117 @@ Only low 4 address bits are decoded, so the canonical registers at `$D200-$D20F`
 
 ```
 AUDCTL bits:
-  bit 6 = timer 1/2 clock: 0 = 64 kHz  /  1 = 15 kHz
-  bit 5 = timer 3/4 clock: 0 = 64 kHz  /  1 = 15 kHz
-  bit 4 = link T1→T2     : 0 = independent  1 = T2 clocked by T1
-  bit 3 = link T3→T4     : 0 = independent  1 = T4 clocked by T3
-  bit 2 = speaker mode   : 0 = two-tone  1 = high-pass-filter
-  bit 1 = channel count  : 0 = 16-bit (T1+T2)  1 = 4-bit
-  bit 0 = T1 clock source: 0 = 64 kHz  1 = 15 kHz
+  bit 7 = 1 -> use 9-bit polynomial, 0 -> 17-bit polynomial
+  bit 6 = channel 1 clock = 1.79 MHz instead of 64/15 kHz
+  bit 5 = channel 3 clock = 1.79 MHz instead of 64/15 kHz
+  bit 4 = join channels 1+2 into one 16-bit divider
+  bit 3 = join channels 3+4 into one 16-bit divider
+  bit 2 = high-pass filter channel 1 with channel 3
+  bit 1 = high-pass filter channel 2 with channel 4
+  bit 0 = 1 -> 15 kHz base, 0 -> 64 kHz base
 ```
 
-| Clock source | Period for timer (AUDF=N) | Notes |
-|---|---|---|
-| 1.79 MHz (USER1/3) | `N+4` cycles | Fastest — highest precision |
-| 15 kHz | `(N+1) × 114`CPU cycles | ~837 Hz at N=0 |
-| 64 kHz | `(N+1) × 28` CPU cycles (~1750 Hz) | Good for short musical notes |
+For pure-tone distortions (`$A0/$E0`) and most tuning work:
 
-**Linked timers:** AUDF1 + AUDF2 form a 16-bit period; T2 counts from AUDF2, then wraps up to $FF on each T1 underflow before both reset together.
+| Clock source | Frequency formula | Notes |
+|---|---|---|
+| 64 kHz base | `f = f_base / (2 × (AUDF + 1))` | `f_base = CPU / 28` |
+| 15 kHz base | `f = f_base / (2 × (AUDF + 1))` | `f_base = CPU / 114` |
+| 1.79 MHz on CH1/CH3 | `f = f_cpu / (2 × (AUDF + 4))` | AUDCTL bit 6 or 5 |
+| Joined 16-bit at 1.79 MHz | `f = f_cpu / (2 × (AUDF_hi×256 + AUDF_lo + 7))` | CH1+2 or CH3+4 |
+
+**Joined channels:** when AUDCTL bit 4 or 3 is set, the lower-numbered channel
+supplies the low byte (`AUDF1` or `AUDF3`) and the higher-numbered channel
+supplies the high byte (`AUDF2` or `AUDF4`). The audible control/output channel
+is the higher-numbered one (`AUDC2` or `AUDC4`).
+
+### §5.2.1  SIO Reprograms AUDCTL — Re-assert Your Audio Setup After I/O
+
+`SIOV` — and therefore every CIO file/disk call and every `DSKINV` sector call — sets
+POKEY up for the transfer and **does not restore** the caller's audio state:
+
+| Register | What SIO writes | Purpose |
+|---|---|---|
+| `AUDCTL ($D208)` | `$28` — CH3 clocked at 1.79 MHz, CH4 clocked by CH3 | channels 3+4 become the baud-rate divider |
+| `AUDF3/AUDF4` | `$0028` (19200 baud) for devices, `$05CC` (600 baud) for cassette | divisor reloaded per transfer |
+| `AUDC1-AUDC4` | `$A8` for all four, then `$A0` on CH1-CH3; `$00` on all four when the operation completes | silences the voices and leaves the 19200 Hz baud tone on CH4 |
+| `SKCTL ($D20F)` | serial-mode bits 4/5 added on top of the current value | serial clocking; the OS never resets it to `$03` |
+
+The OS contains no code path that writes a saved `AUDCTL` back, so a `$00`/`$50`/`$78`
+setup and any music or PDM playback stop working after the next disk, cassette, or
+RS-232 operation. This is the practical form of the De Re Atari rule "POKEY must be
+initialized after any serial bus operation". Re-write `AUDCTL`, `AUDC3`/`AUDC4` (SIO owns
+those voices) and `SKCTL` after each SIO call, or keep the setup in one routine and run
+it from both cold start and the I/O completion path:
+
+```asm
+        ; re-assert the audio configuration that SIO overwrites
+pokey_init
+        lda #$50                ; example: join 1+2, CH1 clocked at 1.79 MHz
+        sta AUDCTL              ; SIO leaves $28 behind
+        lda #$AF                ; pure tone ($A0) + volume 15
+        sta AUDC3               ; SIO leaves $00 here
+        sta AUDC4
+        lda #$03                ; keyboard scan + debounce (OS default)
+        sta SKCTL
+        rts
+```
+
+Do not rely on `AUDCTL=$28` meaning "CH3 at 1.79 MHz only": bits 3+5 together mean the
+3+4 pair is joined, which is exactly how SIO builds its baud generator.
 
 ---
 
 ## §5.3  Distortion / Waveform Selection (AUDCx bits 4–7)
 
-| Bits[7:4] | Output type | Notes |
+`AUDC` low nibble is volume (`0..15`). With bit 4 clear, bits 7:5 select the
+polynomial path:
+
+| Bits 7:5 | High nibble | Source |
 |---|---|---|
-| $0 (/0000) | Poly-5 clocked poly-9/17 | Complex noise |
-| $2 (/0010) | Poly-5 clocked square | Square VCO |
-| $4 (/0100) | Poly-5 clocked poly-4 | Complex tone |
-| $8 (/1000) | Poly-9/17 direct | 9-bit polynomial noise |
-| $A (/1010) | Square wave | Cleanest 2-tone square |
-| $C (/1100) | Poly-4 direct | 4-bit polynomial noise |
-| Bit0     | Volume-only | All deviation bits=0 allowed; channel muted/vol-on |
+| `000` | `$00` | 5-bit gating 17/9-bit polynomial |
+| `001` | `$20` | 5-bit polynomial only |
+| `010` | `$40` | 5-bit gating 4-bit polynomial |
+| `011` | `$60` | 5-bit polynomial only (alternate tap pattern) |
+| `100` | `$80` | 17-bit or 9-bit polynomial only |
+| `101` | `$A0` | Pure tone |
+| `110` | `$C0` | 4-bit polynomial only |
+| `111` | `$E0` | Pure tone |
+
+`AUDC` bit 4 = 1 forces **volume-only output**: the divider, distortion
+selection, and high-pass filter are bypassed and bits 3:0 drive the 4-bit DAC.
 
 ---
 
 ## §5.4  SIO Serial Port
 
-SIO bus: 1 leader byte ($55 AA55...) -> Device_ID ($40-$4F) -> COMMAND frame -> ACK/NACK -> DATA frame(s) -> STATUS frame. `SERIN` / `SEROUT` are the byte-level serial data registers.
+`SEROUT` is the transmit holding register; `SERIN` is the receive holding
+register. POKEY shifts serial bytes as **1 start bit + 8 data bits + 1 stop
+bit**. `SKREST` clears the latched serial/keyboard error bits in `SKSTAT`.
 
-**SIO timeouts:** 540 ms (128-bit clock × 80 bytes ≈ 535 ms). If the drive doesn't ACK within this window, abort and report — don't retry-loop forever on a dead channel.
+SIO protocol bytes such as ACK/NACK/COMPLETE/ERROR are **protocol-level values
+on top of** these raw serial registers; they are not separate hardware states in
+POKEY itself.
 
-> ⚠ **APE-Time DCB $45 payload mismatch:** The APE-Time clock utility uses `DCB $45` (write-time) as its command, but due to a hardware POKEY-SI0 clock gating quirk on the 1090+ stock POKEY revision, the DDEVIC write accepted by the 810 is the 1-byte CX= 4 byte clock buffer, not 5 bytes. On later drives (1050/9+ modifying the stub routine to account for byte counts in the DDEVIC of 4 vs 5 fixes a one-byte DCB offset. Always read-back the DCB after power-on self-test.
+The bit clock for these transfers is POKEY channels 3+4, driven from `AUDCTL=$28`
+(CH3 at 1.79 MHz, CH4 clocked by CH3) with the divisor in `AUDF3/AUDF4` — see §5.2.1
+for what that does to your own audio setup.
 
 ---
 
-## §5.5  POKEY SIO Timers → RMT / TMC2 Trackers
+## §5.5  POKEY Timers → RMT / TMC2 Trackers
 
-```asm
-; RMT / TMC2 VBI-resync via linked timer IRQ
-rmt_vbi_isr
-        pha
-        txa
-        pha
-        tya
-        pha
-        jsr rmt_update           ; RMT engine tick + row resync
-        jsr tmc2_ui_update       ; TMC2 40x39 tracker display
-        jmp XITVBV               ; $E462, correct deferred VBI exit
-```
-
-TMC2 uses the VSCROL trick to display its 40 × 39 character-mode UI during gameplay. The tracker display lives at bank 2 of the TMC2 driver; CHBASE is swapped every 2 scan lines via DLI to create the 4 + 3 pixel-row characters.
+RMT and TMC2 are separate music-player ecosystems. Treat the player routine as
+the ABI: call the documented init/play/stop entry points for that player build,
+preserve any vectors you hook, and assume the player owns `AUDCTL`, `STIMER`,
+and whichever POKEY channels it updates.
 
 ---
 
 ## §5.6  Stereo POKEY
 
-The common stereo upgrade maps the second POKEY at `$D210-$D21F`. Use the same low-nibble register layout as the primary chip:
+The common stereo upgrade maps the second POKEY at `$D210-$D21F`. Use the same
+low-nibble register layout as the primary chip:
 
 | Primary | Stereo POKEY | Meaning |
 |---|---|---|
@@ -132,159 +182,83 @@ The common stereo upgrade maps the second POKEY at `$D210-$D21F`. Use the same l
 | `$D209` | `$D219` | STIMER |
 | `$D20E/$D20F` | `$D21E/$D21F` | IRQEN/SKCTL |
 
-Detection should be non-destructive: save `IRQEN`, `NMIEN`, and `SKCTL`, briefly prime the second chip, test for the expected behavior, then restore all registers. Do not write `$D210-$D21F` blindly in mono-safe code.
-
-Three common detection strategies:
-
-| Method | Idea | Result convention |
-|---|---|---|
-| Timer IRQ alias | Enable timer-1 IRQ on `$D21E`; if a normal POKEY IRQ appears on `$D20E`, the second address range is probably only an alias | A=`$80` present, `$00` absent in Seban/Slight-style code |
-| RANDOM reset | Halt both POKEYs with `SKCTL=0`, release only `$D21F`, then test whether primary `RANDOM ($D20A)` stayed at `$FF` | X=1 stereo, X=0 mono in KMK-style code |
-| Keyboard register | Compare `KBCODE ($D209)` with `$D219`; second POKEY has no keyboard scanner | Z=0 stereo, Z=1 mono, but unreliable after reset or key `L` |
-
-Prefer the RANDOM-reset or timer method for production detection. The keyboard
-method is tiny but can false-negative while the primary keyboard code is `$00`.
-Always restore primary `SKCTL`, `IRQEN`, `NMIEN`, and any timer state after the
-probe.
+Detection is upgrade-specific. Keep probes non-destructive, restore `IRQEN`,
+`SKCTL`, and any timer state you disturb, and do not assume `$D210-$D21F`
+exists on stock mono hardware.
 
 ---
 
 ## §5.7  Polynomial Counters
 
-| Generator | Polynomial | Width | Used by AUDC |
-|---|---|---|---|
-| Noise 1 | x4 + x3 + x2 + x1 + 1 | 4-bit | AUDC bit6=1, clocked by poly-5 |
-| Noise 2 | x5 + x3 + 1 | 5-bit | AUDC bit6=0; shifts 9/17-bit noise gen |
-| Noise 3 | x9 + x5 + 1 | 9-bit | AUDC bit7=0; used for RANDOM direct |
-| Noise 4 | x17 + x14 + 1 | 17-bit | AUDC bit7=0, shifts 9/17-bit |
+| Generator | Width | Practical role |
+|---|---|---|
+| Poly-4 | 4-bit | Short repeating noise / percussive textures |
+| Poly-5 | 5-bit | Gates several distortion modes |
+| Poly-9 | 9-bit | Optional shorter long-period noise (`AUDCTL` bit 7) |
+| Poly-17 | 17-bit | Default long-period noise and `RANDOM` source |
 
 ---
 
-## §5.8  SIO Protocol — Base Timing
+## §5.8  ALLPOT / RANDOM / IRQ / SKCTL / SKSTAT
 
-| SKCTL[4:6] | Input clock | Output clock | Mode |
-|---|---|---|---|
-| `%000` | External | External | Clock disabled / flip-flops reset |
-| `%001` | Timer 4 | Timer 1 | Async/fixed |
-| `%010` | Timer 4 | Timer 2 | Async/two-tone |
-| `%011` | External | Internal | Rarely used |
-| `%101` | Timer 4 | External | Sync receive |
-| `%110` | Timer 4 | Timer 2 | Sync transmit (two-tone) |
-| `%111` | Timer 4 | Timer 1 | Sync transmit (pure tone) |
+`ALLPOT` bits start at `1` after `POTGO` and clear to `0` as each paddle
+reading completes. `RANDOM` returns 8 bits of the currently selected long
+polynomial (17-bit by default, 9-bit when `AUDCTL` bit 7 is set).
 
-For cassette: 600 baud → TIM4 = $05CC; for disk 19200 baud → TIM4 = $0028; max internal bit rate with 1.79 MHz master → 256 KHz (÷2 slip) = 128 Kbps absolute max only when both clocks are in-phase.
+| `IRQEN` / `IRQST` bit | Source |
+|---|---|
+| 7 | BREAK key |
+| 6 | Keyboard data ready |
+| 5 | Serial input ready |
+| 4 | Serial output data needed |
+| 3 | Serial transmit complete |
+| 2 | Timer 4 |
+| 1 | Timer 2 |
+| 0 | Timer 1 |
 
-**Full SIO reset:**
+`IRQEN` bits enable sources when set. `IRQST` is **active low**: a cleared bit
+means the source is pending.
+
+`SKCTL` layout:
+
+| Bit | Meaning |
+|---|---|
+| 7 | Force serial BREAK |
+| 6:4 | Serial clocking / mode select |
+| 3 | Two-tone serial (cassette) mode |
+| 2 | Fast paddle scan |
+| 1 | Keyboard scan enable |
+| 0 | Keyboard debounce enable |
+
+`SKSTAT` layout:
+
+| Bit | Meaning |
+|---|---|
+| 7 | Serial frame error latch |
+| 6 | Serial input overrun latch |
+| 5 | Keyboard overrun latch |
+| 4 | Serial data ready |
+| 3 | Shift key state |
+| 2 | Last key still pressed |
+| 1 | Serial input busy |
+| 0 | Unused / undefined |
+
+OS-friendly reset sequence:
 
 ```asm
         lda #$00
-        sta SKCTL               ; $D20F — reset all clocks
-        lda #$10                ; bit 4 = async receive; T3+T4 = 1.79 MHz
-        sta SKCTL
-        sta AUDF3               ; $D204
-        lda #$28                ; 19200 baud divider
-        sta AUDF4               ; $D206
+        sta SKCTL               ; stop/reset keyboard+serial logic
+        lda #$03
+        sta SKCTL               ; restore normal OS keyboard scan + debounce
 ```
 
 ---
 
 ## §5.9  4-Bit Digital Sample Playback
 
-POKEY volume is a 4-bit register ($0–$F for AUDCn volume bits). Rapidly writing volume-only values to AUDC3/AUDC4 produces 4-bit digital audio. Unpack a full 8-bit sample into two nibbles: upper nibble → high volume burst; lower nibble → next burst. At ~3.9 kHz (one nibble every two scan lines on NTSC), the result is a clean 4-bit sample stream.
+With `AUDC` bit 4 set, rapidly rewriting the low-nibble volume produces 4-bit
+digital audio. `VCOUNT` changes every two scan lines, so one write per `VCOUNT`
+step gives about **7.85 kHz on NTSC** and **7.78 kHz on PAL**. If you pack two
+4-bit samples per byte, that corresponds to about **3.9 kB/s** of source data.
 
-**Source:** Ironman Atari §Pushing POKEY, Space Harrier XE playback IRQ by Chris Hutt.
-
-**Conversion pipeline:**
-
-1. Convert PC audio to unsigned 8-bit mono RAW @ 3.9 kHz: `sox in.wav -t raw -r 3900 -u -b -c 1 out.raw`
-2. Convert RAW to 4-bit big-endian: pair bytes, take upper nibble + lower nibble of next byte → single 4-bit-packed byte.
-3. In playback: read packed byte → output high nibble then low nibble → increment pointer.
-
-**VCOUNT-based sample-play kernel (taken from Space Harrier XE):**
-
-```asm
-; play_sample — VCOUNT-sync 4-bit sample playback on audio channel 3
-; Assumes: play_channel = AUDC3 ($D205)
-; sample_ptr = $80/$81 (zero page)
-; dest_end   = $82/$83 (end address for stop)
-; Uses VCOUNT to time each sample nibble precisely
-
-sample_nibble   = $84        ; bit 0 = which nibble pending (toggle)
-sample_ptr       = $85        ; ZP pointer lo/hi already stored elsewhere
-sample_hi        = $86
-dest_end_lo      = $87
-dest_end_hi      = $88
-next_vcount      = $89
-
-play_sample
-        lda #0
-        tay
-        sta sample_nibble            ; reset counter
-        sta next_vcount
-
-?wait_for_vcount_130
-        lda #130                     ; NTSC: max VCOUNT value before wrap
-        cmp VCOUNT
-        bne ?wait_for_vcount_130     ; spin until VCOUNT=130 (selected scan-line)
-
-?main_loop
-        ; advance VCOUNT target by 2 = ~3.9 kHz
-        lda next_vcount
-        clc
-        adc #2
-        cmp next_vcount_max          ; if NTSC max = 130, PAL = 155
-        bcc ?no_wrap
-        sbc next_vcount_max          ; wrap: subtract max (0 or 1 on overflow)
-?no_wrap
-        sta next_vcount
-
-        lda sample_nibble
-        eor #1                       ; toggle 0→1→0
-        sta sample_nibble
-        bne ?lo_nibble               ; if toggled to 1 → output high nibble next
-
-        ; === HIGH NIBBLE ===
-?hi_nibble
-        lda (sample_ptr),y          ; fetch current packed byte
-        lsr a
-        lsr a
-        lsr a
-        lsr a                       ; high nibble into low bits
-        ora #$10                    ; bit 4 = volume-only mode
-        tax                         ; save to X
-        beq ?skip_play              ; volume 0 = silent frame (unnecessary DMA)
-        bne ?store_vol
-
-?lo_nibble
-        lda (sample_ptr),y          ; fetch same byte again
-        and #$0F                    ; low nibble
-        ora #$10
-        tax
-        iny
-        bne ?no_page
-        inc sample_hi
-?no_page
-        lda sample_hi
-        cmp dest_end_hi
-        bne ?store_vol
-        cpy dest_end_lo
-        beq ?stop
-?store_vol
-        txa                         ; volume nibble + $10 (volume-only)
-        sta AUDC3                   ; $D205 — write volume to channel 3
-?skip_play
-        jmp ?main_loop
-
-?stop
-        lda #$00
-        sta AUDC3                   ; turn off sample playback
-        rts
-```
-
-> ⚠ **Sample overflow:** 4-bit packed samples use approximately 2 bytes per sample nibble (2 bytes per 3.9 kHz sample = ~7.7 KB/s). For a 6-second song at that rate → 46 KB stored in Atari memory. Use a single-player VBI-driven pre-fetched ring buffer to avoid sourcing from the wrong bank of extended RAM. Overflow: 4-bit packed samples use approximately 2 bytes per sample nibble (2 bytes per 3.9 kHz sample = ~7.7 KB/s). For a 6-second song at that rate → 46 KB ROM stored. Use long VBI-thread if sample exceeds flat 64 KB / 128 KB bank. Keep sample in consecutive ROM pages (e.g., $6000–$7FFF bankswitched) to avoid extra cycle from incrementing ZP pointer across pages.
-
-> ⚠ **÷0 in VCOUNT timing:** VCOUNT is 8-bit (0–255); PAL machines reach scan line 155, NTSC machines wrap at scan line ~262 but the counter only counts to 255. Always use `CMP next_vcount_max` where `next_vcount_max = 130` for NTSC / 155 for PAL — don't assume a universal value.
-
----
-
-Source notes: POKEY behavior is summarized from `Altirra-hardware/extracted_chapters/chapter05.md`, `atari-documentation/POKEY/POKEY.md`, `pokey-registers.txt`, and the PCM/PDM technical guide.
+Use `audio/digital-audio.md` for a focused playback kernel and packing pattern.

@@ -28,3 +28,13 @@ src equ *-2
   sta $ff00,y
 dst equ *-2
 ```
+
+A self-modification label must be longer than one character (`a:`, `z:`, and
+`r:` are reserved for XASM-style mnemonic extensions). A label ending with a
+double colon `::` defines a self-modification address with global scope:
+
+```
+.local
+  lda temp:: #$00
+.endl
+```

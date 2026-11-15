@@ -12,7 +12,7 @@ BLK UPDATE NEW LABEL 'LABEL'
 More about SDX symbol declarations in the [Defining SMB symbols](../pseudo-commands/symbols-repeat.md#smb) chapter.
 
 
-<a name="align"></a>
+<a name="var"></a>
 
 ### .VAR var1[=value1],var2[=value2]... (.BYTE|.WORD|.LONG|.DWORD) [=address]
 The `.VAR` directive is used to declare and initialize variables in the main program block and in `.PROC` and `.LOCAL` blocks. **MADS** does not use information about such variables in further operations involving pseudo and macro instructions. Permitted variable types are `.BYTE`, `.WORD`, `.LONG`, `.DWORD` and their multiples, as well as types declared by `.STRUCT` and `.ENUM`, e.g.:
@@ -84,7 +84,7 @@ Upon the first use of the `.ZPVAR` directive, you must initialize the address th
 With each subsequent variable, this address is automatically increased by **MADS**. If variable addresses overlap, an *Access violations at address $xxxx* warning message will be generated. If the zero page range is exceeded, a *Value out of range* error message is generated.
 
 
-<a name="print"></a>
+<a name="define"></a>
 
 ### .DEFINE macro_name expression
 The `.DEFINE` directive allows defining a one-line macro `MACRO_NAME`. Nine parameters are permitted, `%%1..%%9` (`:1..:9`), represented in the same way as for `.MACRO` macros, via the `%%` characters or the `:` character. Literal parameter names are not accepted, and there is no possibility to use the line break character `\`.
@@ -143,7 +143,7 @@ This unary operator tests whether the following label has been defined yet, retu
 > _Defining a label AFTER the use of a .DEF which references it can be dangerous, particularly if the .DEF is used in a .IF directive._
 
 
-<a name="ifdef"></a>
+<a name="using"></a>
 
 ### .USING, [.USE]
 The `.USING` (`.USE`) directive allows specifying an additional search path for label names. The effect of `.USING` (`.USE`) applies in the current namespace as well as subsequent namespaces contained within it.
@@ -176,4 +176,3 @@ hlp2   stx $b000
 .endl
 ```
 
-<a name="get"></a>

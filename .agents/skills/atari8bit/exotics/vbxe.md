@@ -8,8 +8,8 @@ description: >-
 
 > **When to load:** The task requires VBXE detection, FX registers, XDL setup, VRAM access, blitter use, palette work, or VBXE example triage.
 > **Scope:** VBXE: FX/GTIA_emu register map ($D6xx/$D7xx), MEMAC windows, blitter, sprites, XDL, polygon/video examples
-> **Key items:** $D600/$D700 block; CORE_VERSION $D640/$D740; MEMAC B_CTL $D61D; XDL pointer; VGABLIT
-> **Primary sources:** `atari-documentation/vbxe/fx1.26-en.pdf`, `Atariki/articles/rejestry_vbxe.md`, `wykrycie_vbxe.md`, `video_board_xe.md`, `atari-documentation/vbxe/Examples/FX/`
+> **Key items:** `$D6xx`/`$D7xx` register page; FX registers at page+`$40`–`$5F`; CORE_VERSION `$D640`/`$D740`; MINOR_REVISION `$D641`/`$D741`; MEMAC B control `$D65D`; blitter `$D650`–`$D654`
+> **Primary sources:** Altirra's VBXE emulation — `github.com/ilmenit/AltirraSDL` (`src/Altirra/source/vbxe.cpp`, `src/Altirra/h/vbxe.h`, `src/ATHelpFile/source/vbxe.xml`). The VBXE FX 1.26 manual is the vendor reference for the FX core but no online copy could be located, so it is cited by title only — every register fact below is cross-checked against Altirra.
 
 ## Quick-lookup
 
@@ -18,8 +18,8 @@ description: >-
 | VBXE in one paragraph | §15.1 |
 | FX core spec table (512KB VRAM, 21-bit palette) | §15.2 |
 | Register layout table | §15.3 |
-| FX CORE_VERSION $D640 / CORE_REVISION $D641 | §15.4 |
-| FX detection (KMK/DLT 2009, MEMAC B_CTL trick, 36b) | §15.4 |
+| FX CORE_VERSION `$D640` / MINOR_REVISION `$D641` | §15.4 |
+| FX detection (KMK/DLT 2009, MEMAC B_CTL trick) | §15.4 |
 | XDL and minimal init | §15.5 |
 | VRAM / MEMAC / blitter | §15.6 |
 | EN code-examples index | §15.7 |
@@ -38,7 +38,7 @@ VBXE operates in parallel with ANTIC and GTIA: it shadows ANTIC/GTIA writes for 
 | `$11` | GTIA emu v1.xx (GTIA-compatible only, no FX extras) |
 | other | Reserved / unknown |
 
-Four FX hardware variants are available: `a` (standard XL/XE), `r` (RAMBO 256K internal), `5200` (`g` suffix), and `g` without RAMBO.
+The register window must live in PBI space at either `$D6xx` (the usual configuration, and what most existing software assumes) or `$D7xx`. With Ultimate1MB also active, the window is configured through the U1MB setup rather than by the emulator/hardware jumper.
 
 ## 15.2 FX Core Specs
 
@@ -46,32 +46,31 @@ VBXE FX core v1.26 — hardware capabilities:
 
 | Feature | Value |
 |---|---|
-| VRAM | 512 KB local (14 MHz bus, 8× ANTIC bandwidth) |
-| Palette | 21-bit RGB (7-bit per channel) = 2 097 152 colours; 4 planes × 256 entries (1024 simultaneously) |
+| VRAM | 512 KB local; blitter/DMA run 8 memory cycles per ANTIC cycle (≈14.3 MHz) |
+| Palette | 21-bit RGB (7 bits per channel) = 2 097 152 colours; 4 palette planes × 256 entries (1024 simultaneously) |
 | Overlay modes | SR 320/336×256c; HR 640×16c; LR 160×256c; text 80-col |
-| XDL | Independent display list; no JVB or CPU rewrite needed per frame |
-| Attribute map | 8×1 – 32×32-pixel cells (G8 resolution); 32 colour sets; scroll in X/Y |
-| Blitter | 14 MHz; copy/fill; 6.75 MB/s copy, 13.5 MB/s fill; IRQ on completion |
-| Sprites | 1×1 – 256×256 G8-sized; 256 colours each; quantity limited by blitter throughput |
+| XDL | Independent display list; runs from VRAM without CPU rewrite per frame |
+| Attribute map | Cells with programmable width/height and X/Y scroll, one colour set per cell |
+| Blitter | Copy/fill at one memory cycle per byte written (source reads cost extra); IRQ on completion |
+| Sprites | Software only — 1×1 – 256×256 G8-sized blits; 256 colours each; quantity limited by blitter throughput |
 | Priority | Programmable per-layer (PM0–PM3, PF0–PF3, COLBAK, overlay) |
-| RAMBO core | 320 KB expansion via PORTB banking; upper 256 K bonded at $4000 |
+| RAMBO core | The `'r'` firmware variant emulates a RAMBO 256 KB memory expansion from VBXE's VRAM |
 
-VBXE 1.0 introduced the board; VBXE 2.0 cut initialisation from ~6 s to <1 s. By November 2010 roughly 125 of version 2.0 had been sold.
+VBXE 1.0 introduced the board; VBXE 2.0 shrank the FPGA configuration time.
 
 ## 15.3 Register Layout
 
-VBXE registers at `$D600` (slot 0) or `$D700` (slot 1) block.
+VBXE decodes one 256-byte register page, either `$D600` (slot 0, the usual configuration) or `$D700` (slot 1). The FX registers live at **page + `$40` … page + `$5F`** — i.e. `$D640-$D65F` or `$D740-$D75F`. Offsets below `$40` are not registers (reads return `$FF`); offsets from `$C0` up expose the FPGA config latch (D0 = DATA0, D1 = DCLK, D2 = /CONFIG, D7 = CONF_DONE).
 
-| Reg | R/W | Description |
+| Reg (page-relative) | R/W | Description |
 |---|---|---|
-| `$D600` | W | VIDEO_CONTROL — primary mode/effect register |
-| `$D601/$D602` | W | XDL pointer low/high |
-| `$D60C/$D60D/$D60E` | W | CR/CG/CB — palette RGB |
-| `$D618` | W | XDLC — XDL control bits |
-| `$D62E/$D62F` | W | MEMAC A window (0x3000 or 0x4000 base) |
-| `$D61D` | RW | MEMAC B control (FX 1.20+) |
-| `$D61F` | R | FX magic word = $10 |
-| `$D620` | R | FX revision byte (BCD; bit 7 = RAMBO) |
+| `$40` | W | VIDEO_CONTROL — bit0 = XDL enable, bit1 = extended color, bit2 = overlay opaque, bit3 = 15-level transparency |
+| `$41-$43` | W | XDL_ADR0/1/2 — 19-bit XDL address in VRAM |
+| `$50-$52` | W | BL_ADR0/1/2 — 19-bit address of the blitter BCB list |
+| `$55-$58` | W | P0-P3 — overlay priority |
+| `$5D` | W | MEMAC_B_CONTROL — bank/access for the `$4000-$7FFF` window |
+| `$5E` | W | MEMAC_CONTROL — page base, size and access for the MEMAC A window |
+| `$5F` | W | MEMAC_BANK_SEL — MEMAC A bank |
 
 ### FX CORE registers ($D640–$D65F and $D740–$D75F)
 
@@ -79,8 +78,8 @@ VBXE registers at `$D600` (slot 0) or `$D700` (slot 1) block.
 |---|---|---|
 | `$Dx40` | VIDEO_CONTROL | CORE_VERSION |
 | `$Dx41` | XDL_ADR0 | MINOR_REVISION |
-| `$Dx42` | XDL_ADR1 [7:0] | `$FF` |
-| `$Dx43` | XDL_ADR2 [15:8] | `$FF` |
+| `$Dx42` | XDL_ADR1 [15:8] | `$FF` |
+| `$Dx43` | XDL_ADR2 [18:16] | `$FF` |
 | `$Dx44` | CSEL (palette select 0–3) | `$FF` |
 | `$Dx45` | PSEL (playfield palette) | `$FF` |
 | `$Dx46` | CR red | `$FF` |
@@ -89,9 +88,9 @@ VBXE registers at `$D600` (slot 0) or `$D700` (slot 1) block.
 | `$Dx49` | COLMASK entry mask | `$FF` |
 | `$Dx4A` | COLCLR write-back | COLDETECT read-out |
 | `$Dx4B–$Dx4F` | reserved | `$FF` |
-| `$Dx50` | BL_ADR0 blitter src/dst | BLT_COLLISION_CODE |
-| `$Dx51` | BL_ADR1 blitter list | `$FF` |
-| `$Dx52` | BL_ADR2 | `$FF` |
+| `$Dx50` | BL_ADR0 (BCB list address low) | BLT_COLLISION_CODE |
+| `$Dx51` | BL_ADR1 (bits 8-15) | `$FF` |
+| `$Dx52` | BL_ADR2 (bits 16-18) | `$FF` |
 | `$Dx53` | BLITTER_START | BLITTER_BUSY |
 | `$Dx54` | IRQ_CONTROL | IRQ_STATUS |
 | `$Dx55–$Dx5C` | P0–P3 + reserved | `$FF` |
@@ -108,6 +107,8 @@ VBXE registers at `$D600` (slot 0) or `$D700` (slot 1) block.
 ## 15.4 VBXE Detection
 
 ### FX core 1.20+ (KMK/DLT, 2009)
+
+> **MADS/CPU-mode note:** this is plain 6502 source. For 65816 code add `opt c+`, and write accumulator addressing bare (`asl`, `lsr`, `rol`, `ror`) — MADS 2.1.7 rejects `ASL A`. The `get_fx_version` listing below already uses the bare `asl`/`ror`/`lsr` forms.
 
 ```asm
 MEMAC_B_CTL = $5d
@@ -140,16 +141,12 @@ _vbxe_write
 
 Return: **C=0** → VBXE found; `_vbxe_write+2` = `$D600` or `$D700`.
 
-### Core version < 1.20
-
-KMK/DLT code above uses `MEMAC_B_CTL = $4c` for cores older than 1.20. Detection logic unchanged.
-
 ### FX revision read
 
 ```asm
         ; run after vbxe_detect
-        ; out: C=0 FX core confirmed, vb_rev=BCD revision,
-        ;      vb_rambo bit 7 set when FX 1.21+ RAMBO core is present
+        ; out: C=0 FX core confirmed, vb_rev = revision byte,
+        ;      bit 7 of vb_rev set when the RAMBO 'r' firmware is present
 
 get_fx_version
         lda   #$00
@@ -158,32 +155,31 @@ get_fx_version
         lda   _vbxe_write+2
         sta   vb_page+1
         ldy   #$40
-        lda   (vb_page),y    ; CORE_VERSION ($D640 or $D740)
+        lda   (vb_page),y    ; CORE_VERSION ($D640 or $D740) = $10 for FX
         cmp   #$10
         bne   not_fx
         iny
-        lda   (vb_page),y    ; CORE_REVISION
+        lda   (vb_page),y    ; MINOR_REVISION
         cmp   #$ff
         beq   not_fx
         asl
-        ror   vb_rambo       ; bit 7 = RAMBO flag
+        ror   vb_rambo       ; bit 7 = RAMBO/shared-memory flag
         lsr
-        sta   vb_rev          ; BCD revision byte
+        sta   vb_rev          ; revision byte, e.g. $26 = 1.26
         clc                   ; FX OK
         rts
 not_fx  sec
         rts
 ```
 
-Return: **C=0** → FX core confirmed; `vb_rev` = BCD revision; bit 7 of original byte = RAMBO flag (`vb_rambo`).
+Return: **C=0** → FX core confirmed; `vb_rev` = revision byte; bit 7 = RAMBO/shared-memory variant (`vb_rambo`).
 
-**Revision byte structure** (valid from FX 1.21):
-- bit 7 = 1 → RAMBO core
-- bits 6–4 → BCD major revision (values 0–7)
-- bits 3–0 → BCD minor revision (values 0–9)
-- Compatible cores have bits 6–4 equal (FX 1.20 software runs on 1.24).
+**Revision byte structure** (bit 7 valid from FX 1.21):
+- bit 7 = 1 → RAMBO ('r') firmware, i.e. VBXE's memory is reused as a 256 KB RAMBO expansion
+- bits 6–0 → version digits: `$26` = 1.26, `$24` = 1.24, `$20` = 1.20 (Altirra supports exactly 1.20/1.24/1.26 and collapses other values to these)
+- Compatible cores share the upper digit (FX 1.20 software runs on 1.24).
 
-FX 1.20 predates the RAMBO bit and must be detected by comparing PORTB-selected and MEMAC-selected banks separately. Cores before 1.08 return `$FF` at CORE_REVISION.
+FX 1.20 predates the RAMBO bit, so a 1.20 core can never report bit 7.
 
 ---
 
@@ -198,7 +194,7 @@ Minimal setup path:
 3. Upload palette entries through `CSEL/PSEL` and `CR/CG/CB`.
 4. Place the XDL in CPU-visible memory or VRAM as required by the selected mode.
 5. Write XDL address registers.
-6. Enable XDL processing through `VIDEO_CONTROL/XDLC`.
+6. Enable XDL processing through `VIDEO_CONTROL` (`$D640` bit 0).
 
 XDL design rules:
 
@@ -212,11 +208,11 @@ VBXE has 512 KB of local VRAM. The CPU accesses it through MEMAC windows and the
 
 | Mechanism | Use |
 |---|---|
-| MEMAC A | CPU-visible VRAM window, commonly at `$3000` or `$4000` depending on setup |
-| MEMAC B | Additional/banked window and detection/control path on newer FX cores |
-| Palette registers | 21-bit RGB entries selected through palette index/control registers |
-| Blitter list | Copy/fill/attribute operations executed by VBXE hardware |
-| Blitter busy/IRQ | Poll or interrupt on completion before reusing blitter state |
+| MEMAC A | CPU-visible banked VRAM window; base page, size (4/8/16/32 KB) and CPU/ANTIC access are set by MEMAC_CONTROL `$D65E` with the bank in MEMAC_BANK_SEL `$D65F` |
+| MEMAC B | Fixed `$4000-$7FFF` (16 KB) window; bank plus CPU/ANTIC access set by MEMAC_B_CONTROL `$D65D`; also the window the standard detection routine probes |
+| Palette registers | 21-bit RGB entries written through CSEL `$D644` / PSEL `$D645` / CR-CG-CB `$D646-$D648` (the 7-bit channel rides in bits 7..1) |
+| Blitter list | Copy/fill/attribute operations executed by VBXE hardware; BCB list address in `$D650-$D652`, started via `$D653` |
+| Blitter busy/IRQ | Poll BLITTER_BUSY (read `$D653`: bit1 = busy, bit0 = loading BCB) or use the blitter IRQ (`$D654`) before reusing blitter state |
 
 Blitter workflow:
 
@@ -234,9 +230,6 @@ Common hazards:
 - Palette and XDL changes can tear if made mid-frame without a planned raster boundary.
 
 ## 15.7 EN Code Examples (Index)
-
-> ⚠ **XDL/blitter I-field annotation:** Annotation-decoder such as screen-swap overlap, colour-lut reload, and sprites that reference attribute-map cells from even/odd VBLANK halves require frame-doubling XDL sequences (wide XDL entries must be ≥2 NTSC scanlines thick for wobble-free 60 Hz; single-scanline XDL triggers a carry-in hazard on the blitter pixel counter). Production examples below use Ψ-annotated XDL tables where the Ψ character marks paired I-field state transitions.
-> ⚠ **MEMAC A/B window hazard:** On FX firmware < 1.20, MEMAC B_CTL ($D61D) does not expose the auto-increment burst bit. Detection routines that probe MEMAC_B_CTL against $80 must gate on CORE_VERSION ≥ $11 before trusting the response.
 
 ### Candle Family
 
@@ -272,4 +265,4 @@ Common hazards:
 
 Full production builds such as the LAMERS Group `oldschool` directory (10 FX parts) and `wb2` directory (8 FX parts plus bank-switcher) are useful for studying real VBXE asset streaming, XDL changes, and blitter-heavy effects.
 
-Source notes: VBXE detection and register summaries use `Atariki/articles/rejestry_vbxe.md`, `wykrycie_vbxe.md`, `video_board_xe.md`, and the English FX 1.26 manual.
+Source notes: VBXE register, detection and MEMAC semantics above are cross-checked against Altirra's VBXE emulation (`github.com/ilmenit/AltirraSDL`, `src/Altirra/source/vbxe.cpp` + `src/ATHelpFile/source/vbxe.xml`) and the FX 1.26 vendor manual (cited by title; no online copy located).

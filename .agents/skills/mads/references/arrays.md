@@ -30,7 +30,7 @@ It is possible to specify the starting index from which values will be entered f
 .enda
 Example of an array translating a key press code to an INTERNAL code.
 
-.array TAB [255] .byte = $ff   ; allocating 256 bytes [0..255] with an initial value of $FF
+.array TAB [255] .byte = $ff   ; allocating 255 bytes [0..254] with an initial value of $FF
 
  [63]:[127] = "A"              ; assigning a new value TAB[63]="A", TAB[127]="A"
  [21]:[85]  = "B"
@@ -66,7 +66,7 @@ Example of an array translating a key press code to an INTERNAL code.
 .enda
 ```
 
-In the above example, we created an array `TAB` of size 256 bytes `[0..255]`, data type `.BYTE`, and filled the fields with value `$FF`. Additionally, we stored INTERNAL character codes at positions (array indices) equal to the key press code (without SHIFT and with SHIFT, i.e., uppercase and lowercase letters).
+In the above example, we created an array `TAB` of size 255 bytes `[0..254]`, data type `.BYTE`, and filled the fields with value `$FF`. Additionally, we stored INTERNAL character codes at positions (array indices) equal to the key press code (without SHIFT and with SHIFT, i.e., uppercase and lowercase letters).
 
 The colon `:` separates individual array indices.
 
@@ -113,12 +113,12 @@ null
 	[_left_up]  = .lo(left)
 	[_left_dw]  = .lo(left)
 
-	[_right     = .lo(right)
+	[_right]    = .lo(right)
 	[_right_up] = .lo(right)
 	[_right_dw] = .lo(right)
 
 	[_up]       = .lo(up)
-	[_dw]       = .lo(down)
+	[_down]     = .lo(down)
 .enda
 
 .endl

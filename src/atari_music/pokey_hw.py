@@ -28,8 +28,13 @@ from atari_music.constants import (
     AUDC_PURETONE,
     AUDC_VOLUME_ONLY,
     AUDCTL_15KHZ,
+    AUDCTL_9BIT_POLY,
     AUDCTL_CH1_179MHZ,
     AUDCTL_CH3_179MHZ,
+    AUDCTL_HIPASS_CH1_CH3,
+    AUDCTL_HIPASS_CH2_CH4,
+    AUDCTL_JOIN_1_2_16BIT,
+    AUDCTL_JOIN_3_4_16BIT,
     PAL_15KHZ_CLOCK,
     PAL_64KHZ_CLOCK,
     PAL_CLOCK_HZ,
@@ -104,8 +109,95 @@ def clamp_audf_for_tracker(value: int) -> int:
     return max(AUDF_MIN, min(AUDF_TRACKER_MAX, int(value)))
 
 
+# ---------------------------------------------------------------------------
+# Per-channel modulation descriptors (music-data format version 1)
+# ---------------------------------------------------------------------------
+# The instrument table's sixth byte. Version 1 of the song data format defines exactly one
+# descriptor; every song that does not ask for a modulation carries ``MODULATION_NONE``, which
+# is what the composer writes unless something explicitly sets ``IRInstrument.modulation``.
+#
+#: No modulation: the channel holds one divider for the whole note. The default, and what
+#: every song exported before this existed is equivalent to.
+MODULATION_NONE = 0
+#: C1 (``c1_octave_pulse``): alternate the channel divider between ``N`` and ``N // 2`` once
+#: per 50 Hz frame, for the whole note, on every note of the channel. See
+#: :func:`octave_pulse_divider`.
+MODULATION_OCTAVE_PULSE = 1
+#: The largest descriptor value this format version defines. Anything above it is reserved.
+MODULATION_DEFINED_MAX = MODULATION_OCTAVE_PULSE
+#: The byte the MADS exporter writes when a descriptor is not one this format version defines.
+MODULATION_UNSUPPORTED = 0xFF
+
+MODULATION_DESCRIPTIONS = {
+    MODULATION_NONE: "no modulation",
+    MODULATION_OCTAVE_PULSE: "octave pulse (N / N//2 every frame)",
+}
+
+
+def describe_modulation(descriptor: int) -> str:
+    """Human-readable name of a modulation descriptor, for reports and error messages."""
+    return MODULATION_DESCRIPTIONS.get(
+        int(descriptor), f"undefined modulation descriptor ${int(descriptor) & 0xFF:02X}"
+    )
+
+
+def octave_pulse_divider(nominal: int, frame_offset: int) -> int:
+    """C1's divider for one frame inside a note: ``N`` on even offsets, ``N // 2`` on odd.
+
+    This is the single statement of the rule in Python. The 6502 player computes the same
+    thing with ``lsr``, which is ``// 2`` for every value in ``0..255``, so the two cannot
+    disagree about a *value* — only about where the alternation restarts, and both restart it
+    on the note's first frame (see ``apply_modulation`` in ``player.asm``).
+
+    ``nominal`` is already clamped to the tracker range by :func:`clamp_audf_for_tracker`, and
+    ``N // 2`` of a value in ``0..254`` is in ``0..127``, so nothing here can fall out of range.
+    The octave is exact when ``N`` is odd; for even ``N`` it is flat by up to ~12 cents at the
+    bottom of the range, which is the behaviour Experiment 26/27 established and not a rounding
+    bug (see ``docs/c1_player_extension_design.md`` §2.4).
+    """
+    value = int(nominal)
+    return value if int(frame_offset) % 2 == 0 else value // 2
+
+
+def is_octave_pulse(descriptor: int) -> bool:
+    """True when a modulation descriptor is the one this format version defines."""
+    return int(descriptor) == MODULATION_OCTAVE_PULSE
+
+
+
 def _base_clock_hz(audctl: int) -> float:
     return PAL_15KHZ_CLOCK if (audctl & AUDCTL_15KHZ) else PAL_64KHZ_CLOCK
+
+
+def describe_audctl(audctl: int) -> str:
+    """Human-readable description of an AUDCTL byte.
+
+    Used wherever a value is printed (export headers, binding reports) so a comment can
+    never claim a configuration the data does not implement.
+    """
+    audctl = int(audctl) & 0xFF
+    parts: List[str] = []
+    if audctl & AUDCTL_JOIN_1_2_16BIT:
+        clock = "1.79 MHz" if audctl & AUDCTL_CH1_179MHZ else "64 kHz"
+        parts.append(f"16-bit pair Ch1+Ch2 at {clock}")
+    elif audctl & AUDCTL_JOIN_3_4_16BIT:
+        clock = "1.79 MHz" if audctl & AUDCTL_CH3_179MHZ else "64 kHz"
+        parts.append(f"16-bit pair Ch3+Ch4 at {clock}")
+    else:
+        parts.append("4 independent 8-bit channels")
+    if audctl & AUDCTL_15KHZ:
+        parts.append("15 kHz base clock")
+    if not (audctl & AUDCTL_JOIN_1_2_16BIT) and (audctl & AUDCTL_CH1_179MHZ):
+        parts.append("Ch1 at 1.79 MHz")
+    if not (audctl & AUDCTL_JOIN_3_4_16BIT) and (audctl & AUDCTL_CH3_179MHZ):
+        parts.append("Ch3 at 1.79 MHz")
+    if audctl & AUDCTL_HIPASS_CH1_CH3:
+        parts.append("Ch1 high-pass clocked by Ch3")
+    if audctl & AUDCTL_HIPASS_CH2_CH4:
+        parts.append("Ch2 high-pass clocked by Ch4")
+    if audctl & AUDCTL_9BIT_POLY:
+        parts.append("9-bit poly noise")
+    return ", ".join(parts)
 
 
 def _uses_hs_clock(audctl: int, channel: int) -> bool:
@@ -236,25 +328,28 @@ def player_envelope_volumes(
 ) -> List[int]:
     """Reproduce ``player.asm``'s ``update_envelopes`` state machine, one value per frame.
 
-    The 6502 player does NOT implement a multi-step ramp:
+    Matches the Phase-1 fixed 6502 ADSR state machine frame-for-frame using the
+    exact same integer arithmetic:
 
-    * attack  : volume jumps to ``(peak >> 1) | 1`` and stays there until the last
-                attack frame, then jumps to ``peak`` (2 discrete levels).
-    * decay   : volume jumps immediately to ``sustain`` (no slope; ``decay`` only
-                delays the transition to the sustain phase).
-    * sustain : holds ``sustain``.
-    * release : linear ``-1`` per frame, triggered when the remaining note length
-                (measured in row ticks) drops *below* ``release`` — the player uses
-                ``ch_dur < ch_rel`` (strict), verified frame-by-frame against
-                ``player.asm`` under a 6502 emulator.
-
-    The WAV preview uses this function so the rendered envelope matches what the
-    Atari player will actually produce.
+    * attack  : linear multi-step integer ramp across ``attack`` VBI frames:
+                ``max(1, (env_frame * peak_vol) // attack)`` for ``env_frame < attack``,
+                reaching ``peak_vol`` at ``env_frame == attack`` (or immediately if ``attack <= 1``).
+    * decay   : linear multi-step integer ramp from ``peak_vol`` down to
+                ``eff_sustain = min(peak_vol, sustain)`` across ``decay`` VBI frames:
+                ``peak_vol - ((env_frame * (peak_vol - eff_sustain)) // decay)``.
+                Zero-frame decay enters Sustain immediately without emitting an extra hold frame.
+    * sustain : holds ``eff_sustain`` stably until remaining VBI frames
+                ``(ticks_remaining - 1) * frames_per_tick + tick_counter <= release``.
+    * release : linear ``-1`` per VBI frame towards ``0``.
     """
+    if note_len_frames <= 0:
+        return []
     peak_vol = max(0, min(15, int(peak_vol)))
+    if peak_vol == 0:
+        return [0] * int(note_len_frames)
     attack = max(0, int(attack))
     decay = max(0, int(decay))
-    sustain = max(0, min(15, int(sustain)))
+    sustain = min(peak_vol, max(0, min(15, int(sustain))))
     release = max(0, int(release))
     fpt = max(1, int(frames_per_tick))
     total_ticks = max(1, int(math.ceil(note_len_frames / fpt)))
@@ -264,31 +359,33 @@ def player_envelope_volumes(
     env_frame = 0
     cur = 0
     for i in range(note_len_frames):
+        ticks_remaining = max(1, total_ticks - (i // fpt))
+        tick_counter = fpt - (i % fpt)
+        frames_remaining = (ticks_remaining - 1) * fpt + tick_counter
         if phase == 1:  # attack
             if attack == 0:
                 phase, env_frame, cur = 2, 0, peak_vol
             else:
                 env_frame += 1
                 if env_frame < attack:
-                    cur = (peak_vol >> 1) | 1
+                    cur = max(1, (env_frame * peak_vol) // attack)
                 else:
                     phase, env_frame, cur = 2, 0, peak_vol
         elif phase == 2:  # decay
             if decay == 0:
-                phase, cur = 3, sustain
+                phase = 3
             else:
                 env_frame += 1
                 if env_frame < decay:
-                    cur = sustain
+                    cur = peak_vol - ((env_frame * (peak_vol - sustain)) // decay)
                 else:
-                    phase, cur = 3, sustain
-        elif phase == 3:  # sustain
+                    phase = 3
+        if phase == 3:  # sustain (runs on entry from decay or while sustaining)
             cur = sustain
-            ticks_remaining = total_ticks - (i // fpt)
-            if ticks_remaining < release:
+            if release > 0 and frames_remaining <= release:
                 phase = 4
-        else:  # release
+        if phase == 4:  # release (runs on entry from sustain or while releasing)
             if cur > 0:
                 cur -= 1
-        volumes.append(cur)
+        volumes.append(max(0, min(15, cur)))
     return volumes

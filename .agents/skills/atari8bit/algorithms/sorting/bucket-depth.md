@@ -12,9 +12,11 @@ is `depth >> 5` (256 / 8 = 32 depth units per bucket). Zero comparisons.
 
 ```asm
 SortVisible
-        ldx    #$00
+        ldx    #$07
         lda    #$00
-        sta    bkt_0..bkt_7
+@clear  sta    BKT_HEAD,x      ; one loop clears all 8 heads
+        dex
+        bpl    @clear
 
 @fill   lda    BUF_DEPTH,x
         lsr                   ; depth >> 5  -> bucket 0..7
@@ -23,29 +25,32 @@ SortVisible
         lsr
         lsr
         tay
-        lda    bkt_head,y     ; current tail
-        sta    next,x
-        lda    vis_quad,x
+        lda    bkt_head,y     ; current bucket head
+        sta    next,x          ; link this face to it
+        txa                    ; (or lda vis_quad,x if the chain must store a face id)
         sta    bkt_head,y     ; push into bucket
         inx
         cpx    vis_count
         bne    @fill
 
-        ; Drain bucket 7 (far) to bucket 0 (near)
+        ; Drain bucket 7 (far) to bucket 0 (near) by walking each chain
         ldy    #$07
 @bucket lda    bkt_head,y
         beq    @next
-        ; follow linked list into sorted output array
+        ; follow next[] chain into the sorted output array
 @next   dey
         bpl    @bucket
 ```
 
+Do not try to clear the heads with `sta bkt_0..bkt_7`: MADS does not accept an
+address range as an instruction operand.
+
 | | |
 |---|---|
 | Buckets | 8 (depth >> 5) |
-| Bucket storage | BKT_HEAD[8] ZP |
+| Bucket storage | BKT_HEAD[8], zero page |
 | Link storage | NXT_PTR[96] |
-| Cycles | ~500 (96 verts, single pass) |
-| Comparisons | 0 |
+| Cycles | ~3.9 K for the clear plus one pass over 96 faces (~40 cycles/face, measured) |
+| Key comparisons | 0 |
 
 ---

@@ -8,13 +8,15 @@ After rotation you have camera-space `x,y,z`. Convert to screen pixels.
 ## 1. Full perspective
 
 ```
-zi   = z + CAM_DIST            ; shift so nearest z ≥ 1; clamp 1..255
+zi   = z + CAM_DIST            ; shift so the nearest depth ≥ ZMIN
 scrX = CX + (x · RECIP[zi]) >> 8
 scrY = CY − (y · RECIP[zi]) >> 8
 ```
 
 `RECIP[zi] = FOCAL·256/zi` (see `math.md`). One multiply + one lookup per
-axis. Clamp `zi` away from 0.
+axis. Clamp `zi` to at least `ZMIN = ceil(FOCAL·256/255)` — a byte table
+only holds `RECIP ≤ 255`, so `zi = 0` is undefined and `zi < ZMIN` wraps
+the byte; use 16-bit entries if you must divide by small depths.
 
 ## 2. The near plane — why `zi` must be clamped
 
@@ -42,7 +44,7 @@ outside the span/screen buffers — see `rasterizer.md`.
 A widely used cheat: project **Y with perspective but X orthographically**:
 
 ```
-scrX = CX ± |x|                     ; no divide, no multiply
+scrX = CX + x                       ; signed byte add, no divide, no multiply
 scrY = CY − (y · RECIP[zi]) >> 8    ; perspective only in Y
 ```
 
@@ -62,12 +64,12 @@ on the wrong side:
 projY   lda vz
         clc
         adc #CAM_DIST        ; zi = depth + camera distance
-        tax                  ; (clamp zi to 1..255 before use)
+        tax                  ; (clamp zi to ZMIN..255 before use)
         lda RECIP,x
         sta mb               ; scale = RECIP[zi]  (unsigned)
         lda vy
         bpl @pos
-        eor #$FF : clc : adc #1     ; |y|
+        eor #$FF \ clc \ adc #1     ; |y|
         sta ma
         jsr UMult8           ; |y|*scale ; integer part in prod_hi
         lda CY

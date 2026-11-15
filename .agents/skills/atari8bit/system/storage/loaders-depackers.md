@@ -28,29 +28,34 @@ Boot-sector loader, from the MADS example usually named `Boot.asm`:
 ```asm
         org $0700
 boot_hdr
-        .word $0001             ; boot sector count, low byte used
-        .word boot_hdr          ; load address
-        .word $ffff             ; CASINI-related field
+        .word $0001             ; number of boot sectors to load (1-255)
+        .word boot_hdr          ; load address of the boot block
+        .word $ffff             ; init/entry address ($ffff = none)
 
         lda #$ff
         sta $d301               ; disable BASIC / map RAM on XL/XE
         lda #1
         sta $0301               ; DUNIT = drive 1
-        lda #'R'
-        sta $0302               ; DCMD = read
+        lda #$52                ; DCOMND = GET SECTOR
+        sta $0302
         mwa #main_start $0304   ; DBUF
         mwa #main_sector $030a  ; DAUX sector number
 
-load    jsr $e453               ; SIOV
-        bmi error
+load    jsr $e453              ; DSKINV — resident disk handler (SIOV is $E459)
+        bmi error               ; negative status in Y
         adw $0304 #$80          ; next 128-byte buffer
         inw $030a               ; next sector
         ; decrement sector counter...
         jmp load
-error   jmp $e477               ; OS SIO error handling path
+error   jmp $e477               ; COLDSV — cold start (reboot)
 ```
 
 Use this only for ATR/boot-disk workflows. DOS file APIs are not active yet, and the first three boot sectors are normally 128 bytes even on enhanced-density disks.
+
+`DSKINV` (`$E453`) fills `DDEVIC`, `DTIMLO`, `DSTATS` and `DBYT` itself; the caller only
+sets `DUNIT`, `DCOMND`, `DBUFLO/H` and `DAUX1/2`. `SIOV` (`$E459`) is the raw serial-bus
+layer and needs the full DCB (including `DDEVIC`, `DSTATS`, `DBYT`). Both return status in
+`DSTATS ($0303)` and in `Y`; `N=1` means error — see `storage.md` §7.11.
 
 Dual-address loader stub, from the MADS example usually named `file_loader.asm`:
 

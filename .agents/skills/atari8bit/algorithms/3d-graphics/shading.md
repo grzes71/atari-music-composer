@@ -22,14 +22,15 @@ Diffuse lighting is the dot product of the surface normal `N` and the
 light direction `L`, both unit vectors: `intensity = N·L`, mapped to a
 shade. Compute per face (flat) or per vertex (Gouraud).
 
-### Full dot product (~180 cycles)
+### Full dot product (~350 cycles)
 
 ```asm
-        lda nx : ldx lx : jsr SMult8 : sta dot         ; nx*lx
-        lda ny : ldx ly : jsr SMult8 : clc : adc dot : sta dot
-        lda nz : ldx lz : jsr SMult8 : clc : adc dot   ; + nz*lz
-        ; renormalize (>>7 via an ASL dot / ROL A chain) -> signed intensity
-        clc : adc #$80           ; bias signed -> 0..255
+        lda nx \ ldx lx \ jsr SMult8 \ sta dot         ; nx*lx
+        lda ny \ ldx ly \ jsr SMult8 \ clc \ adc dot \ sta dot
+        lda nz \ ldx lz \ jsr SMult8 \ clc \ adc dot   ; + nz*lz
+        asl                      ; SMult8 returns each product's high byte,
+        ;  which is Q1.7/2 -> one ASL restores Q1.7
+        clc \ adc #$80           ; bias signed -> 0..255
         tax
         lda SHADE_TAB,x          ; 256-entry LUT -> pixel value 0..15
 ```
@@ -41,7 +42,7 @@ intensities to the darkest level, spread the positive range across the
 0..15 (mode 9) or 0..8 (mode 10) shade values, apply a ramp/gamma — all
 without extra math.
 
-### Equal-light fast path (~60 cycles)
+### Equal-light fast path (~25 cycles)
 
 If the light's components are equal (`lx == ly == lz`), the dot product
 collapses to a scaled sum of the normal's components — **no multiply**:
@@ -51,7 +52,7 @@ N·L ∝ nx + ny + nz
 ```
 
 ```asm
-        lda nx : clc : adc ny : clc : adc nz
+        lda nx \ clc \ adc ny \ clc \ adc nz
         tax
         lda SHADE_SUM_TAB,x      ; sum -> shade, direct LUT
 ```
@@ -60,9 +61,10 @@ Scale the stored normals so `nx+ny+nz` stays within the table's index
 range (a signed byte, biased), then `SHADE_SUM_TAB` maps the sum straight
 to a shade — the same shaping table idea as above.
 
-**Why keep both:** a fixed diagonal light is common and this path is ~3×
-faster; fall back to the full product only when the light isn't diagonal.
-Detect the case at build time and assemble only the path you need.
+**Why keep both:** a fixed diagonal light is common and this path is an
+order of magnitude faster (measured ~25 vs ~370 cycles); fall back to the
+full product only when the light isn't diagonal. Detect the case at build
+time and assemble only the path you need.
 
 ## 3. Gouraud shading — smooth across the face
 
@@ -114,11 +116,11 @@ writing each pixel's shade into its nibble:
         cmp SPAN_SR,y
         beq @flat_fill       ; common case — cheap
 @grad   ; per-pixel: even pixel -> high nibble, odd -> low nibble
-        lda cx : lsr : tay : bcs @odd
+        lda cx \ lsr \ tay \ bcs @odd
         ldx gs_cur
-        lda (scr),y : and #$0F : ora SHADE_HI,x : sta (scr),y   ; SHADE_HI[x]=x<<4
+        lda (scr),y \ and #$0F \ ora SHADE_HI,x \ sta (scr),y   ; SHADE_HI[x]=x<<4
         jmp @adv
-@odd    lda (scr),y : and #$F0 : ora gs_cur : sta (scr),y
+@odd    lda (scr),y \ and #$F0 \ ora gs_cur \ sta (scr),y
 @adv    ; step shade Bresenham; inc cx; loop to right edge
 ```
 

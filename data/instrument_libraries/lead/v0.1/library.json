@@ -1,0 +1,421 @@
+{
+  "schema": "atari-music/instrument-library/1",
+  "library_id": "lead",
+  "library_name": "Lead Library",
+  "library_version": "0.1",
+  "role": "lead",
+  "status": "experimental_specification",
+  "integrated_into_composer": false,
+  "purpose": "A first, deliberately small specification of four melodic POKEY instruments that Experiments 26-30 produced and evaluated. It records identity, rendering parameters, a musical description and a validation status for each. It is not a runtime instrument registry: nothing here is selected, loaded or exported by the production pipeline.",
+  "scope": {
+    "included": "exactly the four lead candidates that Experiment 29 shortlisted and Experiment 30 compared",
+    "excluded": "bass, percussion, harmony and SFX roles; the other eight Experiment 29 candidates; any new timbre",
+    "why_so_few": "Experiment 30 rated all four useful in context, so none could be dropped on evidence. The point of v0.1 is to describe four instruments correctly, not to fill a library."
+  },
+  "provenance": {
+    "bank": {
+      "registry_path": "tests/data/sound_profiles/bank/registry.json",
+      "registry_schema": "pokey-sound-profile-registry-1.0",
+      "profile_schema": "pokey-playable-sound-profile-1.0",
+      "loader": "atari_music.sound_profiles.bank.load_sound_profile_bank"
+    },
+    "experiments": [
+      "experiment26",
+      "experiment27",
+      "experiment28",
+      "experiment29",
+      "experiment30"
+    ],
+    "rendering_evidence": "experiments/experiment30/manifest.json",
+    "listening_evidence": "evaluation.json"
+  },
+  "rating_conventions": {
+    "basis_verified": "read from the repository: the bank profile document, the registry, or the Experiment 30 manifest",
+    "basis_hypothesis": "a musical guess about how the timbre might be used. It is not a measured or heard property and must not be read as one.",
+    "basis_listening": "a single listener's rating from Experiment 30. It lives in evaluation.json, never here."
+  },
+  "instruments": [
+    {
+      "instrument_id": "c1_octave_pulse",
+      "display_name": "C1 Octave Pulse",
+      "role": "lead",
+      "library_version": "0.1",
+      "identity": {
+        "source": {
+          "kind": "experiment",
+          "experiments": ["experiment26", "experiment27", "experiment28"],
+          "no_bank_profile": "C1 is an experimental register transform, not a bank profile. It has no profile_id and no fingerprint, and none may be invented for it.",
+          "implementation": {
+            "generator_byte": "$40",
+            "generator_constant": "src/atari_music/pokey_timbre_experiment.py::C_GENERATOR",
+            "schedule_constant": "src/atari_music/pokey_octave_pulse_experiment.py::SCHEDULES['C1']",
+            "schedule_parameters": {
+              "hold_frames": 1,
+              "active_frames": null,
+              "active_notes": []
+            },
+            "schedule_meaning": "hold_frames 1 means the divider alternates every 50 Hz frame, so the alternation rate is FRAME_RATE_HZ / (2 * 1) = 25 Hz; active_frames null means the pulse runs for the whole note; an empty active_notes tuple means every note.",
+            "divider_rule": "the divider is N on even frame offsets and N // 2 on odd ones, where N is the note's nominal divider and N // 2 is the octave above",
+            "application": "src/atari_music/pokey_c1_musical_context_experiment.py::apply_c1",
+            "application_signature": "apply_c1(stream, song, channel=3)"
+          }
+        },
+        "evidence": {
+          "experiment": "experiment30",
+          "manifest_path": "experiments/experiment30/manifest.json",
+          "manifest_pointer": "applied_parameters.composition.c1_octave_pulse",
+          "letter_in_experiment30": "B"
+        },
+        "reproducibility": {
+          "status": "partially_reproducible",
+          "what_is_fixed": "the generator byte ($40) and the divider alternation schedule, both pinned in code",
+          "what_is_not_fixed": "the envelope, the channel and AUDCTL are supplied by the host composition. apply_c1 deliberately keeps the composition's articulation, so the same C1 inside a different composition is the same timbre with a different envelope.",
+          "consequence": "an envelope copied from Experiment 30 into this record would describe Experiment 30's composition, not C1. The envelope observed there is recorded under rendering as evidence, not as part of C1's identity.",
+          "alternative_envelope_seen_elsewhere": "Experiment 26/27's isolated prototype used attack 1, decay 8, sustain 12, release 3 frames for its own C1 variant; Experiment 30 used the composition's values instead. Both are C1; neither is C1's envelope."
+        }
+      },
+      "rendering": {
+        "channel": 3,
+        "channel_source": "composition",
+        "generator_byte": "$40",
+        "generator_source": "experiment",
+        "audctl_mode_observed_by_context": {
+          "experiment30_composition": "$10",
+          "experiment30_solo": "$00"
+        },
+        "audctl_source": "composition",
+        "audctl_note": "C1 does not require a particular clock: the transform rewrites the divider and the generator nibble and leaves AUDCTL to the song. Both values above rendered it successfully.",
+        "divider": "alternating N and N // 2 every frame",
+        "divider_source": "experiment",
+        "waveform": "poly5_gated_poly4",
+        "waveform_note": "$40 is poly5-gated poly4, so doubling the divider doubles the poly5 gate rate as well. This is a texture change and a pitch change together, not a clean octave oscillator.",
+        "envelope_observed_in_experiment30": {
+          "attack_frames": 1,
+          "decay_frames": 3,
+          "release_frames": 2,
+          "sustain_vol": 13
+        },
+        "envelope_sources_observed_in_experiment30": {
+          "attack_frames": "composition (character default)",
+          "decay_frames": "composition (character default)",
+          "release_frames": "composition (character default)",
+          "sustain_vol": "composition (character default)"
+        },
+        "envelope_note": "every envelope field came from the composition's bright_lead character default, not from the instrument. This is the C1 asymmetry: the three bank instruments bring their own measured envelope, C1 does not."
+      },
+      "musical": {
+        "character": {
+          "text": "A ringing, beating lead. The divider moves inside the note, which no other instrument here does, and that is what produces the shimmer.",
+          "basis": "hypothesis"
+        },
+        "usage_hypothesis": {
+          "text": "A distinctive, prominent lead or counter-melody: a hook line rather than a bed.",
+          "basis": "hypothesis"
+        }
+      },
+      "limitations": {
+        "profile_codes": {
+          "limitation_codes": [],
+          "blocking_codes": [],
+          "consumer_gap_codes": []
+        },
+        "profile_codes_note": "empty because there is no bank profile. The limits that matter for C1 are under rendering.",
+        "rendering": [
+          "the poly5 gate rate doubles with the divider, so this is not a pure octave oscillator",
+          "the envelope is inherited from the host composition, so the instrument cannot be reproduced from this record alone",
+          "the transform writes one register pair per frame; anything needing more than one write per frame is out of reach",
+          "not expressible as a bank profile: it is code, so it cannot be selected by a profile id"
+        ]
+      },
+      "validation": {
+        "specification": "verified",
+        "specification_note": "the generator constant, the schedule parameters and the application function all resolve in the current repository",
+        "render_in_experiment30": "passed",
+        "render_evidence": "Experiment 30 validation checks 'only the melodic channel's AUDF and AUDC columns differ from the baseline' and 'every variant's AUDC generator nibble is the candidate's own'",
+        "listening": "evaluated",
+        "listening_pointer": "evaluation.json#evaluations.c1_octave_pulse",
+        "listening_scope": "one listener, one composition, one session"
+      }
+    },
+    {
+      "instrument_id": "pure_sustain",
+      "display_name": "Pure Sustain",
+      "role": "lead",
+      "library_version": "0.1",
+      "identity": {
+        "source": {
+          "kind": "bank_profile",
+          "profile_id": "pokey_ref_25f94201",
+          "profile_fingerprint": "e38233097b37decf494ded78e759657ab97ff121a0a514c498f51e90267a919b",
+          "profile_status": "PLAYABLE",
+          "profile_scope": "VOICE",
+          "registry_path": "tests/data/sound_profiles/bank/registry.json",
+          "profile_path": "tests/data/sound_profiles/bank/profiles/pokey_ref_25f94201.json",
+          "profile_schema": "pokey-playable-sound-profile-1.0"
+        },
+        "evidence": {
+          "experiment": "experiment30",
+          "manifest_path": "experiments/experiment30/manifest.json",
+          "manifest_pointer": "applied_parameters.composition.pure_sustain",
+          "letter_in_experiment30": "A"
+        },
+        "reproducibility": {
+          "status": "referenced_not_copied",
+          "why": "the instrument is the bank profile. It is identified by id and fingerprint rather than copied, so the profile document stays the single source of truth and cannot drift from this record.",
+          "verification": "the fingerprint above is the profile's playable_fingerprint as published in the registry"
+        }
+      },
+      "rendering": {
+        "channel": 3,
+        "channel_source": "composition",
+        "generator_byte": "$A0",
+        "generator_source": "profile",
+        "audctl_mode": "$00",
+        "audctl_mode_observed_by_context": {
+          "experiment30_composition": "$10",
+          "experiment30_solo": "$00"
+        },
+        "audctl_source": "profile",
+        "audctl_note": "the profile declares $00, a 64 kHz 8-bit voice on its own channel. Experiment 30 rendered it under a song AUDCTL of $10, which is compatible: $10 configures the CH1+CH2 pair and leaves CH3 at 64 kHz.",
+        "divider": "the note's own divider, unchanged",
+        "divider_source": "composition",
+        "waveform": "pure_tone",
+        "envelope_observed_in_experiment30": {
+          "attack_frames": 6,
+          "decay_frames": 0,
+          "release_frames": 2,
+          "sustain_vol": 10
+        },
+        "envelope_sources_observed_in_experiment30": {
+          "attack_frames": "profile",
+          "decay_frames": "profile",
+          "release_frames": "composition (character default)",
+          "sustain_vol": "profile"
+        },
+        "envelope_note": "the profile does not measure a release frame, so that one field fell back to the composition's character default. The other three are the profile's own."
+      },
+      "musical": {
+        "character": {
+          "text": "A clean, sustained square tone with a smooth onset and a steady body. The plainest of the four.",
+          "basis": "hypothesis"
+        },
+        "usage_hypothesis": {
+          "text": "A stable, held lead: a melodic line that should read clearly without drawing attention to itself.",
+          "basis": "hypothesis"
+        }
+      },
+      "limitations": {
+        "profile_codes": {
+          "limitation_codes": [],
+          "blocking_codes": [],
+          "consumer_gap_codes": ["GESTURE_NOT_RENDERABLE_BY_CONSUMER"]
+        },
+        "profile_codes_note": "GESTURE_NOT_RENDERABLE_BY_CONSUMER means the source recording carried a measured pitch or distortion gesture that the current engine cannot reproduce. The gesture is dropped; the generator, clock and envelope are rendered as measured.",
+        "rendering": [
+          "the measured gesture of the source recording is not rendered",
+          "single 8-bit channel: it occupies one POKEY voice and cannot be doubled for free",
+          "the measured pitch base and range of the source are evidence, not properties: the note supplies the pitch"
+        ]
+      },
+      "validation": {
+        "specification": "verified",
+        "specification_note": "the profile resolves in the registry and its published fingerprint matches the loaded profile",
+        "render_in_experiment30": "passed",
+        "render_evidence": "Experiment 30 validation check 'every variant's AUDC generator nibble is the candidate's own'",
+        "listening": "evaluated",
+        "listening_pointer": "evaluation.json#evaluations.pure_sustain",
+        "listening_scope": "one listener, one composition, one session"
+      }
+    },
+    {
+      "instrument_id": "pure_pluck",
+      "display_name": "Pure Pluck",
+      "role": "lead",
+      "library_version": "0.1",
+      "identity": {
+        "source": {
+          "kind": "bank_profile",
+          "profile_id": "pokey_ref_9daa0429",
+          "profile_fingerprint": "c3b125f70bc44bc8f29df0d038221101cc66255f46e4b54c7ddfc68607b3971f",
+          "profile_status": "PLAYABLE",
+          "profile_scope": "VOICE",
+          "registry_path": "tests/data/sound_profiles/bank/registry.json",
+          "profile_path": "tests/data/sound_profiles/bank/profiles/pokey_ref_9daa0429.json",
+          "profile_schema": "pokey-playable-sound-profile-1.0"
+        },
+        "evidence": {
+          "experiment": "experiment30",
+          "manifest_path": "experiments/experiment30/manifest.json",
+          "manifest_pointer": "applied_parameters.composition.pure_pluck",
+          "letter_in_experiment30": "D"
+        },
+        "reproducibility": {
+          "status": "referenced_not_copied",
+          "why": "the instrument is the bank profile, identified by id and fingerprint rather than copied",
+          "verification": "the fingerprint above is the profile's playable_fingerprint as published in the registry"
+        }
+      },
+      "rendering": {
+        "channel": 3,
+        "channel_source": "composition",
+        "generator_byte": "$A0",
+        "generator_source": "profile",
+        "audctl_mode": "$00",
+        "audctl_mode_observed_by_context": {
+          "experiment30_composition": "$10",
+          "experiment30_solo": "$00"
+        },
+        "audctl_source": "profile",
+        "audctl_note": "same clock configuration as pure_sustain: the profile declares $00 and the song's $10 does not disturb CH3",
+        "divider": "the note's own divider, unchanged",
+        "divider_source": "composition",
+        "waveform": "pure_tone",
+        "envelope_observed_in_experiment30": {
+          "attack_frames": 0,
+          "decay_frames": 6,
+          "release_frames": 2,
+          "sustain_vol": 3
+        },
+        "envelope_sources_observed_in_experiment30": {
+          "attack_frames": "profile",
+          "decay_frames": "profile",
+          "release_frames": "profile",
+          "sustain_vol": "profile"
+        },
+        "envelope_note": "this profile measures all four envelope fields, so the articulation is entirely its own - unlike pure_sustain, whose release comes from the composition."
+      },
+      "musical": {
+        "character": {
+          "text": "The same clean square generator as pure_sustain, but with the opposite articulation: a sharp attack that falls away to a low sustain.",
+          "basis": "hypothesis"
+        },
+        "usage_hypothesis": {
+          "text": "A lead with short, percussive articulation: repeated notes, a staccato line, or an arpeggio figure.",
+          "basis": "hypothesis"
+        }
+      },
+      "limitations": {
+        "profile_codes": {
+          "limitation_codes": [],
+          "blocking_codes": [],
+          "consumer_gap_codes": [
+            "AUDF_FF_EXPORT_BOUNDARY",
+            "GESTURE_NOT_RENDERABLE_BY_CONSUMER"
+          ]
+        },
+        "profile_codes_note": "AUDF_FF_EXPORT_BOUNDARY means the source recording's divider reached AUDF $FF, the top of the 8-bit range, which the audit treats as an export boundary. The bank test suite pins this code on five profiles, of which this is one. GESTURE_NOT_RENDERABLE_BY_CONSUMER is the dropped measured gesture described under pure_sustain.",
+        "rendering": [
+          "the measured gesture of the source recording is not rendered",
+          "the source reached the AUDF $FF boundary, so a note at the very top of the range may not export",
+          "single 8-bit channel: one POKEY voice",
+          "the low sustain (3) makes this the quietest of the four at equal peak, which is why Experiment 30's loudness-matched set had to be quiet overall"
+        ]
+      },
+      "validation": {
+        "specification": "verified",
+        "specification_note": "the profile resolves in the registry and its published fingerprint matches the loaded profile",
+        "render_in_experiment30": "passed",
+        "render_evidence": "Experiment 30 validation check 'every variant's AUDC generator nibble is the candidate's own'",
+        "listening": "evaluated",
+        "listening_pointer": "evaluation.json#evaluations.pure_pluck",
+        "listening_scope": "one listener, one composition, one session"
+      }
+    },
+    {
+      "instrument_id": "buzz_steady",
+      "display_name": "Buzz Steady",
+      "role": "lead",
+      "library_version": "0.1",
+      "identity": {
+        "source": {
+          "kind": "bank_profile",
+          "profile_id": "pokey_ref_2b83db43",
+          "profile_fingerprint": "5c3afef4fa0658e1331dcc5ae0592c36b197b4db308eda9e51515f0f217f183d",
+          "profile_status": "PLAYABLE_WITH_LIMITATION",
+          "profile_scope": "VOICE",
+          "registry_path": "tests/data/sound_profiles/bank/registry.json",
+          "profile_path": "tests/data/sound_profiles/bank/profiles/pokey_ref_2b83db43.json",
+          "profile_schema": "pokey-playable-sound-profile-1.0"
+        },
+        "evidence": {
+          "experiment": "experiment30",
+          "manifest_path": "experiments/experiment30/manifest.json",
+          "manifest_pointer": "applied_parameters.composition.buzz_steady",
+          "letter_in_experiment30": "C"
+        },
+        "reproducibility": {
+          "status": "referenced_not_copied",
+          "why": "the instrument is the bank profile, identified by id and fingerprint rather than copied",
+          "verification": "the fingerprint above is the profile's playable_fingerprint as published in the registry"
+        }
+      },
+      "rendering": {
+        "channel": 3,
+        "channel_source": "composition",
+        "generator_byte": "$C0",
+        "generator_source": "profile",
+        "audctl_mode": "$00",
+        "audctl_mode_observed_by_context": {
+          "experiment30_composition": "$10",
+          "experiment30_solo": "$00"
+        },
+        "audctl_source": "profile",
+        "audctl_note": "the profile declares $00, the same clock configuration as the two pure tones",
+        "divider": "the note's own divider, unchanged",
+        "divider_source": "composition",
+        "waveform": "poly4_direct",
+        "waveform_note": "poly4 direct is a 15-step waveform, not a square, which is where the buzz comes from",
+        "envelope_observed_in_experiment30": {
+          "attack_frames": 0,
+          "decay_frames": 0,
+          "release_frames": 5,
+          "sustain_vol": 9
+        },
+        "envelope_sources_observed_in_experiment30": {
+          "attack_frames": "profile",
+          "decay_frames": "profile",
+          "release_frames": "profile",
+          "sustain_vol": "profile"
+        },
+        "envelope_note": "all four fields are the profile's own: an immediate attack, no decay, and a steady body"
+      },
+      "musical": {
+        "character": {
+          "text": "A grainy, buzzing tone from the poly4 generator: a distinct metallic edge rather than a clean square.",
+          "basis": "hypothesis"
+        },
+        "usage_hypothesis": {
+          "text": "A lead with a harder, more aggressive colour than the pure tones, for a harsher or more urgent passage.",
+          "basis": "hypothesis"
+        }
+      },
+      "limitations": {
+        "profile_codes": {
+          "limitation_codes": ["PITCH_BASE_PAIR_INCONSISTENT"],
+          "blocking_codes": [],
+          "consumer_gap_codes": [
+            "GESTURE_NOT_RENDERABLE_BY_CONSUMER",
+            "VOLUME_MODULATION_NOT_REPRODUCIBLE"
+          ]
+        },
+        "profile_codes_note": "PITCH_BASE_PAIR_INCONSISTENT is an inconsistency code: the profile's measured pitch base does not agree with its pair information. It is the reason this profile is PLAYABLE_WITH_LIMITATION rather than PLAYABLE, and it is the one code the project's own stage 9D analysis treated as disqualifying. It concerns the profile's source evidence, not the rendered sound: Experiment 30 rendered it without complaint. VOLUME_MODULATION_NOT_REPRODUCIBLE means the source's measured volume contour is not reproduced - the contour is off by default and the MADS exporter refuses a song that sets one.",
+        "rendering": [
+          "the measured gesture of the source recording is not rendered",
+          "the measured volume contour is not reproduced; this experiment did not enable it",
+          "the profile's pitch-base/pair inconsistency is recorded, unresolved, and inherited from the source measurement",
+          "single 8-bit channel: one POKEY voice"
+        ]
+      },
+      "validation": {
+        "specification": "verified",
+        "specification_note": "the profile resolves in the registry and its published fingerprint matches the loaded profile. The PLAYABLE_WITH_LIMITATION status is carried, not upgraded.",
+        "render_in_experiment30": "passed",
+        "render_evidence": "Experiment 30 validation check 'every variant's AUDC generator nibble is the candidate's own'",
+        "listening": "evaluated",
+        "listening_pointer": "evaluation.json#evaluations.buzz_steady",
+        "listening_scope": "one listener, one composition, one session"
+      }
+    }
+  ]
+}
+

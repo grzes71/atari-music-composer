@@ -39,7 +39,7 @@ It is possible to use **XASM**-style mnemonic extensions `a:`, `z:`, and `r:`, e
 ```
 XASM        MADS
 lda a:0     lda.a 0
-ldx z:0     lda.z 0
+ldx z:0     ldx.z 0
 
 org r:$40   org $40,*
 ```

@@ -1,15 +1,17 @@
 # Cio File Access
 
-## §7.3  IOCB File-Access (IOSB free-finder)
+## §7.3  IOCB File-Access (free-IOCB finder)
 
-Finding a free IOCB: scan for `$FF` in status byte at `$340/$350/$360…/3B0`. Each IOCB is 16 bytes. Only one byte must be `$FF: the status field.
+Finding a free IOCB: scan the handler-index byte (`ICHID`, offset `+0`) of each IOCB for `$FF` — CIO writes `$FF` there when a channel is closed. Each IOCB is 16 bytes, so that byte sits at `$0340/$0350/$0360…$03B0`.
 
 ```asm
+; out: X = IOCB base offset ($00,$10,…,$70) — use $0340+X as the IOCB
+;      Y negative ($A1) when no channel is free
 find_free_iocb
-        ldx #0                  ; IOCB index ×16
-?loop   lda $340,x              ; status byte
+        ldx #0                  ; IOCB offset (index × 16)
+?loop   lda $340,x              ; ICHID: $FF = free (closed) channel
         cmp #$FF
-        beq ?found              ; $FF = free
+        beq ?found
         txa
         clc
         adc #$10                ; next IOCB (16 bytes)
@@ -17,11 +19,9 @@ find_free_iocb
         cmp #$80                ; past IOCB 7 → none free
         bcs ?none
         jmp ?loop
-?found  txa
-        adc #$01                ; ch = IOCB / 16 + 1
-        sta $34a                 ; store channel number (IOCB + $01)
+?found  txa                     ; X = IOCB base
         rts
-?none   lda #$00                ; no free IOCB
+?none   ldy #-95                ; $A1: too many files (no free channel)
         rts
 ```
 
@@ -29,19 +29,20 @@ Alternative OS-style contract:
 
 ```asm
 ; out: N clear => X = IOCB offset ready to use, Y = channel number + 1
-;      N set   => Y = -95 (too many channels open)
+;      N set   => Y = -95 ($a1 — too many files/channels open)
 lookup_iocb
         ldx   #$00
         ldy   #$01
-@loop   lda   $0340,x           ; ICCHID/status: $ff means free
+@loop   lda   $0340,x           ; ICHID: $ff means a free (closed) channel
         cmp   #$ff
         beq   @found
         txa
         clc
         adc   #$10
         tax
+        cmp   #$80              ; past IOCB 7?
         iny
-        bpl   @loop
+        bcc   @loop
         ldy   #-95              ; TOO MANY CHANNELS OPEN
 @found  rts
 ```

@@ -2,21 +2,54 @@
 
 ## 11.3 Flag Manipulation (SEC / CLC / SEI / CLI / CLV)
 
-### C-flag and overflow control
+### Carry and interrupt-mask control
 
 ```asm
-sec    lda  #$FF             ; set C for subtraction/addition chains
-        sbc  value             ; A = value - 1 (overflow)
+        sec                    ; C = 1
+        clc                    ; C = 0
+        sei                    ; I = 1  (mask IRQs)
+        cli                    ; I = 0  (allow IRQs)
+        clv                    ; V = 0  (there is no SEV: to set V, use BIT)
 ```
 
-### BIT trick: fast flag loading (zero page only)
-
-NMOS 6502 `BIT <zp>` reads the T flag but on NMOS chips the T flag is merely a read of the *original* bit-7 value. Reading with BIT immediate is a way to test specific bit-values on specific zero page for built-in safety states.
+`SBC`/`CMP` treat carry as "no borrow", so an unsigned subtraction chain starts
+with `SEC`:
 
 ```asm
-; Fast way to pre-load flags: use immediate
-        bit   value            ; define value = $FF for full C-M-Z set
-; avoid BIT with absolute; any read-modify-write past $0080 breaks.
+        sec
+        sbc   value            ; A = A - value
 ```
+
+`ASL`/`LSR`/`ROL`/`ROR`/`ADC`/`SBC`/`CMP` all write carry; `STA`, `STX`, `STY`,
+`TAX`, `TAY`, `INX`/`INY`/`DEX`/`DEY` and the flag instructions above do not.
+That is why "set carry once, then use a chain of shifts" works.
+
+### BIT: N/V/Z from memory without touching A
+
+`BIT <zp>` / `BIT <abs>` copy the operand's bit 7 into N and bit 6 into V, and
+set Z from `A AND operand`. A is not modified, and carry is not set:
+
+```asm
+        bit   flags            ; N = bit7, V = bit6, Z = (A & flags) == 0
+```
+
+A byte whose bit 6 is set (for example the `RTS` opcode `$60`) therefore gives a
+one-instruction `V = 1`:
+
+```asm
+        bit   v_source
+v_source rts                   ; $60 -> V = 1, N = 0
+```
+
+The NMOS 6502 has no `BIT #imm`. The usual workaround is a zero-page table of
+power-of-two constants (`$01,$02,$04,$08,$10,$20,$40,$80`), so `BIT zp` can test
+any single bit:
+
+```asm
+        bit   bit_tab+7        ; Z = (A & $80) == 0
+```
+
+On 65C02/65816 a real `BIT #imm` exists, but it only updates Z from `A & imm`
+(see `math/65816-math.md`); it does not load N/V from the operand.
 
 ---

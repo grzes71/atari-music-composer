@@ -44,15 +44,19 @@ B_4 equ H_4    B_5 equ H_5    B_6 equ H_6    B_7 equ H_7    B_8 equ H_8
 
 ### Usage
 
-Write the AUDF value to the desired POKEY audio channel register for 8-bit mode with PAL timing:
+The octave numbers in this table follow the 8-bit divider range (the first entry,
+`AUDF = $FF`, is the lowest pitch the 64 kHz / 15 kHz path can produce), not
+scientific pitch notation. In scientific terms middle C (261.6 Hz) is `C₂ = $78`
+and A₄ = 440 Hz is `A₂ = $47`.
 
 ```asm
-LDA #C_4          ; $1D — middle C on PAL
+LDA #C_2          ; $78 — middle C (261.6 Hz) on PAL
 STA AUDF1
-LDA #$A8          ; distortion 5, volume 8
+LDA #$A8          ; distortion 5 (pure tone), volume 8
 STA AUDC1
 ```
 
-For 16-bit paired mode (1.789 77 MHz CPU clock), compute the combined divider value instead; the 8-bit table above applies to the 63.337 kHz base clock only.
+For 16-bit paired mode, compute the combined divider value instead (see
+`frequency-tuning.md`); the 8-bit table above applies to the 63.337 kHz base clock only.
 
 ---

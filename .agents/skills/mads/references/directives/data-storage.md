@@ -4,7 +4,7 @@
 The `.END` directive can be used interchangeably with the directives `.ENDP`, `.ENDM`, `.ENDS`, `.ENDA`, `.ENDL`, `.ENDR`, `.ENDPG`, `.ENDW`, and `.ENDT`.
 
 
-<a name="var"></a>
+<a name="byte"></a>
 
 ### .BYTE, .WORD, .LONG, .DWORD
 The above directives are used to denote the allowed parameter types in procedure parameter declarations (`.BYTE`, `.WORD`, `.LONG`, `.DWORD`). They can also be used to define data, as a substitute for the `DTA` pseudo-instruction.

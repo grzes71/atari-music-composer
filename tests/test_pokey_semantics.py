@@ -276,58 +276,53 @@ def test_percussion_character_mapping(character, expected_dist, expected_role):
 
 
 # ===========================================================================
-# Case 9: envelope model (matches player.asm)
+# Case 9: envelope model (matches Phase-1 fixed player.asm)
 # ===========================================================================
 
-def test_envelope_attack_is_two_step_like_the_player():
-    # attack=3, peak=15 -> (15>>1)|1 = 7, 7, then peak 15
+def test_envelope_attack_ramps_linearly_to_peak():
+    # attack=3, peak=15 -> 5, 10, 15 across the 3 attack frames, then sustain=8
     vols = pokey_hw.player_envelope_volumes(12, 4, 15, 3, 0, 8, 0)
-    assert vols[:3] == [7, 7, 15]
+    assert vols[:4] == [5, 10, 15, 8]
 
 
 def test_envelope_attack_zero_jumps_to_peak():
     vols = pokey_hw.player_envelope_volumes(8, 4, 15, 0, 0, 8, 0)
     assert vols[0] == 15
+    assert vols[1:] == [8] * 7
 
 
-def test_envelope_decay_jumps_to_sustain_without_slope():
-    # decay must NOT ramp: first frame after attack is already sustain
-    vols = pokey_hw.player_envelope_volumes(12, 4, 15, 0, 4, 6, 0)
-    assert vols[0] == 15
-    assert vols[1] == 6
-    assert vols[2] == 6
+def test_envelope_decay_ramps_linearly_to_sustain():
+    # decay=4, peak=15, sustain=7 (span=8) -> 15 -> 13 -> 11 -> 9 -> 7
+    vols = pokey_hw.player_envelope_volumes(12, 4, 15, 0, 4, 7, 0)
+    assert vols[:6] == [15, 13, 11, 9, 7, 7]
 
 
-def test_envelope_release_starts_only_when_ticks_remain_below_release():
-    """``player.asm`` releases on ``ch_dur < ch_rel`` (strict), so a note whose
-    remaining ticks *equal* ``release`` must still be sustaining.
+def test_envelope_release_starts_in_vbi_frames_not_ticks():
+    """``player.asm`` converts remaining duration to VBI frames and enters release
+    when ``frames_remaining <= release``.
 
-    Hand-derived from the player state machine: attack=0 jumps straight to the peak,
-    then decay=0 jumps to sustain=10. ``total_ticks = 8 / 4 = 2``, so the first tick
-    has 2 ticks remaining (not yet < 2 -> sustain) and the second has 1 (-> release).
+    For 8 frames (2 ticks x 4 frames) and ``release=2``: attack=0 emits peak 15 on
+    frame 0, frames 1..5 hold sustain 10, and release runs on the last 2 frames (9, 8).
     """
     vols = pokey_hw.player_envelope_volumes(8, 4, 15, 0, 0, 10, 2)
-    assert vols == [15, 10, 10, 10, 10, 9, 8, 7]
-    # the release tail is a linear -1 per frame fade from the sustain level
-    assert vols[-3:] == [9, 8, 7]
+    assert vols == [15, 10, 10, 10, 10, 10, 9, 8]
+    assert vols[-2:] == [9, 8]
 
 
-def test_envelope_release_holds_sustain_for_the_whole_first_tick():
-    """Regression for the old off-by-one: release used to start on frame 0 here."""
+def test_envelope_release_holds_sustain_before_release_window():
+    """Sustain remains flat across tick boundaries until remaining frames <= release."""
     vols = pokey_hw.player_envelope_volumes(8, 4, 15, 0, 0, 10, 2)
     assert vols[0] == 15
-    assert vols[1] == 10
-    assert vols[2] == 10
-    assert vols[3] == 10
+    assert vols[1:6] == [10] * 5
 
 
-def test_envelope_release_on_last_tick_only():
-    """16 rows x 4 frames = 64 frames, release=2 -> release begins on the final tick."""
+def test_envelope_release_on_final_vbi_frames_only():
+    """16 rows x 4 frames = 64 frames, release=2 -> release begins on the last 2 VBI frames."""
     vols = pokey_hw.player_envelope_volumes(64, 4, 15, 0, 0, 10, 2)
     assert len(vols) == 64
     assert vols[0] == 15
-    assert vols[1:61] == [10] * 60
-    assert vols[61:] == [9, 8, 7]
+    assert vols[1:62] == [10] * 61
+    assert vols[62:] == [9, 8]
 
 
 def test_envelope_release_zero_never_ramps():
@@ -578,6 +573,10 @@ ENV_PARITY_CASES = [
     (0, 0, 10, 0, 120),
     (0, 0, 10, 4, 120),
     (2, 3, 8, 2, 120),
+    (4, 4, 7, 2, 120),
+    (5, 6, 4, 3, 120),
+    (1, 1, 10, 1, 120),
+    (15, 15, 1, 4, 120),
     (0, 0, 10, 2, 60),     # bpm 60  -> frames_per_tick 6
     (0, 0, 10, 2, 160),    # bpm 160 -> frames_per_tick 3
 ]

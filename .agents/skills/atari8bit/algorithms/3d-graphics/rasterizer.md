@@ -16,7 +16,8 @@ SPAN_XR[y] = rightmost x on scanline y    (init to 0)
 
 Walk every edge, updating `min` into `SPAN_XL[y]` and `max` into
 `SPAN_XR[y]` for each scanline the edge crosses. Then a single pass fills
-`SPAN_XL[y]..SPAN_XR[y]` on each row.
+`SPAN_XL[y]..SPAN_XR[y]` on each row, skipping rows where `XL > XR` — the
+untouched `$FF`/`0` sentinel pair marks a scanline the polygon misses.
 
 **Why a span buffer:** it cleanly handles convex polygons (quads,
 triangles) regardless of vertex order, separates the (branchy) edge logic
@@ -76,8 +77,12 @@ WalkEdge
 ```
 
 **Why Bresenham:** needs no division and no tables — just adds and
-compares — and is exact. It is the default when you don't already have a
-reciprocal handy.
+compares — and is exact, as long as the accumulator fits in a byte: `err`
+stays below `dy` and grows by `adx` per row, so the walk is only safe while
+`adx + dy ≤ 255`. A shallow edge (roughly `adx > 255 − dy`) overflows and
+the x values drift — e.g. `(30,5)-(220,120)` (`adx`=190, `dy`=115) ends at
+x=104 instead of 218. Use a 16-bit error for those, or clip such edges out.
+It is the default when you don't already have a reciprocal handy.
 
 ### DDA (fixed-point slope from a reciprocal table)
 
@@ -119,13 +124,14 @@ Ordered from simplest to fastest-and-most-specialized:
         lda colour
 @f      sta (scr),y
         cpy byte_r
-        beq +                ; stop after writing byte_r (handles l == r)
+        beq @+               ; stop after writing byte_r (handles l == r)
         iny
         bne @f
-+
+@
 ```
 
-Simple, general, ~8 cycles/byte. Fine for small spans or a first cut.
+Simple, general, ~16 cycles/byte (measured: `sta (scr),y` is 6 cycles
+before any loop overhead). Fine for small spans or a first cut.
 
 ### (b) Nibble-aware fill — for 4-bit (GTIA) modes
 
@@ -153,10 +159,10 @@ neighbouring pixel, while the middle is whole bytes:
         lda shade_pair
 @f      sta (scr),y
         cpy byte_r
-        beq +
+        beq @+
         iny
         bne @f
-+       rts
+@       rts
 ```
 
 Precompute `shade_pair = (shade<<4) | shade` once so whole bytes are a
@@ -195,8 +201,8 @@ into a RAM buffer:
 ; then "rts" ($60). The fill value is loaded once; every pixel is a bare
 ; store to a hard-coded address.
         ldy #0
-        lda #$A9 : sta (code),y : iny      ; LDA #imm
-        lda shade : sta (code),y : iny
+        lda #$A9 \ sta (code),y \ iny      ; LDA #imm
+        lda shade \ sta (code),y \ iny
 @emit   lda #$8D             ; opcode for STA abs
         sta (code),y
         iny
@@ -228,13 +234,13 @@ minimal by running the loop **from zero page** and **self-modifying its
 source/destination operands**:
 
 ```asm
-; copied into zero page at $90.. once; operands patched per column
-$0090   ora TEX,x            ; TEX low/high self-modified per span
+; this loop is copied into zero page at $0090 first; operands patched per column
+ZPLOOP  ora TEX,x            ; TEX low/high self-modified per span
         sta SCR,y            ; SCR low/high self-modified per span
-        ...advance texture coordinate (DDA)...
+        ; ...advance texture coordinate (DDA)...
         iny
         cpy #width
-        bcc $0090
+        bcc ZPLOOP
 ```
 
 **Why zero page:** *not* faster instruction fetch — the 6502 fetches
@@ -279,14 +285,14 @@ only the fill is left to debug.
 DrawLine
         ; err = 2*dx - dy   (16-bit, in err_lo/err_hi)
 @yl     jsr PlotPixel            ; plot (x,y): nibble RMW from fill (b)
-        lda y : cmp y1 : beq @done
+        lda y \ cmp y1 \ beq @done
         lda err_hi
         bpl @stepx               ; err >= 0 -> also step the minor axis (x)
         ...err += 2*dx (16-bit)...
         jmp @stepy
 @stepx  ...err += 2*dx - 2*dy (16-bit)...
-        lda x : clc : adc sx : sta x
-@stepy  lda y : clc : adc sy : sta y   ; major axis steps every iteration
+        lda x \ clc \ adc sx \ sta x
+@stepy  lda y \ clc \ adc sy \ sta y   ; major axis steps every iteration
         jmp @yl
 @done   rts
 ```

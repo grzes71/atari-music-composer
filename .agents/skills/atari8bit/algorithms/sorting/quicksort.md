@@ -1,39 +1,26 @@
 # Quicksort
 
-## 18.4 Quicksort — 16-bit Keys (litwr / Vladimir Lidovski)
+## 18.4 Quicksort — 16-bit Keys
 
-Recursive via PLA stack — no auxiliary stack allocation.
+In-place partition, then recurse on the two halves. The parts that matter on a
+6502:
 
-```asm
-; quicksort16: sorts uint16 array [lo..hi]
-; lo/hi indices arrive via PLA (popped return-address trick)
+- Compare 16-bit keys high byte first, and only compare the low byte when the
+  high bytes are equal.
+- Keep the current `lo`/`hi` bounds in zero page and pass the range through the
+  stack (`PHA` high byte first, then low byte) so the routine stays re-entrant
+  and each level costs only the pushed pair.
+- Recursion depth is the real hazard: a bad pivot can need O(N) levels, which
+  eats the 256-byte stack. Push the bounds explicitly and loop on the larger half
+  (recursing only into the smaller one), or cap the depth.
+- Complexity: O(N log N) comparisons on average, O(N^2) worst case — already
+  sorted or reverse-sorted input with a first/last pivot is the classic failure.
+- Stop recursing below about 8 elements and finish with the sorting network from
+  §18.1; this removes most of the call overhead for small partitions and avoids
+  the "quicksort a tiny range" pathology.
 
-quicksort16
-        cpy    lo_ptr
-        bcs    @done           ; base case: lo >= hi
-        tax                     ; T = hi
-        sty    lo_ptr
-        txa
-
-        ; partition pass
-        ; search left for key > pivot
-        ; search right for key < pivot
-        ; swap when both found
-
-        ; after partition: recurse on left half, then right half
-        ; via PLA-low+PLA-high for each range
-
-        pla
-        pla                    ; pop low byte of partition range
-        cmp    lo_ptr
-        bcs    @recurse_right
-        jsr    quicksort16     ; left
-        ; fall through to right
-@recurse_right
-        jsr    quicksort16
-@done   rts
-```
-
-> Always add a median-of-3 pivot guard against O(N^2) worst case on sorted input.
+> A median-of-3 pivot (two extra compares per partition) removes the classic
+> sorted-input worst case, but it is a guard, not a guarantee: an adversary can
+> still make median-of-3 pick an extreme element.
 
 ---

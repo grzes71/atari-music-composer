@@ -457,7 +457,13 @@ def test_openai_provider_missing_key_security():
 # =========================================================================
 
 def test_end_to_end_example_artifacts_compilation():
-    """Test G: End-to-end verification that all example JSONs compile to valid Atari XEX binaries."""
+    """Test G: End-to-end verification that all example JSONs compile to valid Atari XEX binaries.
+
+    The complete `.xex` file is **not** size-bounded. The project's one hard byte limit applies to
+    the assembled player (see :func:`atari_music.stage15.player_size_limit_ok`), and a valid
+    executable whose song data pushes it past 2048 bytes is accepted. Only the container's
+    structure is asserted here.
+    """
     from conftest import require_local_artifact
 
     mads_exe = Path("tools/mads/mads.exe")
@@ -467,19 +473,72 @@ def test_end_to_end_example_artifacts_compilation():
     require_local_artifact(examples_dir)
     json_files = ["dungeon_dark.json", "action_fast.json", "funny_prl.json"]
 
+    sizes = {}
     for jf in json_files:
         path = examples_dir / jf
         assert path.exists(), f"Example JSON {path} must exist"
-        
+
         comp = load_composition_json(path)
         xex_out = Path(f"experiments/test_ai_{path.stem}.xex")
-        
+
         # Test compilation
         result_xex = build_xex_from_composition(comp, output_path=xex_out, mads_bin=mads_exe)
         assert result_xex.exists()
-        
-        # Check binary headers & size
+
+        # Check binary headers & structure. There is deliberately no upper size bound: the
+        # 2048-byte limit bounds the player, not the file.
         data = result_xex.read_bytes()
         assert len(data) >= 500, f"XEX too small ({len(data)} bytes)"
-        assert len(data) <= 2048, f"XEX exceeds memory budget ({len(data)} bytes)"
         assert data[0] == 0xFF and data[1] == 0xFF, "Invalid Atari DOS header (must begin with $FFFF)"
+        start = int.from_bytes(data[2:4], "little")
+        end = int.from_bytes(data[4:6], "little")
+        assert end >= start, (
+            f"Malformed first segment header: start ${start:04X} > end ${end:04X}"
+        )
+        sizes[jf] = len(data)
+
+    # Live evidence that the policy is what the code does: at least one example is larger than
+    # the old whole-file ceiling and still compiles. If a future player shrinks enough that none
+    # of them does, relax *this guard* — do not reinstate a ceiling on the file.
+    assert max(sizes.values()) > 2048, (
+        f"No example exceeds 2048 bytes any more (sizes: {sizes}). That is not a policy "
+        f"violation — the complete XEX is not size-bounded — but this guard, which exists to "
+        f"prove an oversized file is accepted, must then be relaxed."
+    )
+
+
+def test_an_unloadable_player_address_is_still_rejected(tmp_path):
+    """An invalid load address is refused, so removing the file-size rule weakened nothing.
+
+    The pipeline's only memory-layout validation is the assembler's own: a player whose code
+    would run past ``$FFFF`` cannot be assembled at all, and the build surfaces that as
+    ``MusicCompositionError`` rather than writing a truncated or wrapped binary. This guard
+    exists because the *only* post-build check the pipeline used to have was the whole-file
+    2048-byte ceiling, which was a size rule and never a layout rule.
+    """
+    from conftest import require_local_artifact
+
+    mads_exe = Path("tools/mads/mads.exe")
+    require_local_artifact(mads_exe)
+    examples_dir = Path("examples/ai")
+    require_local_artifact(examples_dir)
+
+    comp = load_composition_json(examples_dir / "dungeon_dark.json")
+    out = tmp_path / "unloadable.xex"
+
+    # $FD00 + a 1016-byte player leaves far too little room before $FFFF, so the code wraps.
+    with pytest.raises(MusicCompositionError) as excinfo:
+        build_xex_from_composition(
+            comp, output_path=out, player_address=0xFD00, music_address=0x8000,
+            mads_bin=mads_exe,
+        )
+    assert "MADS compilation failed" in str(excinfo.value)
+    assert not out.exists(), "a failed build must not leave a binary behind"
+
+    # A control: the same song at an address that fits assembles cleanly.
+    ok = tmp_path / "loadable.xex"
+    built = build_xex_from_composition(
+        comp, output_path=ok, player_address=0x6000, music_address=0x8000, mads_bin=mads_exe,
+    )
+    assert built.exists()
+    assert built.read_bytes()[:2] == b"\xff\xff"

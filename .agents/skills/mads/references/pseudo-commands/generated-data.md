@@ -1,5 +1,7 @@
 # Generated Data
 
+<a name="sin"></a>
+
 ### SIN (centre,amp,size[,first,last])
 
 ```
@@ -42,8 +44,3 @@ This pseudo-command allows generating LENGTH random values within the range <MIN
 ```
    dta b(rnd(0,33,256))
 ```
-
-<a name="ift"></a>
-<a name="els"></a>
-<a name="eli"></a>
-<a name="eif"></a>

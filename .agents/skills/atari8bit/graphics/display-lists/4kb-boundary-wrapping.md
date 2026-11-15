@@ -1,38 +1,47 @@
 # 4KB Memory Boundary Wrapping & LMS Segment Alignment
 
-## §7  ANTIC 12-Bit Counter Limit & 4KB Memory Boundary Wrapping
+## §7  ANTIC Playfield Counter Limit & 4KB Memory Boundary Wrapping
 
-ANTIC's internal video memory address counter is **12-bit** (`$0000`–`$0FFF` / 4096 bytes / 4 KB). When ANTIC fetches screen bytes sequentially across scanlines, only the bottom 12 bits increment automatically. The high 4 bits (bits 12–15, loaded by a Load Memory Scan / LMS instruction) **do not increment** when bits 0–11 wrap from `$FFF` to `$000`.
+ANTIC's **playfield-memory scan counter** increments only within the current
+4 KB block. If screen data for a bitmap mode crosses a 4 KB boundary and you do
+not reload the address with an LMS instruction, ANTIC wraps to the start of the
+same 4 KB block instead of continuing into the next one.
+
+This is a **playfield-data** rule, not a display-list-pointer rule.
 
 ### Root Cause Mechanics
-1. **12-Bit Counter Wrap:** If ANTIC reaches `$xFFF` during scanline rendering without an LMS instruction, the address counter wraps to `$x000` (the start of the same 4 KB memory page) instead of advancing to `$x+1000`.
-2. **Mode Scanline Math:**
-   - **Mode E / Graphics 15 (160×192 / 160×190, 2 bpp):** 40 bytes/scanline. `floor(4096 / 40) = 102 lines` (`102 * 40 = 4080 bytes`). Line 102 (the 103rd scanline) crosses the 4 KB boundary `$x000`.
-   - **Mode F / Graphics 8 (320×192 / 320×190, 1 bpp):** 40 bytes/scanline. `floor(4096 / 40) = 102 lines` (`102 * 40 = 4080 bytes`).
-   - **Mode D / Graphics 7 (160×96, 2 bpp):** 40 bytes/scanline. `96 * 40 = 3840 bytes` (< 4096 bytes), fits in a single 4 KB segment without wrapping.
+
+1. **4 KB wrap:** when sequential playfield fetches reach `$xFFF`, the next
+   byte comes from `$x000` unless an LMS reloads the counter.
+2. **Mode math for 40 bytes/scan line:**
+   - ANTIC **D**, **E**, and **F** all fetch **40 bytes** per normal-width scan line.
+   - `4096 / 40 = 102` full lines with **16 bytes left over**.
+   - Therefore line 102 (the 103rd scan line, counting from 0) would straddle
+     the 4 KB boundary if you let the counter run straight through.
 
 ---
 
-## The Mid-Scanline Wrapping Gotcha (Horizontal Shift)
+## The Mid-Scanline Wrapping Gotcha
 
-A common mistake is placing an LMS instruction at scanline 102 reloading address `IMAGE_BUFFER + 4080` (e.g. `$4FF0` if `IMAGE_BUFFER = $4000`):
+A common mistake is reloading to `IMAGE_BUFFER + 4080` (for example `$4FF0`
+when `IMAGE_BUFFER = $4000`) and expecting line 102 to continue into `$5000`.
+It will not.
 
-- **Problem:** Address `$4FF0` has only 16 bytes remaining before the `$5000` 4 KB boundary (`$4FF0`–`$4FFF`).
-- **Mid-Line Wrap:** Scanline 102 requires 40 bytes. ANTIC reads the first 16 bytes from `$4FF0`..`$4FFF`. At byte 16, the 12-bit address counter wraps from `$FFF` to `$000`. High bits remain `$4`, so ANTIC fetches the remaining 24 bytes of scanline 102 from `$4000`..`$4017`!
-- **Visual Artifact:** The display splits horizontally—the first 64 pixels (16 bytes) come from the right edge of line 102, and the rest of the scanline (and subsequent scanlines) wraps to the left margin shifted by 16 bytes.
+- `$4FF0` leaves only **16 bytes** before `$5000`.
+- A 40-byte scan line then fetches 16 bytes from `$4FF0..$4FFF` and wraps the
+  remaining 24 bytes to `$4000..$4017`.
+- Visually, the scan line splits horizontally because the right end of one row
+  is followed by the left end of the 4 KB block.
 
 ---
 
-## 4KB Alignment & Memory Padding Solution
+## 4KB Alignment & Padding Solution
 
-To ensure no scanline straddles a `$x000` boundary:
-1. **Pad VRAM Segments in Memory:** Pad each 4 KB VRAM block in RAM to exactly 4096 bytes.
-   - Segment 1: 102 scanlines × 40 bytes = 4080 bytes (`$4000`–`$4FEF`).
-   - Padding: Append 16 zero-padding bytes (`$4FF0`–`$4FFF`).
-   - Segment 2: Starts cleanly at offset 4096 (`$5000`).
-2. **Reload LMS at 4KB Aligned Address:** Set the Display List LMS instruction for Segment 2 to point to `$5000` (`a(IMAGE_BUFFER + 4096)`).
+1. **Pad each 4 KB source block** in memory to a full 4096 bytes.
+2. **Reload with LMS at the next 4 KB boundary**, e.g. `$5000`, before the
+   first line that would cross.
 
-### MADS Assembly Example
+### MADS Assembly Example (192 lines)
 
 ```mads
 DLIST_PREVIEW
@@ -42,18 +51,20 @@ DLIST_PREVIEW
     ; --- Segment 1: Lines 0..101 (102 lines = 4080 bytes) ---
     dta $4E, a(IMAGE_BUFFER + 0)    ; LMS Mode E: start of VRAM ($4000)
     .rept 101
-    dta $0E                         ; Mode E scanlines
+    dta $0E                         ; Mode E scan lines
     .endr
 
-    ; --- Segment 2: Lines 102..189 (88 lines = 3520 bytes) ---
-    dta $4E, a(IMAGE_BUFFER + 4096) ; LMS Mode E: reload aligned at 4KB offset ($5000)
-    .rept 87
-    dta $0E                         ; Mode E scanlines
+    ; --- Segment 2: Lines 102..191 (90 lines = 3600 bytes) ---
+    dta $4E, a(IMAGE_BUFFER + 4096) ; LMS Mode E: reload at $5000
+    .rept 89
+    dta $0E
     .endr
 
     ; --- Jump and Wait for Vertical Blank ---
     dta $41, a(DLIST_PREVIEW)
 ```
+
+For a **190-line** screen, the second segment would be 88 lines instead of 90.
 
 ---
 
@@ -74,7 +85,7 @@ def build_dlist(
     bytes_per_line = (width * bits_per_pixel) // 8
     max_lines_per_segment = 4096 // bytes_per_line  # 102 lines for 40 B/line
 
-    dlist = bytearray([0x70, 0x70, 0x70])  # Blank lines margin
+    dlist = bytearray([0x70, 0x70, 0x70])
 
     remaining_lines = height
     current_byte_offset = 0
@@ -83,9 +94,6 @@ def build_dlist(
         lines_in_segment = min(remaining_lines, max_lines_per_segment)
         segment_bytes = lines_in_segment * bytes_per_line
 
-        # Assertion: Verify segment size does not exceed 4KB limit
-        assert segment_bytes <= 4096, f"Segment size {segment_bytes} bytes exceeds 4KB limit"
-
         target_addr = screen_base_address + current_byte_offset
         dlist.extend([lms_byte, target_addr & 0xFF, (target_addr >> 8) & 0xFF])
 
@@ -93,7 +101,7 @@ def build_dlist(
             dlist.extend([mode_byte] * (lines_in_segment - 1))
 
         if pad_4kb and remaining_lines > lines_in_segment:
-            current_byte_offset += 4096  # Advance to next 4KB boundary ($x000)
+            current_byte_offset += 4096
         else:
             current_byte_offset += segment_bytes
 
@@ -107,14 +115,10 @@ def build_dlist(
 
 ## Quick Reference Summary
 
-| Parameter | Mode D (7) | Mode E (15) | Mode F (8) |
+| Parameter | Mode D | Mode E | Mode F |
 |---|---|---|---|
-| Resolution | 160×96 | 160×192 / 160×190 | 320×192 / 320×190 |
-| Color Depth | 2 bpp (4 col) | 2 bpp (4 col) | 1 bpp (2 col) |
-| Bytes / Line | 40 | 40 | 40 |
-| Max Lines / 4KB | 102 | 102 | 102 |
-| Total Segments | 1 | 2 | 2 |
-| Segment 1 Lines | 96 | 102 | 102 |
-| Segment 1 LMS | `$4D, $00, $40` | `$4E, $00, $40` | `$4F, $00, $40` |
-| Segment 2 Lines | N/A | 90 (or 88) | 90 (or 88) |
-| Segment 2 LMS | N/A | `$4E, $00, $50` | `$4F, $00, $50` |
+| Resolution | 160×96 | 160×192 | 320×192 |
+| Bits/pixel | 2 | 2 | 1 |
+| Bytes / line | 40 | 40 | 40 |
+| Max full lines / 4 KB | 102 | 102 | 102 |
+| 192-line segments | 1 | 102 + 90 | 102 + 90 |

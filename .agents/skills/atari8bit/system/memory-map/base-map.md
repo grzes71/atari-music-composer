@@ -2,53 +2,79 @@
 
 ## 2.1  Full 64 K Memory Map ($0000 – $FFFF)
 
-The Atari 8-bit has a flat 64 K 16-bit address space. Layout is fixed for all models except where extended RAM windowing and ROM bits apply.
+The Atari 8-bit has a flat 64 K CPU address space. Which ROM or RAM is visible in some ranges depends on the machine family and, on XL/XE machines, `PORTB ($D301)`.
 
 ### Map by region
 
 | Region | Purpose |
 |---|---|
-| `$0000–$00FF` | Zero page — OS, user, FP (floating-point) slots |
-| `$0100–$01FF` | Hardware stack — 256 bytes, grows down |
-| `$0200–$02FF` | DOS control block (buffer pointer etc.) |
-| `$0300–`..| OS screen/line edit buffer, free RAM |
-| `$D000–`..| POKEY (4 mirrors) / GTIA / PIA 6520 / ANTIC / POKEY mirrors |
-| `$E000–$FFFF` | OS ROM — 8 K (400/800) or 16 K (XL/XE); basic ROM at `$A000–$BFFF` |
+| `$0000-$00FF` | Zero page — OS variables, DOS/BASIC work areas, user-reserved bytes if your environment allows them |
+| `$0100-$01FF` | Hardware stack |
+| `$0200-$02FF` | OS database: page-2 vector/IRQ-NMI dispatch table, shadows, timers, color registers, keyboard/display variables — owned by the OS, never by DOS |
+| `$0300-$03FF` | OS page 3: SIO `DCB` (`$0300-$030F`), `HATABS`, `IOCB`s, work buffers |
+| `$0400-$7FFF` | Main RAM; on 130XE-class machines `$4000-$7FFF` can be replaced by banked extended RAM |
+| `$8000-$9FFF` | Cartridge window (`RD4` / right or lower 8K) |
+| `$A000-$BFFF` | BASIC ROM, cartridge window (`RD5` / left or upper 8K), or RAM depending on machine and banking |
+| `$C000-$CFFF` | XL/XE OS ROM or underlying RAM when OS ROM is banked out |
+| `$D000-$D0FF` | GTIA |
+| `$D100-$D1FF` | PBI device select / status / device space |
+| `$D200-$D2FF` | POKEY |
+| `$D300-$D3FF` | PIA 6520 |
+| `$D400-$D4FF` | ANTIC |
+| `$D500-$D5FF` | Cartridge control space (`CCTL`) |
+| `$D600-$D7FF` | PBI/ECI device register space |
+| `$D800-$FFFF` | Math Pack and OS ROM on computer models unless overlaid / banked out |
 
-### Zero page zones
+### Common zero-page / page-2 / page-3 landmarks
 
-| Zone | Range | Notes |
+| Address | Name | Purpose |
 |---|---|---|
-| OS numbered vector table | `$00–$1F` | 32 entry points |
-| OS free / unnumbered | `$20–$8F` | Mostly unused on entry; safe for user programs |
-| WSYNC, STICK/PADDL shadows | `$C0–`.. | Altirra hardware calls OS page 2 shadow page |
-| Floating point | `$D4–`.. | FP database on entry from BASIC init |
-| FP private | `$F0–`.. | |
+| `$0008` | `WARMST` | Warm-start flag |
+| `$000A/$000B` | `DOSVEC` | DOS entry vector |
+| `$000C/$000D` | `DOSINI` | DOS initialization vector |
+| `$000E/$000F` | `APPMHI` | Application memory high-water mark |
+| `$0012-$0014` | `RTCLOK` | 24-bit real-time clock |
+| `$0042` | `CRITIC` | Critical I/O section flag |
+| `$004D-$004F` | `ATRACT/DRKMSK/COLRSH` | Attract-mode state |
+| `$006A` | `RAMTOP` | Top of RAM in pages |
+| `$0200/$0201` | `VDSLST` | DLI vector |
+| `$0202/$0203` | `VPRCED` | Serial bus PROCEED IRQ vector |
+| `$0204/$0205` | `VINTER` | Serial bus INTERRUPT IRQ vector |
+| `$0206/$0207` | `VBREAK` | BRK instruction IRQ vector |
+| `$0216/$0217` | `VIMIRQ` | Immediate IRQ vector |
+| `$0222/$0223` | `VVBLKI` | Immediate VBI vector |
+| `$0224/$0225` | `VVBLKD` | Deferred VBI vector |
+| `$022F` | `SDMCTL` | ANTIC DMA shadow |
+| `$0230/$0231` | `SDLSTL/SDLSTH` | Display list pointer shadow |
+| `$0244` | `COLDST` | Cold-start flag |
+| `$026F` | `GPRIOR` | `PRIOR ($D01B)` shadow |
+| `$02C4-$02C8` | `COLOR0-COLOR4` | Color shadows |
+| `$02E0/$02E1` | `RUNAD` | Binary load run address |
+| `$02E2/$02E3` | `INITAD` | Binary load init address |
+| `$02E5/$02E6` | `MEMTOP` | Top of usable RAM pointer |
+| `$02EA-$02ED` | `DVSTAT` | Device/disk status buffer (4 bytes) |
+| `$02FC` | `CH` | Keyboard character buffer |
+| `$0300-$030F` | `DCB` | SIO device control block (`DDEVIC`…`DAUX2`) |
+| `$031A` | `HATABS` | Device handler table |
+| `$0340-$03BF` | `IOCB0-IOCB7` | Eight 16-byte I/O control blocks |
+
+Page 2 belongs to the OS, not to DOS: it is the OS database — the NMI/IRQ dispatch
+vectors above, plus display, color, keyboard and editor shadows. DOS and BASIC keep
+their own control blocks in the RAM they allocate and reach the OS through
+`DOSVEC`/`DOSINI` (`$000A-$000D`). Page 3 starts with the SIO `DCB` at `$0300`
+(`DDEVIC` `$0300`, `DUNIT` `$0301`, `DCOMND` `$0302`, `DSTATS` `$0303`,
+`DBUFLO/HI` `$0304/$0305`, `DTIMLO` `$0306`, `DBYTLO/HI` `$0308/$0309`,
+`DAUX1/2` `$030A/$030B`); see `storage.md` for the command set.
 
 ### PIA 6520 (Peripheral Interface Adapter)
 
-Address range: `$D300–$D3FF`, only bits 0–1 decoded → 4 mirrored locations:  
-`$D300/$D301/$D302/$D303` / `$D304/$D305/$D306/$D307` / … / `$D3FC/$D3FD/$D3FE/$D3FF`
+Address range: `$D300-$D3FF`; only the low two address bits are decoded, so the four PIA registers repeat throughout the page.
 
 | Register | Address | Function |
 |---|---|---|
-| PORTA | `$D300` | Joystick directions ports 1/2 (read); data direction chg when DDRA bit2=0 |
-| PORTB | `$D301` | Port data; banking/ROM enable on XL/XE (output: bits 0,1,4,6,7); joystick ports 3/4 on 400/800 |
-| PACTL | `$D302` | Port A control register (data direction + interrupt enable) |
-| PBCTL | `$D303` | Port B control register (same layout as PACTL) |
-| DDRA | bit=write to $D300 when PACTL.bit2=0 | Data direction: 0=input, 1=output |
-| DDRB | bit=write to $D301 when PBCTL.bit2=0 | Data direction: 0=input, 1=output |
-
-**PORTA PACTL X Micro**
-
-```asm
-        ; Typical PACTL/PBCTL init on XL/XE
-        lda #$34             ; CA2 low, CB2 low, interrupts disabled
-        sta PACTL
-        sta PBCTL
-```
-
-**400/800 RESET key:** RNMI asserted on leading edge of VBLANK → OS warm-start.  
-**XL/XE RESET key:** Assert reset lines on CPU, ANTIC, FREDDIE, PIA; cold-restarts at `$FFFC`.
+| `PORTA` | `$D300` | Joystick directions for ports 1 and 2; with PACTL bit 2 clear, accesses DDRA instead |
+| `PORTB` | `$D301` | Joystick directions for ports 3 and 4 on 400/800; ROM/RAM/bank control on XL/XE; with PBCTL bit 2 clear, accesses DDRB instead |
+| `PACTL` | `$D302` | Port A control register |
+| `PBCTL` | `$D303` | Port B control register |
 
 ---

@@ -72,6 +72,10 @@ The ability to chain two mnemonics using the colon `:` character is already know
  lda:iny:sta:iny $600,y
 ```
 
+All chained mnemonics are processed with the **same** argument, i.e.
+`lda:iny:sta:iny $600,y` assembles to `lda $600,y` / `iny` / `sta $600,y` /
+`iny`.
+
 ## Expressions
 
 The term "expression" refers to a sequence of operators and operands (arguments) that defines operations, i.e., the type and order of calculations. A complex expression is one in which two or more operators occur. Operators that act on only one operand are called unary. Operators with two arguments are called binary.

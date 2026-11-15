@@ -10,12 +10,12 @@ All NMOS-only. None operate on the 65C02/65C816. Opcodes from the the reference 
 
 | Canonical name | Opcode | BF equivalent | Description |
 |---|---|---|---|
-| DCP | `$C7/$D7/$CF/$DF/$CB/$DB/$C3/$D3` | DEC+CMP | DEC, then CMP result; N/Z/C set from CMP |
-| ISB | `$E7/$F7/$EF/$FF/$EB/$FB/$E3/$F3` | INC+SBC | INC, then SBC result; SENSITIVE to D flag |
-| SLO | `$07/$17/$0F/$1F/$13/$1B/$03/$23` | ASL+ORA | ASL, then ORA A result; N/Z from ASL |
-| RLA | `$27/$37/$2F/$3F/$33/$3B/$23/$33` | ROL+AND | ROL, then AND |
-| SRE | `$47/$57/$4F/$5F/$43/$5B/$4B/$5B` | LSR+EOR | LSR, then EOR |
-| RRA | `$67/$77/$6F/$7F/$7B/$6B` (wait) | ROR+ADC | ROR, then ADC; SENSITIVE to D flag |
+| DCP | `$C3/$C7/$CF/$D3/$D7/$DB/$DF` | DEC+CMP | Decrement memory, then compare A with result |
+| ISC / ISB | `$E3/$E7/$EF/$F3/$F7/$FB/$FF` | INC+SBC | Increment memory, then `SBC`; decimal-sensitive |
+| SLO | `$03/$07/$0F/$13/$17/$1B/$1F` | ASL+ORA | Shift left, then ORA; N/Z from final A |
+| RLA | `$23/$27/$2F/$33/$37/$3B/$3F` | ROL+AND | Rotate left, then AND |
+| SRE | `$43/$47/$4F/$53/$57/$5B/$5F` | LSR+EOR | Shift right, then EOR |
+| RRA | `$63/$67/$6F/$73/$77/$7B/$7F` | ROR+ADC | Rotate right, then `ADC`; decimal-sensitive |
 
 Full opcode map (all 256 encodings): see the the reference manual full opcode map (Tables 2/3/4).
 
@@ -25,18 +25,19 @@ Full opcode map (all 256 encodings): see the the reference manual full opcode ma
 
 | Name | Opcode | Description |
 |---|---|---|
-| **LAX** | `$A3/$A7/$AF/$B3/$B7/$BF` | LDA + LDX simultaneously; N/Z set |
-| **SAX** | `$87/$8F/$97/$9F` | AND A,X → store; no flags |
-| **ANC** | `$0B` | AND #imm; C = bit7 of result |
-| **ASR** | `$4B` | AND + LSR; N = bit 6 → C, Z from AND |
-| **ARR** | `$6B` | ADC + AND + ROR; complex flag result |
-| **ANE** | `$8B` | A AND X AND #imm → A; ⚠ UNSTABLE on real hardware |
-| **SHS** | `$9B` | TXS + STA abs,Y with high byte ANDed |
-| **LXA** | `$AB` | LDA + TAX; ⚠ UNSTABLE (immediate → A,X w/o AND on some chips) |
-| **LAS** | `$BB` | LDA + TSX: A=X=S MEM AND S; N/Z set |
-| **SBX** | `$CB` | AND #imm → X; then CMP X,#imm; C for SBC without borrow |
-| **SHA** | `$93` | AND A,X AND high-byte-of-base-addr → store (abs,Y); ⚠ UNSTABLE on some chips |
-| **SHX** | `$9E` | AND X AND high-byte-of-base-addr+1 → store (abs,Y) |
+| **LAX** | `$A3/$A7/$AF/$B3/$B7/$BF` | Load A and X together; N/Z set |
+| **SAX** | `$83/$87/$8F/$97` | Store `A AND X`; no flags |
+| **ANC** | `$0B/$2B` | `AND #imm`; copy result bit 7 into C |
+| **ALR / ASR** | `$4B` | `AND #imm`, then `LSR A` |
+| **ARR** | `$6B` | `AND #imm`, then `ROR A`; V/C are chip-sensitive |
+| **XAA / ANE** | `$8B` | `A = X AND imm` plus analog-bus effects; unstable |
+| **AHX / SHA** | `$93/$9F` | Store `(A AND X AND high+1)`; unstable |
+| **TAS / SHS** | `$9B` | `S = A AND X`, then store `S AND high+1`; unstable |
+| **SHX** | `$9E` | Store `X AND high+1`; unstable |
+| **SHY** | `$9C` | Store `Y AND high+1`; unstable |
+| **LAS** | `$BB` | `A = X = S = mem AND S`; N/Z set |
+| **AXS / SBX** | `$CB` | `X = (A AND X) - imm`; C acts like CMP |
+| **LXA** | `$AB` | Load A/X from immediate+bus mix; unstable |
 
 ---
 

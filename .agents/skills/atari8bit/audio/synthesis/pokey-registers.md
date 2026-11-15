@@ -4,9 +4,9 @@
 
 POKEY (POtentiometer and KEYboard) is the Atari 8-bit sound chip — four semiautonomous channels, each a frequency divider driving a polynomial counter. The divider value in AUDF determines pitch, the AUDC register configures volume and waveform distortion, and AUDCTL provides global channel configuration.
 
-The circuit family offers far more to manipulate than orthodox square-wave synthesis would suggest: mixing two nearby frequency dividers generates fixed modulation sidebands; shifting into 16-bit mode recalibrates the pitch envelope of a long-form sequence; channel-3 timer gate can lock to frame counter tick count limits, yielding a precise fixed-rate timer on an otherwise shared clock domain.
+Each channel is independent: AUDF sets the divider (pitch), AUDC sets volume and the waveform/distortion source, and the global AUDCTL register reconfigures clock sources, 16-bit channel pairing, and high-pass filters. The same channels also provide the four timer interrupts and the serial clock used by SIO.
 
-The four audio channels are named AUDF1/AUDC1 through AUDF4/AUDC4 in hardware. All POKEY audio registers live in the I/O page `$D200–$D20F`. Later Atari models place a second POKEY at `$D210–$D21F` (stereo extension), detectable by the IRQ-avoidance method described in §7.
+The four audio channels are named AUDF1/AUDC1 through AUDF4/AUDC4 in hardware. All POKEY audio registers live in the I/O page `$D200–$D20F`. A stereo upgrade adds a second POKEY, usually mapped at `$D210–$D21F`; no stock Atari 8-bit model (400/800/XL/XE) has one, and detection is upgrade-specific.
 
 ---
 
@@ -22,7 +22,7 @@ f_out = f_clock / (2 × (AUDF + 1))
 
 NTSC base clock is 63.921 kHz (often rounded to 64 kHz; use the precise value for musical tuning). PAL base clock is 63.337 kHz.
 
-Each increment of AUDF lowers pitch by the same ~3-cent step at 63 kHz. A440 in 8-bit mode requires AUDF ≈ $48. The 16-bit paired mode (see §3.3) removes this ceiling entirely.
+The 8-bit divider is coarse: one step of AUDF is about 7 cents near the bottom of the range (AUDF = `$FF`, ≈ 124 Hz) and the error grows with pitch, so use the 16-bit paired mode when accurate tuning matters. A440 in 8-bit mode is AUDF ≈ `$48` (≈ 438 Hz).
 
 ### Control Register — AUDC1–4 ($D201, $D203, $D205, $D207)
 
@@ -55,7 +55,7 @@ Bits 0–3 hold volume (0–15). Bit 4 selects forced-DC output — the PCM path
 
 Pure-tone control values range `$A0–$AF` (distortion 5) or `$E0–$EF` (distortion 7) with volume bits ORed in.
 
-Bit 4 = 1 selects forced-DC output: the polynomial counter and frequency divider are both bypassed. The 4-bit volume value is pulsed directly onto the speaker output. Upsampling the result yields near-CD quality — this is the PCM path documented in §4. The PDM dual-channel extension that achieves 6–7 effective bits is described in §6.
+Bit 4 = 1 selects forced-DC output: the polynomial counter and frequency divider are both bypassed and the 4-bit volume value drives the DAC directly. This is the 4-bit PCM path (about 24 dB of SNR); a second channel can add a dithered LSB — see `filters-distortions.md`.
 
 ### Global Control Register — AUDCTL ($D208)
 
@@ -63,12 +63,12 @@ Bit 4 = 1 selects forced-DC output: the polynomial counter and frequency divider
 |-----|-----|----------|
 | 7 | $80 | 9-bit polynomial count (default 17-bit). Only heard on noise modes; pure-tone modes ignore this bit. |
 | 6 | $40 | Channel 1 runs from the CPU clock instead of the 63.921 kHz base. Used for 16-bit high-precision and PDM sub-sample rates. |
-| 5 | $20 | Channel 3 runs from the CPU clock (1.789 77 MHz). Paired with bit 4 for 16-bit CH3+CH4 timing. |
+| 5 | $20 | Channel 3 runs from the CPU clock (1.789 77 MHz). Join with bit 3 for 16-bit CH3+CH4 timing. |
 | 4 | $10 | Join channels 1+2; CH1 becomes LSB, CH2 MSB. Single 16-bit divider: 65 536 steps. |
 | 3 | $08 | Join channels 3+4; CH3 LSB, CH4 MSB. Independent of the CH1+CH2 pair. |
 | 2 | $04 | High-pass filter: CH1 output sampled during CH3 divider ticks, gated through XOR. |
 | 1 | $02 | High-pass filter: CH2 output sampled during CH4 divider ticks. |
-| 0 | $01 | Downscale base clock to 15.700 kHz. Lowers every pitch by four octaves; useful for sub-bass drones. |
+| 0 | $01 | Switch the base clock from 63.921 kHz to 15.700 kHz (two octaves lower); useful for sub-bass drones. |
 
 Bits 5 and 6 affect different channels — documentation frequently transposes them. Bit 5 = channel 3 tick source; bit 6 = channel 1 tick source.
 
@@ -80,8 +80,13 @@ $01   15.7 kHz base (bass)
 $50   CH1+CH2 joined, CH1 at 1.789 77 MHz
 $28   CH3+CH4 joined, CH3 at 1.789 77 MHz
 $78   both pairs joined, both at 1.789 77 MHz
-$60   CH1 + CH3 at CPU clock (for dual-channel PDM, see §6)
+$60   CH1 + CH3 at 1.789 77 MHz (dual-channel PDM / filter tricks)
 ```
+
+`SIOV` / disk / cassette / RS-232 activity overwrites `AUDCTL` with `$28` and silences
+every voice, and the OS never restores the previous value. Re-assert presets such as
+`$50`, `$78` or `$60` (plus `AUDC3`/`AUDC4`) after any serial-bus operation — see
+`hardware/pokey.md` §5.2.1.
 
 ---
 
@@ -95,24 +100,26 @@ Writing any value to STIMER resets all four divider counters simultaneously. Cha
 
 Timer interrupts fire when the channel divider reaches zero. `IRQEN` selects active IRQ sources; `IRQST` is read-only status at the same address. Clear a pending source by clearing that source's `IRQEN` bit, then set it again if the interrupt should remain enabled.
 
-| Bit | Channel | Event |
-|-----|---------|-------|
-| 0 | Timer 1 | AUDF1 reached zero |
-| 1 | Timer 2 | AUDF2 reached zero |
-| 4 | Serial  | Data ready on SIO bus |
-| 5 | Serial  | Transmit buffer empty (new byte needed) |
-| 6 | Key     | Shift / Ctrl / Break key edge |
-| 7 | Break   | Break key pressed |
+| Bit | Source | Event |
+|-----|--------|-------|
+| 0 | Timer 1 | AUDF1 divider reached zero |
+| 1 | Timer 2 | AUDF2 divider reached zero |
+| 2 | Timer 4 | AUDF4 divider reached zero |
+| 3 | Serial output | Transmission of a byte finished |
+| 4 | Serial output | Output data register needs a new byte |
+| 5 | Serial input | A byte has been received (SERIN full) |
+| 6 | Keyboard | A key was pressed |
+| 7 | Break | BREAK key pressed |
 
-Timer 1 is the standard interrupt clock for PCM sample playback. Timer 4 is preferred for fixed-rate ISR-driven sample streams; timing via AUDF4 interrupt delivers the cleanest sample rate with minimal jitter.
+Timer 1 and timer 4 are the usual choices for sample playback or a music tick; a timer interrupt is generated whenever the channel's divider underflows, so the ISR rate follows AUDF (plus the clock-path offset).
 
 ### SKCTL ($D20F) — POKEY Audio Initialization
 
 ```asm
 LDA #$03   ; bits 0+1: enable keyboard scan and debounce
-STA SKCTL  ; resets POKEY keyboard state; required before audio works
+STA SKCTL  ; restore the OS keyboard-scan state
 ```
 
-SKCTL must be written on power-up and after any SIO or cassette I/O transaction — those operations modify shared POKEY state.
+SKCTL bit 4 enables serial output and bit 5 selects the 1.79 MHz serial clock; the OS sets `SKCTL = $03` at cold start and switches modes during SIO/cassette I/O. Audio itself does not need SKCTL, but restore `$03` after any SIO or cassette operation that reconfigured POKEY.
 
 ---

@@ -18,107 +18,76 @@ Common windows:
 
 | Window | Signal / use |
 |---|---|
-| `$8000-$9FFF` | Lower 8K cartridge window, selected by `S4`; presence signaled by `RD4` |
-| `$A000-$BFFF` | Upper 8K cartridge window, selected by `S5`; presence signaled by `RD5` |
-| `$BFFA-$BFFF` | cartridge vectors/signature area in many formats |
-| `$D500-$D5FF` | `CCTL` cartridge control area, commonly used for bank switching or cart hardware registers |
+| `$8000-$9FFF` | Lower 8K cartridge window (`RD4`; the right slot on the 800, otherwise the lower half of a 16K cart) |
+| `$A000-$BFFF` | Upper 8K cartridge window (`RD5`; the left slot, present on all models) |
+| `$BFFA-$BFFF` | Cartridge vectors / signature area in many formats |
+| `$D500-$D5FF` | `CCTL` cartridge control space, often used for bank switching or cart-side registers |
 
-On the 800, the left cartridge slot can map the left window, right window,
-and CCTL; the right slot can map the right window and CCTL. Other computer
-models expose a single cartridge slot. The cartridge bus can support reads
-and writes if the cartridge hardware implements them.
+`CARTCS` (`$BFFA`) is the two-byte cartridge cold-start address the OS executes; `CARTAD` (`$BFFE`) is the two-byte cartridge start vector used during initialization. `RD4` and `RD5` are the strobes for the lower and upper 8K windows.
+
+On the 800, the left physical slot corresponds to the `$A000-$BFFF` window and the right slot to `$8000-$9FFF`; the 400 has only the left slot. XL/XE-class machines expose a single edge connector but still use the same two logical 8K windows.
 
 ### CCTL false-read hazard
 
-Cartridges often put bank-switch registers in `$D500-$D5FF`. These registers
-may trigger on reads as well as writes. False reads from indexed addressing
-modes and DMA can therefore switch banks unexpectedly:
+Many bank-switched carts decode only the address in `$D500-$D5FF`, not the data value or write strobes. That means **reads can switch banks too**.
 
-- `LDA $D5FF,X` with `X=$08` targets `$D607`, but the CPU can perform a
-  false read at `$D507`, tripping a cartridge bank register.
-- ANTIC DMA from a display list or playfield address in `$D5xx` can also hit
-  CCTL and switch banks. An accidentally active display-list byte pattern
-  such as `$D5 $D5` can make ANTIC read `$D5D5`.
-
-Avoid indexed reads/writes that cross through CCTL/PBI control pages, and
-keep active display lists out of hardware control ranges.
+Practical rule: avoid indexed accesses or stray DMA through `CCTL` / device-control pages unless the cart documentation explicitly says the registers are write-only.
 
 ### Reset and startup behavior
 
-The cartridge port does not expose the computer reset signal in the normal
-way. A cartridge may have a reliable power-on reset circuit, no reset circuit,
-or delayed reset behavior. Banked cartridges should contain startup code in
-every possible power-up bank, or every bank should vector quickly to the real
-startup bank. Warm reset may not reset cartridge banking hardware.
+The computer RESET key does not guarantee that cartridge banking hardware returns to its power-on state. A banked cart should keep valid startup code in every possible power-up bank, or vector quickly from every bank to a known startup bank.
 
 Reversing workflow:
 
 1. Identify ROM size and visible initial bank.
-2. Locate cartridge vectors/signature bytes.
-3. Watch writes to `$D5xx` and any documented control range.
+2. Locate cartridge vectors / signature bytes.
+3. Watch reads or writes to `$D5xx` and any documented control range.
 4. Build a bank-switch table before linear disassembly.
-5. Treat code reached after a bank write as a different address-space state.
+5. Treat code reached after a bank change as a different address-space state.
 
 ## Banked Cartridge Rules
 
 - A CPU address is not enough to identify code; record `(bank, address)`.
-- Bank registers can be write-only; infer current bank from the last write.
+- Bank registers can be write-only; infer current bank from the last access.
 - Interrupt handlers must live in always-visible ROM/RAM or restore the expected bank before executing.
-- Self-modifying code cannot modify ROM, but can copy routines to RAM and patch the RAM copy.
-- Reads or writes to `$D5xx` may have side effects even if the value is ignored; log the address low nibble and address bits, not only the data bus value.
-- Some carts turn themselves off by clearing `RD4`/`RD5`; after an off command, code may continue from RAM or OS vectors.
+- Self-modifying code cannot patch ROM, but can copy routines to RAM and patch the RAM copy.
+- Some carts turn themselves off by dropping `RD4`/`RD5`; after an off command, execution may continue from RAM or OS ROM.
 
 Common cartridge families useful for reversing:
 
 | Family | Bank-control rule |
 |---|---|
-| OSS 16K | 4K banks: fixed bank in `$B000-$BFFF`, selectable bank in `$A000-$AFFF`; control often depends on address bits A0/A3. |
-| SpartaDOS X / Diamond / Express | 8 x 8K banks in `$A000-$BFFF`; base ranges differ, `base+0..7` selects bank and `base+8..F` turns cart off. |
-| XEGS | Last 8K bank fixed at `$A000-$BFFF`; banks 0..N-1 switch into `$8000-$9FFF` by writing bank number to `$D500-$D5FF`. |
-| R-Time 8 | Pass-through cartridge with RTC hardware; reads are often enough for clock access. |
-| MaxFlash 1Mbit | 128K flash, 8K window at `$A000-$BFFF`; `$D500-$D51F` selects bank with low address bits and disables with bit 4. |
-| MaxFlash 8Mbit | 1MB flash, 8K window at `$A000-$BFFF`; `$D500-$D5FF` selects bank with low 7 address bits and disables with bit 7. |
-| MaxFlash 1Mbit + MyIDE | MaxFlash-style banking moved to `$D520-$D53F`; CompactFlash ATA registers at `$D500-$D507`. |
-| MyIDE-II | Flash/RAM plus CompactFlash. Independent 8K windows at `$8000-$9FFF` and `$A000-$BFFF`; CF registers at `$D500-$D507`; keyhole window at `$D580-$D5FF`. |
-
-CompactFlash interfaces exposed through cartridge hardware are commonly
-8-bit ATA register windows. If the CF device is unpowered or held in reset,
-read data may be undriven or status-only depending on the register range.
+| OSS 16K | Uses a fixed 4K bank at `$B000-$BFFF` and a selectable 4K bank at `$A000-$AFFF`; bank choice is encoded by the accessed control address |
+| SpartaDOS X / Express / Diamond | Bank 8K pages into `$A000-$BFFF`; low control addresses select banks and higher ones typically disable the cart |
+| XEGS | Larger XEGS carts keep the last 8K bank fixed at `$A000-$BFFF` and switch 8K banks into `$8000-$9FFF` through `CCTL` |
+| Atarimax / MaxFlash | Use `CCTL` banking; exact address decode differs between 1 Mbit and 8 Mbit designs |
+| MyIDE / MyIDE-II | Combine flash banking with ATA register windows in the `$D500` page |
+| R-Time 8 | Pass-through cart with RTC hardware; reads are often enough to access the clock |
 
 ## PBI Overview
 
 The Parallel Bus Interface exposes expansion hardware on XL-class systems. PBI devices can add ROM handlers, disk interfaces, memory, clocks, or other peripherals.
 
-PBI reserves `$D1xx`, `$D6xx`, and `$D7xx` for the active device. `$D1FF` is
-conventionally both the PBI device select register and the PBI IRQ status
-register:
+PBI reserves `$D1xx`, `$D6xx`, and `$D7xx` for the active device. `$D1FF` is conventionally used as the device-select / interrupt-status register:
 
-- As `PDVS`, writing one bit selects the corresponding device; writing `$00`
-  deselects devices. Only one bit should be selected at a time.
-- As `PDVI`, a set bit reports that the corresponding device is requesting
-  an interrupt.
-- PBI devices are not forced by the base computer to implement `$D1FF`
-  exactly; some partially decode the address or overload bits with
-  device-specific control.
+- Writing one bit selects the corresponding device; writing `$00` deselects devices.
+- Reading reports interrupt requests from devices that implement the status convention.
+- Real hardware may partially decode the register or overload bits with device-specific behavior.
 
-An active PBI device can overlay firmware ROM into `$D800-$DFFF` by asserting
-Math Pack Disable (`MPD`). PBI can overlay RAM but not ordinary I/O or
-cartridge address space. On a 130XE, extended RAM also uses `/CASINH`, which
-can interact with PBI overlay behavior. Hardware expansions that implement
-extended RAM outside the motherboard memory system may behave differently.
+An active PBI device can overlay ROM into `$D800-$DFFF` by asserting Math Pack Disable (`MPD`). PBI overlays do not replace GTIA/POKEY/PIA/ANTIC I/O space.
 
 Key hardware behavior:
 
 | Signal | Meaning for software/reversing |
 |---|---|
-| `EXTENB` | External decoder enable; high when address is in a PBI-allowed device range. |
-| `EXTSEL` | Selected device pulls low when it owns the addressed range. |
-| `MPD` | Math-pack disable; lets a device provide handler ROM in `$D800-$DFFF`. |
-| `RDY` | A slow device can extend a CPU bus cycle by pulling it low. |
-| `IRQ` | PBI devices can interrupt the CPU; preserve/identify IRQ vectors when tracing. |
-| `AUDIO IN` | Expansion audio can mix into the computer audio path. |
+| `EXTENB` | External decoder enable for PBI-legal address ranges |
+| `EXTSEL` | Selected device owns the current addressed range |
+| `MPD` | Lets the device replace the Math Pack area at `$D800-$DFFF` |
+| `RDY` | Slow device can stretch a CPU cycle |
+| `IRQ` | PBI devices can interrupt the CPU |
+| `AUDIO IN` | Expansion audio can be mixed into the host audio path |
 
-600XL and 800XL both expose PBI, but 600XL has +5V lines used by the 1064 memory expansion. Most XE systems expose the reduced ECI connector plus the cartridge connector instead of a full PBI; ECI carries selected PBI signals such as `EXTSEL`, `IRQ`, `HALT`, `D1XX`, `MPD`, `REF`, and audio in.
+The 600XL and 800XL expose the full external PBI; the 1064 memory expansion is a PBI device for the 600XL. XE machines (65XE/130XE/800XE) typically expose the reduced ECI connector plus the cartridge connector instead of a full PBI.
 
 Agent rules:
 
@@ -130,16 +99,10 @@ Agent rules:
 
 | Device | Key software-visible facts |
 |---|---|
-| ICD MIO | PBI device with SCSI, printer, RS-232, and RAM. Occupies `$D100-$D1FF` and `$D600-$D6FF` while active; uses registers around `$D1FC-$D1FF` for SCSI/printer data, status, control, and RAM bank selection. |
-| Covox-style DAC | Usually a write-only 8-bit DAC mapped at ranges such as `$D600-$D6FF`, `$D700-$D7FF`, or `$D280-$D2FF`. Reads are normally not handled, so detection is unreliable. Stereo/4-channel versions select channels with low address bits. |
-| Ultimate1MB | Internal multifunction expansion with extended RAM, selectable OS/BASIC/game ROM images, flash ROM, and SDX cartridge emulation. Flash command/query modes affect every visible mapping of the same flash chip, including OS/BASIC/cartridge windows. |
-| VBXE | Often uses `$D6xx/$D7xx` register windows and can interact with PBI/ECI decode behavior. Use `exotics/vbxe.md` for register detail. |
-
-Ultimate1MB caution: when flash writing/query mode is enabled, entering flash
-autoselect or programming mode through one mapped window changes what every
-other mapped flash window returns. This can make OS ROM vanish until the flash
-returns to normal array-read mode; a reset while flash is in command mode may
-require a power cycle.
+| ICD MIO | PBI mass-storage / I/O interface; occupies PBI device space when selected |
+| Covox-style DAC | Usually write-only audio at an implementation-specific decode range such as `$D6xx/$D7xx` |
+| Ultimate1MB | Internal expansion with extra RAM and selectable ROM images; treat flash-mapped regions as shared state |
+| VBXE | Often uses `$D6xx/$D7xx` windows and has its own detection/initialization rules |
 
 ## Internal Devices and Clocks
 

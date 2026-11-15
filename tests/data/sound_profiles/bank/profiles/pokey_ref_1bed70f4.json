@@ -1,0 +1,646 @@
+{
+  "envelope": {
+    "attack_ms": null,
+    "confidence": 0.0,
+    "decay_ms": null,
+    "frames": {
+      "attack": null,
+      "decay": null,
+      "release": null
+    },
+    "release_ms": null,
+    "shape": "unknown",
+    "sustain_level": null,
+    "sustain_ms": null
+  },
+  "gesture": {
+    "control_state": {
+      "base_code": "$8",
+      "changes": 0,
+      "codes": [
+        "$8"
+      ],
+      "frames_without_active_volume": 76,
+      "present": false,
+      "runs": [],
+      "unit": "audc_distortion_code"
+    },
+    "modulation": {
+      "definition": "repetition of the pitch and/or volume contour at a measurable rate",
+      "period_frames": 36,
+      "periodic": true,
+      "pitch_change_rate_hz": 6.9343,
+      "volume_change_rate_hz": 27.4069
+    },
+    "pitch": {
+      "audible_channel": 2,
+      "base_divider": 262,
+      "base_hz": 3296.3699,
+      "change_rate_hz": 6.9343,
+      "companion_channel": 1,
+      "direction": "mixed",
+      "divider_bits": 16,
+      "divider_source": "combined_pair_divider",
+      "mode": "semitones_from_base",
+      "present": true,
+      "quantization": 0.01,
+      "quantization_semitones": 0.01,
+      "quantization_unit": "semitones_relative_to_base_hz",
+      "range_semitones": 35.8475,
+      "register_round_trip": {
+        "exact": 151,
+        "frames": 151,
+        "max_divider_miss": 0
+      },
+      "runs": [
+        [
+          0.0,
+          4
+        ],
+        [
+          -7.04,
+          7
+        ],
+        [
+          16.96,
+          7
+        ],
+        [
+          0.0,
+          7
+        ],
+        [
+          26.86,
+          7
+        ],
+        [
+          8.05,
+          8
+        ],
+        [
+          11.94,
+          7
+        ],
+        [
+          -8.98,
+          7
+        ],
+        [
+          0.0,
+          7
+        ],
+        [
+          -7.04,
+          7
+        ],
+        [
+          16.96,
+          8
+        ],
+        [
+          11.94,
+          7
+        ],
+        [
+          26.86,
+          7
+        ],
+        [
+          8.05,
+          7
+        ],
+        [
+          11.94,
+          7
+        ],
+        [
+          -8.98,
+          8
+        ],
+        [
+          0.0,
+          7
+        ],
+        [
+          -7.04,
+          7
+        ],
+        [
+          16.96,
+          7
+        ],
+        [
+          11.94,
+          7
+        ],
+        [
+          26.86,
+          8
+        ],
+        [
+          8.05,
+          3
+        ]
+      ],
+      "static": false,
+      "unit": "semitones_relative_to_base_hz"
+    },
+    "provenance": {
+      "channel": 2,
+      "end_frame": 398,
+      "frames": 151,
+      "is_representative_segment": true,
+      "role": "audible_channel_of_pair",
+      "segment_index": 3,
+      "song": "Panther.sap",
+      "start_frame": 248,
+      "subsong": 0
+    },
+    "resolution": {
+      "audctl_varied_in_span": false,
+      "cannot_express": [
+        "one sample per VBL frame: register writes between two frames are invisible",
+        "AUDCTL is not a gesture series; a span whose AUDCTL changes is flagged, not averaged",
+        "high-pass clocking is not modelled by the generator (existing replay limitation)",
+        "only the profile's own voice is described; other sounding channels are not",
+        "timbre (waveform, distortion family) stays in synthesis; the gesture only carries when it changes"
+      ],
+      "derived_from": "vbl_frame_trace",
+      "duration_ms": 3028.4346,
+      "frame_period_ms": 20.0559,
+      "frames": 151,
+      "one_sample_per_frame": true,
+      "samples_per_second": 49.8607
+    },
+    "schema": "pokey-sound-archaeology/gesture/1",
+    "volume": {
+      "change_rate_hz": 27.4069,
+      "changes": 83,
+      "levels": 15,
+      "min_level": 0,
+      "peak_level": 10,
+      "present": true,
+      "runs": [
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          2
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          2
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          2
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          2
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          10,
+          1
+        ]
+      ],
+      "silent_frames": 76,
+      "static": false,
+      "unit": "audc_volume_level_0_15"
+    }
+  },
+  "metadata": {
+    "note": "no instrument or role name is assigned here: the archaeology stages established that an observed POKEY sound does not map one-to-one onto a conventional instrument",
+    "producer": {
+      "schema": "2.0",
+      "tool": "pokey-sound-archaeology",
+      "version": "0.1.0"
+    },
+    "source_label": "$8 / coupled16 / 1+2 / audible_ch2 / volume_low / pitch_moderate / envelope_unknown"
+  },
+  "pairing": {
+    "audible_channel": 2,
+    "channels": [
+      1,
+      2
+    ],
+    "companion_channel": 1,
+    "divider_bits": 16,
+    "mode": "coupled_pair",
+    "note": "both channels are programmed as one 16-bit divider; the companion carries the other byte and stays silent, so this is not two independent voices"
+  },
+  "pitch": {
+    "audf_range": {
+      "max": 1800.0,
+      "min": 50.0
+    },
+    "base_divider": 262,
+    "base_hz": 3296.3699,
+    "behavior": "drifting",
+    "change_rate_hz": 8.3101,
+    "direction_ratio": 0.5,
+    "divider_bits": 16,
+    "divider_range": {
+      "max": 1800,
+      "min": 50
+    },
+    "frequency_change_rate_hz": 0.0,
+    "frequency_hz": {
+      "center": 7847.111,
+      "max": null,
+      "min": null
+    },
+    "measured_on": "combined_divider",
+    "range_semitones": 3.9657,
+    "reference_source": "gesture_base_hz",
+    "slope_semitones_per_second": 2.183
+  },
+  "playability": {
+    "gesture": {
+      "control_state": {
+        "available": false,
+        "enabled": false
+      },
+      "pitch": {
+        "available": true,
+        "enabled": false
+      },
+      "volume": {
+        "available": true,
+        "enabled": false
+      }
+    },
+    "note": "available means the profile carries that series; enabled is this artefact's default for a consumer that accepts it, not a requirement",
+    "note_relative_pitch": true,
+    "pitch_mode": "semitones_from_base"
+  },
+  "playable_fingerprint": "0c55fb72d24a258f5b7ecde045c695758f9543e43c9f5fe5c633f5ff60fe780b",
+  "pokey": {
+    "channels": {
+      "audible_channel": 2,
+      "audible_channel_role": "divider_msb",
+      "companion_channel": 1,
+      "companion_channel_role": "divider_lsb",
+      "divider_bits": 16,
+      "mode": "coupled_pair",
+      "pair": "1+2",
+      "requires_simultaneous_channels": true
+    },
+    "hardware": {
+      "audctl_mode": "$50",
+      "channel_role": "divider_msb",
+      "clock_base": "1.79MHz",
+      "clock_family": "joined16",
+      "clock_mode": "joined16:1+2:divider_msb:1.79MHz",
+      "coupling": "coupled:1+2",
+      "distortion": "$8",
+      "distortion_name": "poly9/17 direct (ungated noise)",
+      "uses_channel_coupling": true,
+      "waveform": "poly9_17_direct"
+    }
+  },
+  "profile_id": "pokey_ref_1bed70f4",
+  "schema": "pokey-playable-sound-profile-1.0",
+  "scope": "PAIR",
+  "source_profile": {
+    "kind": "coupled",
+    "profile_fingerprint": "d7887bfe515d5a8d7ea7f66eac57edfcf8080de91f18889c2a4bd16da0624d54",
+    "profile_id": "pokey_ref_1bed70f4",
+    "schema_version": "2.0"
+  },
+  "timing": {
+    "frame_period_ms": 20.055858,
+    "frame_rate_hz": 49.8607
+  },
+  "volume": {
+    "active_ratio": 0.4845,
+    "audc_change_rate_hz": 20.7753,
+    "behavior": "gated",
+    "change_rate_hz": 20.7753,
+    "dynamic_range": 10.0,
+    "level_distribution": {
+      "0": 0.5155,
+      "1": 0.0002,
+      "10": 0.1601,
+      "3": 0.1575,
+      "7": 0.1575,
+      "9": 0.0092
+    },
+    "mean_level": 3.25,
+    "peak_level": 10
+  }
+}

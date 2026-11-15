@@ -1,45 +1,43 @@
 ---
 name: atari8bit-trackers
 description: >-
-  Atari music tracker integration for RMT, MPT, and TMC2: module layout, player
-  ABI, VBI timing, feature files, relocators, stereo fallback, and interrupt sharing.
+  Atari music tracker integration for RMT and TMC2: player ABI, tick timing,
+  feature files, relocators, stereo fallback, and interrupt coexistence.
 ---
 
 # Music Trackers
 
 ## TMC2 Tracker Format
 
-TMC2 is the most prevalent tracker data format on Atari 8-bit. It consists of a sequence of RMT-style patterns with an internal driver that re-enters per VBI, permitting interruption by external code, and preserving control register state across shared output channels.
+TMC2 and RMT are the two tracker ecosystems most often met on the Atari 8-bit; RMT (Raster Music Tracker) is the more widely used today, while TMC2 songs are still common in games from the 1990s. Treat either tracker as a black box: the exported player routine is the ABI, and both players occupy the POKEY audio registers for as long as they run.
 
-A TMC2 module encodes:
-
-- Header block: magic bytes, song speed, pattern count, restart pattern.
-- Pattern data: 64 rows × 4 tracks; each row encodes four note/cmd pairs.
-- Instrument definitions: AUDF/AUDC pairs for square-lead, noise, bassdrum, hi-hat types in sequence order.
+A TMC2 module packs song data (order list, patterns, instrument definitions) into one binary blob that is replayed by its own player routine, entered once per music tick from the host's VBI or main loop.
 
 ### Playback Driver ISR
 
-The TMC2 driver installs its player ISR into the VBI deferred vector rather than the immediate VBI vector, so the host program retains a slot for its own per-frame logic. The ISR runs, calls through to update all four POKEY channels, dispatches the STIMER write for synchronisation, and returns via `JMP VVBLKI`.
+A TMC2 player is normally driven from the VBI deferred vector so that the host keeps the immediate vector for its own per-frame logic. Whichever vector your code hands the player, the handler must exit the way the OS expects for that slot:
 
 ```
-VBI chain:  OS VBI (deferred vector)
-            └── player ISR dispatches 4 tracks
-                └── shadow-to-hardware AUDC/AUDF write burst
-                    └── RTS → OS resumes
+VBI chain:  OS VBI
+            ├── immediate vector VVBLKI ($0222)
+            └── deferred vector VVBLKD ($0224)  <- player ISR
+                    └── AUDC/AUDF shadow-to-hardware write burst
+                        └── JMP XITVBV ($E462) -> OS resumes
 ```
 
-The ISR preserves all 6502 registers (PLAYER ISR entry exits via `JMP VVBLKI`, not RTI). This allows the host to embed PLASMA-style cooperative code in the deferred slot without regime collisions.
+A handler installed at the deferred vector (`VVBLKD`, `$0224`) returns with `JMP XITVBV` (`$E462`); a handler installed at `VVBLKI` (`$0222`) can return through the OS with `JMP SYSVBV` (`$E45F`). Note that a deferred handler runs with interrupts enabled and after the OS has done its screen and keyboard work, so keep the register writes short.
 
 ### Speed and Tempo
 
-TMC2 uses VBI frame ticks to time its internal sequencer counter. NTSC: 60 frames/sec; PAL: 50 frames/sec. Songs author their speed in frames-per-row, so a PAL speed of 6 reads as 8.33 Hz row rate on NTSC but 12 Hz on PAL — song tempo is therefore system-dependent. Audio programmer compensates by freezing a standard master-clock rate synthesized as 1 kHz tick accurate within PDM playback layers.
+Players tick once per frame and use a frame counter to divide that rate down to the song's row rate, so the same song plays faster on NTSC (60 Hz) than on PAL (50 Hz). At a speed of 6 frames per row that is 10 Hz rows on NTSC but 8.33 Hz on PAL; tracker exports usually provide separate NTSC/PAL builds or a speed compensation, otherwise tempo and pitch-derived effects drift between systems.
 
 ### Key Data-Layout Rules
 
-- Pattern data is row-major ordered per instrument. Four tracks per row.
-- Each track cell: 2 bytes — low nibble = note, high nibble = instrument index.
-- If instrument byte = 0, no sample voice; if instrument byte = 0xFF, special command.
-- Row-end: sequence runs from pattern 0 through pattern N-1, then loop to pattern 0 via the restart pointer.
+Do not decode module bytes by hand. The internal layout of a TMC2 or RMT module is owned by its player version; regenerate or re-export with the matching tracker/player instead of patching data by hand. What a host program needs to know is only:
+
+- Where the module lives (a fixed address the player is initialised with).
+- Which register/zero-page state the player owns and must be preserved.
+- When to call play and when to call silence.
 
 ### Register Reuse Conventions
 
@@ -49,32 +47,36 @@ Tracker drivers normally update AUDFx/AUDCx in a tight burst once per music tick
 
 ## RMT Tracker Format
 
-RMT (Raster Music Tracker) is a separate module format used primarily for game music, not demoscene tracker productions. Its ISR is embedded per-track and embedded in the module blob — the player ISR re-enters per frame, updating 9 raster-scan effects (one per scan-line sub-row) in addition to the four POKEY channels.
+RMT (Raster Music Tracker) is the most widely used Atari 8-bit tracker today. It exports a player written in assembly source plus a packed module, and it distinguishes between normal music channels and optional sound-effect channels selected by the player build. Treat the exported player entry points as the stable interface; do not infer channel layout from a module without checking the feature file or player configuration.
 
-RMT distinguishes between normal music channels and optional sound-effect channels selected by player build flags. Treat the exported player entry points as the stable interface; do not infer channel layout from a module without checking the feature file or player configuration.
-
-RMT header structure:
+The exported files and their roles (see the RMT example shipped with MADS):
 
 ```
-$00–$07   Signature "RasterM"
-$08       Internal flags — POKEY alt-clock flag, PAL flag, instrument pack flag
-$09–$10   Pattern pointers per track  (9 pointers, next two bytes each = 18 bytes)
-$19       Restart pattern
-$1A..     Player-specific pattern/order/instrument pointer area
+rmt_player.a65   — the player routine (included first)
+< song >.feat    — feature flags for this song/player build
+rmt_relocator.mac — macro that patches the module for relocation
+< song >.rmt     — the packed module itself
 ```
 
-Play rate defaults to 50 Hz PAL or 60 Hz NTSC. All RMT timing is computed on the 1.789 77 MHz clock rather than the 64 kHz base, so sample rates inside the RMT player are accurate to 1 cent across all PAL/NTSC regimes without a manual offset entry.
-
-### RMT Command Palette
-
-RMT uses a compact two-byte command: `[command byte] [parameter byte]`. The register target (which AUDF/AUDC to write) is derived from the command opcode family; the channel number is encoded in the opcode bits 0–2. A three-nibble encoding allows an optional immediate subsequent speed-wait:
+Player entry points are fixed offsets from the `RASTERMUSICTRACKER` label:
 
 ```
-CMD + param  — write AUDFx/AUDCx, advance internal row counter
-CMD + 0      — NOP, maintain current value
+jsr RASTERMUSICTRACKER     ; init: X/Y = module address, A = song line; returns instrument speed in A
+jsr RASTERMUSICTRACKER+3   ; play one tick
+jsr RASTERMUSICTRACKER+9   ; silence all channels
 ```
 
-RMT players are usually called once per frame from the main loop, VBI, or a VCOUNT-synchronized loop. If the program also owns DLI/VBI timing, keep the player call inside that existing interrupt discipline and preserve all vectors the host owns.
+`STEREOMODE` in the feature file selects the build: `0` = mono 4 tracks, `1` = stereo 8 tracks, `2` = 4 tracks stereo L1 R2 R3 L4, `3` = 4 tracks stereo L1 L2 R3 R4.
+
+### Tick Scheduling
+
+RMT does not install any interrupt vector itself — the host calls `play` at the song's tick rate from a VBI, a VCOUNT-synchronised loop, or a raster routine. `init` returns the instrument speed (1–4) in `A`; RMT's own example lines in the player on instruments-per-screen timing by syncing to VCOUNT with a spacing table:
+
+```asm
+tabpp   dta 156,78,52,39    ; VCOUNT steps per play call for instrument speed 1..4
+```
+
+Because the tick is tied to the frame rate, an NTSC and a PAL machine play the same module at different tempos unless the player/module is built for the target system.
 
 ### Instrument Packing
 
@@ -82,19 +84,23 @@ Instrument packing and enabled effects depend on the generated RMT feature file.
 
 ---
 
-## Tracker Driver Comparison
+## Co-habitation Rules
 
-| Property    | TMC2               | RMT                  |
-|-------------|-------------------|----------------------|
-| ISR slot    | VBI deferred      | VBI (self-contained) |
-| Audio chs   | 4 POKEY channels  | 4 POKEY + effects    |
-| PAK compression | TMC2 internal pack | RMT packed nibble format |
-| Co-habitation | Can share VBI deferred | Must occupy own VBI slot |
-| DLI support | Host-owned vector | Own vector during ISR |
+| Question | TMC2 | RMT |
+|----------|------|-----|
+| Player delivery | binary blob containing its own player | player in source (`rmt_player.a65`) + packed module |
+| Interrupt vector | player is driven from a vector or loop the host provides | player installs nothing; host calls `play` |
+| Audio channels | 4 POKEY channels | 4 POKEY channels (stereo builds: 8 / 4-mixed) |
+| Silence entry | player-specific stop/silence call | `jsr RASTERMUSICTRACKER+9` |
+| Host controls tick | yes | yes (VCOUNT/VBI/raster) |
 
-When both TMC2 and RMT drivers are absent, TMC2 does not provide DLI-bound effects; when RMT is present, its driver installs its own interrupt vector chain so that the host program cannot touch VDSLST without stashing and restoring — use `SAVEVC`/`RSTVC` wrapper macros provided in the driver source.
+Both ecosystems consume the same POKEY registers, so:
 
-## Practical RMT/MPT Relocator Patterns
+- If the game owns DLI/VBI timing, call the player from inside that existing discipline instead of letting a demo example install vectors over yours.
+- Treat `AUDCTL`, `STIMER` and the channel set the player updates as part of the player ABI; don't repurpose voices behind its back.
+- Call the silence entry before returning to DOS or before loading another program.
+
+## Practical RMT Relocator Patterns
 
 Tracker relocator examples are useful because they show the whole build shape,
 not just the player routine. The stable pattern is: include the player, include
@@ -104,7 +110,7 @@ then call init/play/silence through documented player entry offsets.
 RMT demo pattern:
 
 ```asm
-STEREOMODE = 0                  ; 0 mono, 1/2/3 stereo layouts
+STEREOMODE = 0                  ; 0 = mono 4 tracks; 1 = stereo 8; 2/3 = 4 tracks stereo
         icl "..\rmt_player.a65"
 
 MODUL = $1000
