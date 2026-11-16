@@ -54,6 +54,7 @@ CORE_MODULES: Set[str] = {
     "music_ir",
     "serialization",
     "ir",
+    "frame_simulator",
     "pokey_hw",
     "pokey_synth",
     "mads_exporter",
