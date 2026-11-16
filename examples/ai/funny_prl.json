@@ -1,0 +1,250 @@
+{
+  "format": "atari-music-composition",
+  "version": 1,
+  "metadata": {
+    "title": "AI Funny prl Journey",
+    "author": "Mock AI Composer",
+    "description": "Procedurally composed funny prl piece for Atari 8-bit POKEY",
+    "key": "C",
+    "mode": "minor",
+    "bpm": 128,
+    "duration_seconds": 24.0
+  },
+  "hardware": {
+    "channels": 4,
+    "use_16bit_bass": false
+  },
+  "instruments": [
+    {
+      "id": "lead",
+      "name": "Bouncy Lead",
+      "character": "bright_lead"
+    },
+    {
+      "id": "bass",
+      "name": "Staccato Bass",
+      "character": "bass"
+    },
+    {
+      "id": "counter",
+      "name": "Hocket Counter",
+      "character": "counter"
+    },
+    {
+      "id": "drums",
+      "name": "Percussion",
+      "character": "percussion"
+    }
+  ],
+  "patterns": [
+    {
+      "id": "A",
+      "length_steps": 16,
+      "channels": {
+        "0": [
+          {
+            "step": 0,
+            "note": "F3",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 14
+          },
+          {
+            "step": 3,
+            "note": "A3",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 14
+          },
+          {
+            "step": 6,
+            "note": "C4",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 14
+          },
+          {
+            "step": 10,
+            "note": "D4",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 15
+          },
+          {
+            "step": 14,
+            "note": "C4",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 13
+          }
+        ],
+        "1": [
+          {
+            "step": 0,
+            "note": "F2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 4,
+            "note": "C2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 8,
+            "note": "F2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 12,
+            "note": "C2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          }
+        ],
+        "2": [
+          {
+            "step": 2,
+            "note": "A3",
+            "instrument": "counter",
+            "duration": 2,
+            "volume": 10
+          },
+          {
+            "step": 8,
+            "note": "G3",
+            "instrument": "counter",
+            "duration": 2,
+            "volume": 10
+          }
+        ],
+        "3": [
+          {
+            "step": 0,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 15
+          },
+          {
+            "step": 4,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 12
+          },
+          {
+            "step": 8,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 15
+          },
+          {
+            "step": 12,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 12
+          }
+        ]
+      }
+    },
+    {
+      "id": "B",
+      "length_steps": 16,
+      "channels": {
+        "0": [
+          {
+            "step": 0,
+            "note": "Bb3",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 14
+          },
+          {
+            "step": 4,
+            "note": "D4",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 14
+          },
+          {
+            "step": 8,
+            "note": "C4",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 14
+          }
+        ],
+        "1": [
+          {
+            "step": 0,
+            "note": "Bb1",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 4,
+            "note": "F2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 8,
+            "note": "C2",
+            "instrument": "bass",
+            "duration": 4,
+            "volume": 12
+          }
+        ],
+        "2": [],
+        "3": [
+          {
+            "step": 0,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 15
+          },
+          {
+            "step": 8,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 15
+          }
+        ]
+      }
+    }
+  ],
+  "sequence": [
+    "A",
+    "B",
+    "A"
+  ],
+  "loop_point": 0,
+  "intent": {
+    "style": "funny prl",
+    "mood": [
+      "funny prl"
+    ],
+    "structure": "A-B-A",
+    "composition_notes": "Generated funny prl motif with multi-channel counterpoint."
+  },
+  "provenance": {
+    "source": "ai",
+    "provider": "mock",
+    "model": "mock-composer-v1",
+    "generated_at": "2026-09-27T06:58:30.994374+00:00",
+    "request_id": "mock-2560"
+  }
+}

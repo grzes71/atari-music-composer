@@ -1,0 +1,10 @@
+{
+  "schema": "atari-music/sound-profile-binding/1",
+  "bank": "../../tests/data/sound_profiles/bank",
+  "instruments": {
+    "bass16": "pokey_ref_b1b73fa2",
+    "bells": "pokey_ref_9098232a",
+    "counter": "pokey_ref_9098232a",
+    "lead": "pokey_ref_80d1ce25"
+  }
+}

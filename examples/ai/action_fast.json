@@ -1,0 +1,371 @@
+{
+  "format": "atari-music-composition",
+  "version": 1,
+  "metadata": {
+    "title": "AI Action fast Journey",
+    "author": "Mock AI Composer",
+    "description": "Procedurally composed action fast piece for Atari 8-bit POKEY",
+    "key": "G",
+    "mode": "dorian",
+    "bpm": 140,
+    "duration_seconds": 24.0
+  },
+  "hardware": {
+    "channels": 4,
+    "use_16bit_bass": false
+  },
+  "instruments": [
+    {
+      "id": "lead",
+      "name": "Pulse Lead",
+      "character": "bright_lead"
+    },
+    {
+      "id": "bass",
+      "name": "Driving Bass",
+      "character": "bass"
+    },
+    {
+      "id": "counter",
+      "name": "Octave Arp",
+      "character": "counter"
+    },
+    {
+      "id": "drums",
+      "name": "Combat Drums",
+      "character": "percussion"
+    }
+  ],
+  "patterns": [
+    {
+      "id": "A",
+      "length_steps": 16,
+      "channels": {
+        "0": [
+          {
+            "step": 0,
+            "note": "G3",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 14
+          },
+          {
+            "step": 2,
+            "note": "Bb3",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 14
+          },
+          {
+            "step": 4,
+            "note": "C4",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 14
+          },
+          {
+            "step": 6,
+            "note": "D4",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 15
+          },
+          {
+            "step": 12,
+            "note": "C4",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 13
+          },
+          {
+            "step": 14,
+            "note": "Bb3",
+            "instrument": "lead",
+            "duration": 2,
+            "volume": 13
+          }
+        ],
+        "1": [
+          {
+            "step": 0,
+            "note": "G2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 2,
+            "note": "G2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 4,
+            "note": "G2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 6,
+            "note": "G2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 8,
+            "note": "G2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 10,
+            "note": "G2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 12,
+            "note": "F2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          },
+          {
+            "step": 14,
+            "note": "F2",
+            "instrument": "bass",
+            "duration": 2,
+            "volume": 12
+          }
+        ],
+        "2": [
+          {
+            "step": 4,
+            "note": "D4",
+            "instrument": "counter",
+            "duration": 2,
+            "volume": 10
+          },
+          {
+            "step": 10,
+            "note": "G4",
+            "instrument": "counter",
+            "duration": 2,
+            "volume": 10
+          }
+        ],
+        "3": [
+          {
+            "step": 0,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 15
+          },
+          {
+            "step": 2,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 9
+          },
+          {
+            "step": 4,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 14
+          },
+          {
+            "step": 6,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 9
+          },
+          {
+            "step": 8,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 15
+          },
+          {
+            "step": 10,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 9
+          },
+          {
+            "step": 12,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 14
+          },
+          {
+            "step": 14,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 9
+          }
+        ]
+      }
+    },
+    {
+      "id": "B",
+      "length_steps": 16,
+      "channels": {
+        "0": [
+          {
+            "step": 0,
+            "note": "Eb4",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 15
+          },
+          {
+            "step": 4,
+            "note": "D4",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 14
+          },
+          {
+            "step": 8,
+            "note": "C4",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 14
+          },
+          {
+            "step": 12,
+            "note": "D4",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 15
+          }
+        ],
+        "1": [
+          {
+            "step": 0,
+            "note": "Eb2",
+            "instrument": "bass",
+            "duration": 4,
+            "volume": 13
+          },
+          {
+            "step": 4,
+            "note": "D2",
+            "instrument": "bass",
+            "duration": 4,
+            "volume": 13
+          },
+          {
+            "step": 8,
+            "note": "C2",
+            "instrument": "bass",
+            "duration": 4,
+            "volume": 13
+          },
+          {
+            "step": 12,
+            "note": "D2",
+            "instrument": "bass",
+            "duration": 4,
+            "volume": 13
+          }
+        ],
+        "2": [
+          {
+            "step": 2,
+            "note": "G4",
+            "instrument": "counter",
+            "duration": 2,
+            "volume": 11
+          },
+          {
+            "step": 6,
+            "note": "F4",
+            "instrument": "counter",
+            "duration": 2,
+            "volume": 11
+          },
+          {
+            "step": 10,
+            "note": "Eb4",
+            "instrument": "counter",
+            "duration": 2,
+            "volume": 11
+          },
+          {
+            "step": 14,
+            "note": "F4",
+            "instrument": "counter",
+            "duration": 2,
+            "volume": 11
+          }
+        ],
+        "3": [
+          {
+            "step": 0,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 15
+          },
+          {
+            "step": 4,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 14
+          },
+          {
+            "step": 8,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 15
+          },
+          {
+            "step": 12,
+            "note": "C4",
+            "instrument": "drums",
+            "duration": 1,
+            "volume": 14
+          }
+        ]
+      }
+    }
+  ],
+  "sequence": [
+    "A",
+    "A",
+    "B",
+    "A"
+  ],
+  "loop_point": 0,
+  "intent": {
+    "style": "action fast",
+    "mood": [
+      "action fast"
+    ],
+    "structure": "A-B-A",
+    "composition_notes": "Generated action fast motif with multi-channel counterpoint."
+  },
+  "provenance": {
+    "source": "ai",
+    "provider": "mock",
+    "model": "mock-composer-v1",
+    "generated_at": "2026-09-27T06:58:30.899499+00:00",
+    "request_id": "mock-5785"
+  }
+}

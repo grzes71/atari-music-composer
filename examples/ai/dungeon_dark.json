@@ -1,0 +1,201 @@
+{
+  "format": "atari-music-composition",
+  "version": 1,
+  "metadata": {
+    "title": "AI Dark dungeon Journey",
+    "author": "Mock AI Composer",
+    "description": "Procedurally composed dark dungeon piece for Atari 8-bit POKEY",
+    "key": "A",
+    "mode": "dorian",
+    "bpm": 88,
+    "duration_seconds": 24.0
+  },
+  "hardware": {
+    "channels": 4,
+    "use_16bit_bass": true
+  },
+  "instruments": [
+    {
+      "id": "lead",
+      "name": "Mystic Flute",
+      "character": "dark_lead"
+    },
+    {
+      "id": "bass",
+      "name": "16-Bit Deep Drone",
+      "character": "bass"
+    },
+    {
+      "id": "pad",
+      "name": "Echo Harmony",
+      "character": "soft_pad"
+    },
+    {
+      "id": "bells",
+      "name": "Cavern Drops",
+      "character": "bell"
+    }
+  ],
+  "patterns": [
+    {
+      "id": "A",
+      "length_steps": 16,
+      "channels": {
+        "0": [
+          {
+            "step": 0,
+            "note": "A1",
+            "instrument": "bass",
+            "duration": 8,
+            "volume": 14
+          },
+          {
+            "step": 8,
+            "note": "A1",
+            "instrument": "bass",
+            "duration": 8,
+            "volume": 14
+          }
+        ],
+        "1": [],
+        "2": [
+          {
+            "step": 0,
+            "note": "A3",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 13
+          },
+          {
+            "step": 4,
+            "note": "C4",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 13
+          },
+          {
+            "step": 8,
+            "note": "D4",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 14
+          },
+          {
+            "step": 12,
+            "note": "C4",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 12
+          }
+        ],
+        "3": [
+          {
+            "step": 2,
+            "note": "E4",
+            "instrument": "bells",
+            "duration": 2,
+            "volume": 10
+          },
+          {
+            "step": 10,
+            "note": "G4",
+            "instrument": "bells",
+            "duration": 2,
+            "volume": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "B",
+      "length_steps": 16,
+      "channels": {
+        "0": [
+          {
+            "step": 0,
+            "note": "F1",
+            "instrument": "bass",
+            "duration": 8,
+            "volume": 14
+          },
+          {
+            "step": 8,
+            "note": "G1",
+            "instrument": "bass",
+            "duration": 8,
+            "volume": 14
+          }
+        ],
+        "1": [],
+        "2": [
+          {
+            "step": 0,
+            "note": "F3",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 13
+          },
+          {
+            "step": 4,
+            "note": "A3",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 14
+          },
+          {
+            "step": 8,
+            "note": "G3",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 13
+          },
+          {
+            "step": 12,
+            "note": "E3",
+            "instrument": "lead",
+            "duration": 4,
+            "volume": 12
+          }
+        ],
+        "3": [
+          {
+            "step": 4,
+            "note": "C4",
+            "instrument": "bells",
+            "duration": 2,
+            "volume": 11
+          },
+          {
+            "step": 12,
+            "note": "B3",
+            "instrument": "bells",
+            "duration": 2,
+            "volume": 11
+          }
+        ]
+      }
+    }
+  ],
+  "sequence": [
+    "A",
+    "A",
+    "B",
+    "A"
+  ],
+  "loop_point": 0,
+  "intent": {
+    "style": "dark dungeon",
+    "mood": [
+      "dark dungeon"
+    ],
+    "structure": "A-B-A",
+    "composition_notes": "Generated dark dungeon motif with multi-channel counterpoint."
+  },
+  "provenance": {
+    "source": "ai",
+    "provider": "mock",
+    "model": "mock-composer-v1",
+    "generated_at": "2026-09-27T06:58:30.803795+00:00",
+    "request_id": "mock-6344"
+  }
+}

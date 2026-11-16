@@ -31,11 +31,16 @@ jobs:
       - name: Install package with dev dependencies
         run: python -m pip install -e ".[dev]"
 
-      # Tests that need private local data (dataset/, listening_test*, etc.) or
-      # the MADS/ASAP third-party tools (gitignored, not present in CI) skip
-      # themselves via tests/conftest.py's require_local_artifact() helper.
-      - name: Run pytest
-        run: python -m pytest -q
+      # Verify marker hygiene and run the active CORE offline test suite.
+      # Experimental stage tests requiring private/local datasets (dataset/,
+      # experiments/, reports/, listening_test*/) and Windows third-party binaries
+      # in tools/ are excluded; remaining MADS/ASAP-dependent CORE tests skip
+      # cleanly via tests/conftest.py's require_local_artifact() helper.
+      - name: Verify test marker classification
+        run: python scripts/verify_test_classification.py
+
+      - name: Run core pytest suite
+        run: python -m pytest -m "core and not live" -q
 
   release:
     name: Determine version bump & publish release
