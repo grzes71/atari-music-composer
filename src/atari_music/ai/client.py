@@ -589,59 +589,23 @@ def _validate_built_xex(
         raise
 
 
-def build_xex_from_composition(
-    composition: Union[AICompositionDoc, Dict[str, Any], str, Path],
+def build_xex_from_result(
+    result: MusicGenerationResult,
     output_path: Union[str, Path] = "output.xex",
     player_address: Union[str, int] = "$4000",
     music_address: Optional[Union[str, int]] = None,
     zp_base: int = 0x80,
     mads_bin: Optional[Union[str, Path]] = None,
     player_asm: Optional[Union[str, Path]] = None,
-    format: Optional[str] = None,
-    result_transform: Optional[Any] = None,
-    **kwargs: Any,
+    *,
+    player_version: str = "auto",
+    title: Optional[str] = None,
+    bpm: Optional[int] = None,
+    duration_seconds: Optional[float] = None,
+    sequence_length: Optional[int] = None,
+    keep_asm: bool = True,
 ) -> Path:
-    """Compile an AI composition directly into an executable Atari XEX file via MADS.
-    
-    Parameters
-    ----------
-    composition : Union[AICompositionDoc, Dict[str, Any], str, Path]
-        The composition document or path.
-    output_path : Union[str, Path]
-        Target .xex file path.
-    player_address : Union[str, int], default="$4000"
-        Installation memory address for player and harness.
-    music_address : Optional[Union[str, int]]
-        Optional separate address for song data (split-relocation).
-    zp_base : int, default=0x80
-        Zero page base address ($80..$F0).
-    mads_bin : Optional[Union[str, Path]]
-        Optional path to mads assembler executable.
-    player_asm : Optional[Union[str, Path]]
-        Optional explicit path to player.asm. If omitted, checks current working directory,
-        repository root, and package directory.
-    format : Optional[str]
-        Optional explicit format: 'json' or 'dsl'.
-    result_transform : Optional[callable], default=None
-        Optional ``transform(result, composition) -> result`` hook applied to the
-        compiled result before the assembly is exported. Whatever it returns is what
-        both the WAV preview and the XEX are built from, so a caller that rewrites
-        hardware realization (for example by attaching a POKEY sound profile) cannot
-        make the two outputs disagree. ``None`` leaves the pipeline untouched.
-    Returns
-    -------
-    Path
-        Path to the generated .xex file.
-    """
-    if "output_xex" in kwargs and output_path == "output.xex":
-        output_path = kwargs["output_xex"]
-    if "mads_exe" in kwargs and mads_bin is None:
-        mads_bin = kwargs["mads_exe"]
-    if "player_asm" in kwargs and player_asm is None:
-        player_asm = kwargs["player_asm"]
-    if "format" in kwargs and format is None:
-        format = kwargs["format"]
-
+    """Compile a compiled :class:`MusicGenerationResult` directly into an Atari XEX binary via MADS."""
     if isinstance(player_address, int):
         player_addr_str = f"${player_address:04X}"
     else:
@@ -654,21 +618,10 @@ def build_xex_from_composition(
         else:
             music_addr_str = str(music_address)
 
-    if not isinstance(composition, AICompositionDoc):
-        comp_doc = load_composition(composition, format=format)
-    else:
-        comp_doc = composition
-
-    res = generate_music_from_composition(comp_doc)
-    if result_transform is not None:
-        # An optional, profile-agnostic hook on the compiled result. Whatever it returns
-        # is what both the WAV preview and the exported assembly are built from, so the
-        # two outputs cannot disagree about the hardware configuration.
-        res = result_transform(res, comp_doc)
     from atari_music.instruments.planner import resolve_export_format_version
-    player_ver = kwargs.get("player_version", "auto")
-    export_ver = resolve_export_format_version(res.pokey_ir, str(player_ver))
-    song_asm = export_mads_asm(res, format_version=export_ver)
+
+    export_ver = resolve_export_format_version(result.pokey_ir, str(player_version))
+    song_asm = export_mads_asm(result, format_version=export_ver)
 
     out_p = Path(output_path)
     out_p.parent.mkdir(parents=True, exist_ok=True)
@@ -708,32 +661,30 @@ def build_xex_from_composition(
 
     # Helper to convert ASCII string to ANTIC Mode 2 screen codes
     def _ascii_to_antic(s: str) -> list[int]:
-        res = []
+        out_chars = []
         for c in s:
             v = ord(c)
             if 32 <= v <= 95:
-                res.append(v - 32)
+                out_chars.append(v - 32)
             elif 96 <= v <= 122:
-                res.append(v)
+                out_chars.append(v)
             else:
-                res.append(0)
-        return res
+                out_chars.append(0)
+        return out_chars
 
-    title_str = (comp_doc.metadata.title or "POKEY Music")[:28]
+    title_str = (title or result.pokey_ir.title or "POKEY Music")[:28]
+    bpm_val = int(bpm if bpm is not None else result.pokey_ir.tempo_bpm)
+    dur_val = float(duration_seconds if duration_seconds is not None else result.metadata.duration)
+    seq_len = int(sequence_length if sequence_length is not None else len(result.pokey_ir.sequence))
+
     title_antic = _ascii_to_antic(f"TITLE:   {title_str}")
-    tempo_antic = _ascii_to_antic(f"TEMPO:   {comp_doc.metadata.bpm} BPM")
+    tempo_antic = _ascii_to_antic(f"TEMPO:   {bpm_val} BPM")
 
-    dur_sec = comp_doc.metadata.duration_seconds
-    if dur_sec is None:
-        from atari_music.ai.analysis import calculate_composition_duration
-        dur_sec = calculate_composition_duration(comp_doc)
-
-    tot_sec = int(round(dur_sec))
+    tot_sec = int(round(dur_val))
     tot_min_part = tot_sec // 60
     tot_sec_part = tot_sec % 60
     time_antic = _ascii_to_antic(f"TIME:    00:00 / {tot_min_part:02d}:{tot_sec_part:02d}")
-    num_steps = len(comp_doc.sequence)
-    step_antic = _ascii_to_antic(f"STEP:    00 / {num_steps:02d}")
+    step_antic = _ascii_to_antic(f"STEP:    00 / {seq_len:02d}")
 
     # Generate self-contained assembly source
     asm_lines = [
@@ -1185,13 +1136,18 @@ def build_xex_from_composition(
 
     asm_content = "\n".join(asm_lines)
 
-    # Temporary assembly file
-    temp_asm = out_p.with_suffix(".asm")
-    temp_asm.write_text(asm_content, encoding="utf-8")
+    import tempfile
 
-    # Run MADS
-    cmd = [str(mads_exe), str(temp_asm), f"-o:{out_p}"]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    # Compile MADS assembly either next to XEX (default build-xex contract) or isolated temp dir
+    if keep_asm:
+        temp_asm = out_p.with_suffix(".asm")
+        temp_asm.write_text(asm_content, encoding="utf-8")
+        proc = subprocess.run([str(mads_exe), str(temp_asm), f"-o:{out_p}"], capture_output=True, text=True)
+    else:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            temp_asm = Path(tmp_dir) / f"{out_p.stem}_xex_harness.asm"
+            temp_asm.write_text(asm_content, encoding="utf-8")
+            proc = subprocess.run([str(mads_exe), str(temp_asm), f"-o:{out_p}"], capture_output=True, text=True)
 
     if proc.returncode != 0:
         raise MusicCompositionError(
@@ -1206,3 +1162,56 @@ def build_xex_from_composition(
     )
 
     return out_p
+
+
+def build_xex_from_composition(
+    composition: Union[AICompositionDoc, Dict[str, Any], str, Path],
+    output_path: Union[str, Path] = "output.xex",
+    player_address: Union[str, int] = "$4000",
+    music_address: Optional[Union[str, int]] = None,
+    zp_base: int = 0x80,
+    mads_bin: Optional[Union[str, Path]] = None,
+    player_asm: Optional[Union[str, Path]] = None,
+    format: Optional[str] = None,
+    result_transform: Optional[Any] = None,
+    **kwargs: Any,
+) -> Path:
+    """Compile an AI composition directly into an executable Atari XEX file via MADS."""
+    if "output_xex" in kwargs and output_path == "output.xex":
+        output_path = kwargs["output_xex"]
+    if "mads_exe" in kwargs and mads_bin is None:
+        mads_bin = kwargs["mads_exe"]
+    if "player_asm" in kwargs and player_asm is None:
+        player_asm = kwargs["player_asm"]
+    if "format" in kwargs and format is None:
+        format = kwargs["format"]
+
+    if not isinstance(composition, AICompositionDoc):
+        comp_doc = load_composition(composition, format=format)
+    else:
+        comp_doc = composition
+
+    res = generate_music_from_composition(comp_doc)
+    if result_transform is not None:
+        res = result_transform(res, comp_doc)
+
+    dur_sec = comp_doc.metadata.duration_seconds
+    if dur_sec is None:
+        from atari_music.ai.analysis import calculate_composition_duration
+        dur_sec = calculate_composition_duration(comp_doc)
+
+    return build_xex_from_result(
+        res,
+        output_path=output_path,
+        player_address=player_address,
+        music_address=music_address,
+        zp_base=zp_base,
+        mads_bin=mads_bin,
+        player_asm=player_asm,
+        player_version=str(kwargs.get("player_version", "auto")),
+        title=comp_doc.metadata.title,
+        bpm=comp_doc.metadata.bpm,
+        duration_seconds=dur_sec,
+        sequence_length=len(comp_doc.sequence),
+        keep_asm=bool(kwargs.get("keep_asm", True)),
+    )

@@ -108,6 +108,47 @@ class MusicGenerationResult(BaseModel):
         self.pokey_ir.to_json_file(out_p)
         return out_p
 
+    def export_mads(
+        self,
+        output_path: Optional[str | Path] = None,
+        *,
+        song_label: str = "song_data",
+        player_version: str = "auto",
+    ) -> str:
+        """Export this result to MADS assembly using v1 or v2 format resolution."""
+        from atari_music.instruments.planner import resolve_export_format_version
+        from atari_music.mads_exporter import export_mads_asm
+
+        fmt = resolve_export_format_version(self.pokey_ir, player_version)
+        return export_mads_asm(self, output_path, song_label=song_label, format_version=fmt)
+
+    def build_xex(
+        self,
+        output_path: str | Path,
+        *,
+        player_address: str | int = 0x6000,
+        music_address: Optional[str | int] = 0x8000,
+        zp_base: int = 0x80,
+        mads_bin: Optional[str | Path] = None,
+        player_asm: Optional[str | Path] = None,
+        player_version: str = "auto",
+        keep_asm: bool = True,
+    ) -> Path:
+        """Compile this result to a relocatable Atari XEX binary via the shared MADS pipeline."""
+        from atari_music.ai.client import build_xex_from_result
+
+        return build_xex_from_result(
+            self,
+            output_path=output_path,
+            player_address=player_address,
+            music_address=music_address,
+            zp_base=zp_base,
+            mads_bin=mads_bin,
+            player_asm=player_asm,
+            player_version=player_version,
+            keep_asm=keep_asm,
+        )
+
 
 def generate_music(
     profile: str = "action",
@@ -267,4 +308,181 @@ def generate_music(
         pokey_ir=v4_res.pokey_ir,
         metadata=metadata,
         quality_report=q,
+    )
+
+
+def _load_song_input_for_arrange(
+    input_song: Any,
+) -> tuple[IRSong, MusicSong, Optional[str]]:
+    """Load an existing AI composition or POKEY IR without ever invoking an AI provider."""
+    import json
+
+    if isinstance(input_song, MusicGenerationResult):
+        return (
+            input_song.pokey_ir.model_copy(deep=True),
+            input_song.music_ir.model_copy(deep=True),
+            input_song.metadata.profile,
+        )
+    if isinstance(input_song, IRSong):
+        ms = MusicSong(
+            title=input_song.title,
+            tempo_bpm=input_song.tempo_bpm,
+            key=input_song.key,
+            mode=input_song.mode,
+            sequence=list(input_song.sequence),
+        )
+        return input_song.model_copy(deep=True), ms, None
+
+    from atari_music.ai.client import generate_music_from_composition, load_composition_json
+    from atari_music.ai.schema import AICompositionDoc
+
+    if isinstance(input_song, AICompositionDoc):
+        res = generate_music_from_composition(input_song)
+        return res.pokey_ir, res.music_ir, res.metadata.profile
+
+    data: Optional[Dict[str, Any]] = None
+    if isinstance(input_song, (Path, str)):
+        p = Path(input_song) if isinstance(input_song, Path) or (len(str(input_song)) < 512 and Path(str(input_song)).is_file()) else None
+        raw_text = p.read_text(encoding="utf-8") if p is not None else str(input_song)
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError as err:
+            raise ValueError(f"failed to parse composition JSON: {err}") from err
+        if isinstance(parsed, dict):
+            data = parsed
+        else:
+            raise ValueError(f"expected JSON object, got {type(parsed).__name__}")
+    elif isinstance(input_song, Mapping):
+        data = dict(input_song)
+    else:
+        raise TypeError(
+            f"unsupported input_song type {type(input_song).__name__}; expected IRSong, MusicGenerationResult, AICompositionDoc, dict, or JSON path"
+        )
+
+    if data.get("format") == "atari-music-composition":
+        doc = load_composition_json(data)
+        res = generate_music_from_composition(doc)
+        return res.pokey_ir, res.music_ir, res.metadata.profile
+
+    ir_song = IRSong.model_validate(data)
+    ms = MusicSong(
+        title=ir_song.title,
+        tempo_bpm=ir_song.tempo_bpm,
+        key=ir_song.key,
+        mode=ir_song.mode,
+        sequence=list(ir_song.sequence),
+    )
+    return ir_song, ms, None
+
+
+def arrange_song(
+    input_song: Any,
+    channel_instruments: Optional[Mapping[int | str, str]] = None,
+    *,
+    program_change_policy: str = "preserve",
+    instrument_catalog_path: Optional[Path | str] = None,
+    player_version: str = "auto",
+) -> MusicGenerationResult:
+    """Arrange an existing composition with new POKEY catalog instruments without calling AI.
+
+    Supports AI Composition JSON (``atari-music-composition``), POKEY IR JSON (``IRSong``),
+    :class:`IRSong`, or :class:`MusicGenerationResult`. Returns a new :class:`MusicGenerationResult`
+    compatible with ``render_wav()``, ``export_mads_asm()``, ``export_mads()``, and ``build_xex()``
+    while keeping *input_song* and all musical events (notes, rests, durations, tempo, patterns,
+    sequence) immutable.
+    """
+    from atari_music.instruments.planner import (
+        arrange_ir_song,
+        resolve_export_format_version,
+    )
+    from atari_music.ir import calculate_ir_binary_size, song_requires_v2
+    import numpy as np
+
+    base_ir, music_ir, style_hint = _load_song_input_for_arrange(input_song)
+    cat_path = Path(instrument_catalog_path) if instrument_catalog_path is not None else None
+    arranged_ir, _rt_report = arrange_ir_song(
+        base_ir,
+        channel_instruments=channel_instruments,
+        program_change_policy=program_change_policy,
+        catalog_path=cat_path,
+        player_version=player_version,
+    )
+
+    export_ver = resolve_export_format_version(arranged_ir, player_version)
+    mem_size = calculate_ir_binary_size(arranged_ir, format_version=export_ver)
+    if song_requires_v2(arranged_ir):
+        from atari_music.frame_simulator import simulate_ir_song_frames
+        frames = simulate_ir_song_frames(arranged_ir, format_version=2)
+    else:
+        frames = compile_ir_to_pokey_frames(arranged_ir)
+
+    total_frames = int(frames.shape[0])
+    duration_s = round(float(total_frames) / 50.0, 2)
+
+    active_channels = 0
+    active_pct: Dict[int, float] = {}
+    for ch in range(1, 5):
+        audc_col = (ch - 1) * 2 + 1
+        active_f = int(np.count_nonzero((frames[:, audc_col] & 0x0F) > 0)) if total_frames > 0 else 0
+        pct = round((active_f / total_frames) * 100.0, 1) if total_frames > 0 else 0.0
+        active_pct[ch] = pct
+        if pct > 0:
+            active_channels += 1
+
+    sound_profiles_meta = [
+        {
+            "ir_instrument_id": inst.id,
+            "instrument_id": inst.profile_id,
+            "display_name": inst.name,
+            "behavior_id": inst.behavior_id,
+            "profile_fingerprint": inst.profile_fingerprint,
+        }
+        for inst in arranged_ir.instruments
+        if inst.profile_id is not None
+    ]
+
+    metadata = MusicGenerationMetadata(
+        profile=style_hint or music_ir.style or "arranged",
+        seed=0,
+        tempo=arranged_ir.tempo_bpm,
+        key=arranged_ir.key,
+        mode=arranged_ir.mode,
+        duration=duration_s,
+        channels_used=max(1, sum(1 for ch in range(1, 5) if any(pat.tracks.get(ch) for pat in arranged_ir.patterns))),
+        form=" ".join(str(x) for x in arranged_ir.sequence),
+        memory_size_bytes=mem_size,
+        pattern_count=len(arranged_ir.patterns),
+        sequence_length=len(arranged_ir.sequence),
+        frames_per_tick=arranged_ir.frames_per_tick,
+        uses_16bit_bass=arranged_ir.uses_16bit_bass,
+        format_version=export_ver,
+        sound_profiles=sound_profiles_meta,
+    )
+
+    quality = ComposerV4QualityReport(
+        profile_name=metadata.profile,
+        memory_size=mem_size,
+        under_budget=(mem_size <= 2048),
+        channels_used=metadata.channels_used,
+        active_channels_audio=active_channels,
+        duration=duration_s,
+        tempo=arranged_ir.tempo_bpm,
+        form=metadata.form,
+        pitch_range=0,
+        repetition=0.0,
+        novelty=0.0,
+        melodic_density=0.0,
+        rhythmic_density=0.0,
+        harmonic_complexity=0.0,
+        pattern_count=len(arranged_ir.patterns),
+        attempts_needed=1,
+        format_version=export_ver,
+        active_frame_pct=active_pct,
+    )
+
+    return MusicGenerationResult(
+        music_ir=music_ir,
+        pokey_ir=arranged_ir,
+        metadata=metadata,
+        quality_report=quality,
     )

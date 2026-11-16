@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
 
@@ -24,9 +26,17 @@ from atari_music.instruments.runtime import (
     RuntimeResolutionReport,
     TargetCapability,
 )
-from atari_music.ir import IRInstrument, IRSong, song_requires_v2
+from atari_music.ir import (
+    IRInstrument,
+    IRNote,
+    IRPattern,
+    IRSong,
+    resolve_initial_channel_instruments,
+    song_requires_v2,
+)
 
 PlayerVersionChoice = Literal["auto", "v1", "v2"]
+ProgramChangePolicy = Literal["preserve", "replace", "remove"]
 
 #: Role aliases accepted by CLI/API channel assignment parsers.
 _ROLE_TO_CHANNEL: Dict[str, int] = {
@@ -483,3 +493,332 @@ def select_ai_catalog_instrument_id(
         if channel is None or channel in info["channels_allowed"]:
             return cid
     return None
+
+
+def normalize_program_change_policy(policy: str) -> ProgramChangePolicy:
+    """Validate and normalize ``preserve|replace|remove`` policy names."""
+    norm = str(policy).strip().lower()
+    if norm == "preserve":
+        return "preserve"
+    if norm == "replace":
+        return "replace"
+    if norm == "remove":
+        return "remove"
+    raise InstrumentPlanError(
+        f"unsupported program_change_policy {policy!r}; expected 'preserve', 'replace', or 'remove'",
+        code="INVALID_PROGRAM_CHANGE_POLICY",
+    )
+
+
+def composition_musical_fingerprint(song: IRSong) -> str:
+    """Compute a SHA-256 hash of instrument-independent musical content in *song*.
+
+    Excludes instrument definitions, channel assignments, distortion bytes,
+    ``initial_channel_instruments``, and ``PROGRAM_CHANGE`` commands so two
+    arrangements of the same composition yield the exact same hash if and only if
+    all notes, rests, durations, volumes, tempo, patterns, and sequence match.
+    """
+    payload = {
+        "tempo_bpm": int(song.tempo_bpm),
+        "frames_per_tick": int(song.frames_per_tick),
+        "key": song.key,
+        "mode": song.mode,
+        "sequence": list(song.sequence),
+        "patterns": [
+            {
+                "id": int(pat.id),
+                "rows": int(pat.rows),
+                "tracks": {
+                    str(ch): [
+                        {
+                            "pitch": n.pitch,
+                            "midi_pitch": n.midi_pitch,
+                            "duration": int(n.duration),
+                            "volume": int(n.volume),
+                            "is_rest": bool(n.is_rest),
+                            "slide_semitones": int(n.slide_semitones),
+                            "arpeggio_offsets": list(n.arpeggio_offsets),
+                        }
+                        for n in notes
+                    ]
+                    for ch, notes in sorted(pat.tracks.items())
+                },
+            }
+            for pat in song.patterns
+        ],
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def arrange_ir_song(
+    song: IRSong,
+    *,
+    channel_instruments: Optional[Mapping[int | str, str]] = None,
+    program_change_policy: str = "preserve",
+    catalog: Optional[InstrumentCatalog] = None,
+    catalog_path: Optional[Path] = None,
+    player_version: str = "auto",
+) -> Tuple[IRSong, Optional[RuntimeResolutionReport]]:
+    """Return a deep-copied *song* with channel instrument overrides applied without mutating input.
+
+    Unassigned channels keep their original instruments and ``PROGRAM_CHANGE`` events.
+    Assigned channels follow ``program_change_policy`` (``preserve``, ``replace``, ``remove``).
+    """
+    ver_choice = normalize_player_version(player_version)
+    policy = normalize_program_change_policy(program_change_policy)
+    base = song.model_copy(deep=True)
+
+    assigned: Dict[int, str] = {}
+    if channel_instruments:
+        for raw_ch, raw_id in channel_instruments.items():
+            ch = parse_channel_identifier(raw_ch)
+            inst_id = str(raw_id).strip()
+            if not inst_id:
+                raise InstrumentPlanError(
+                    f"channel {ch} has empty catalog instrument_id",
+                    code="INVALID_ASSIGNMENT_SYNTAX",
+                )
+            assigned[ch] = inst_id
+
+    if not assigned:
+        if ver_choice == "v1" and song_requires_v2(base):
+            raise InstrumentPlanError(
+                "song requires format v2 (" + "; ".join(song_requires_v2(base)) + ")",
+                code="FORMAT_VERSION_CONFLICT",
+            )
+        return base, None
+
+    cat = catalog if catalog is not None else load_instrument_catalog(catalog_path)
+
+    # Reject unknown catalog IDs upfront
+    for ch in sorted(assigned):
+        pid = assigned[ch]
+        if not cat.has_profile(pid):
+            available = ", ".join(p.instrument_id for p in cat.instruments)
+            raise InstrumentPlanError(
+                f"instrument {pid!r} (channel {ch}) not found in catalog (available: {available})",
+                code=INSTRUMENT_NOT_FOUND,
+            )
+
+    # Preserve musical integrity of existing CH2 harmony if 16-bit pair requested on CH1
+    if 1 in assigned:
+        p1, _ = cat.resolve_profile_behavior(assigned[1])
+        if p1.hardware_constraints.divider_mode == "16bit_ch12":
+            if 2 in assigned:
+                raise InstrumentPlanError(
+                    "channel 2 cannot be assigned independently while channel 1 uses 16-bit CH1+CH2 mode",
+                    code="PAIR_16BIT_CHANNEL_CONFLICT",
+                )
+            has_ch2_notes = any(
+                any(not n.is_rest for n in pat.tracks.get(2, []))
+                for pat in base.patterns
+            )
+            if has_ch2_notes and not base.uses_16bit_bass:
+                raise InstrumentPlanError(
+                    f"profile {assigned[1]!r} on channel 1 requires 16-bit CH1+CH2 pairing, "
+                    "which conflicts with existing independent notes on channel 2",
+                    code="PAIR_16BIT_CHANNEL_CONFLICT",
+                )
+
+    orig_inst_by_idx: Dict[int, IRInstrument] = {
+        idx: inst for idx, inst in enumerate(base.instruments)
+    }
+    id_to_orig_idx: Dict[int, int] = {
+        inst.id: idx for idx, inst in enumerate(base.instruments)
+    }
+    orig_init = resolve_initial_channel_instruments(base)
+
+    # Represent instrument references per note cleanly using symbolic tokens:
+    # ("orig", orig_idx) or ("cat", catalog_id)
+    ch_init_token: Dict[int, Tuple[str, Any]] = {}
+    for ch in range(1, 5):
+        if ch in assigned:
+            ch_init_token[ch] = ("cat", assigned[ch])
+        else:
+            ch_init_token[ch] = ("orig", orig_init[ch])
+
+    new_patterns: List[IRPattern] = []
+    used_tokens: List[Tuple[str, Any]] = []
+    ch_catalog_profiles: Dict[int, List[str]] = {c: [] for c in range(1, 5)}
+
+    def _register_token(tok: Tuple[str, Any], ch_num: int) -> None:
+        if tok not in used_tokens:
+            used_tokens.append(tok)
+        if tok[0] == "cat":
+            pid = tok[1]
+            if pid not in ch_catalog_profiles[ch_num]:
+                ch_catalog_profiles[ch_num].append(pid)
+        else:
+            orig_i = orig_inst_by_idx.get(tok[1])
+            if orig_i is not None and orig_i.profile_id and cat.has_profile(orig_i.profile_id):
+                if orig_i.profile_id not in ch_catalog_profiles[ch_num]:
+                    ch_catalog_profiles[ch_num].append(orig_i.profile_id)
+
+    for ch in range(1, 5):
+        _register_token(ch_init_token[ch], ch)
+
+    pattern_token_tracks: Dict[int, Dict[int, List[Tuple[IRNote, Tuple[str, Any], Tuple[Tuple[str, Any], ...]]]]] = {}
+    for pat in base.patterns:
+        pat_map: Dict[int, List[Tuple[IRNote, Tuple[str, Any], Tuple[Tuple[str, Any], ...]]]] = {}
+        for ch, notes in pat.tracks.items():
+            orig_start = orig_init.get(ch, 0)
+            annotated: List[Tuple[IRNote, Tuple[str, Any], Tuple[Tuple[str, Any], ...]]] = []
+            prev_orig_idx: Optional[int] = orig_start
+
+            for n in notes:
+                raw_o_idx = id_to_orig_idx.get(n.instrument_id, orig_start)
+                raw_pcs = tuple(id_to_orig_idx.get(pid, pid) for pid in n.pending_program_changes)
+
+                if ch not in assigned:
+                    tok = ("orig", raw_o_idx)
+                    pc_toks = tuple(("orig", p) for p in raw_pcs)
+                else:
+                    new_tok: Tuple[str, Any] = ("cat", assigned[ch])
+                    if policy == "remove":
+                        tok = new_tok
+                        pc_toks = ()
+                    elif policy == "replace":
+                        tok = new_tok
+                        is_switch = bool(raw_pcs) or (
+                            not n.is_rest and prev_orig_idx is not None and raw_o_idx != prev_orig_idx
+                        )
+                        pc_toks = (new_tok,) if is_switch else ()
+                    else:  # preserve
+                        tok = new_tok if (raw_o_idx == orig_start or n.is_rest) else ("orig", raw_o_idx)
+                        pc_toks = tuple(
+                            (new_tok if p == orig_start else ("orig", p)) for p in raw_pcs
+                        )
+
+                if not n.is_rest:
+                    prev_orig_idx = raw_o_idx
+
+                _register_token(tok, ch)
+                for p_t in pc_toks:
+                    _register_token(p_t, ch)
+                annotated.append((n, tok, pc_toks))
+            pat_map[ch] = annotated
+        pattern_token_tracks[pat.id] = pat_map
+
+    # Determine effective runtime target (respecting auto vs v1 vs v2 and POKEYRuntime checks)
+    has_multi_inst_ch = False
+    for ch in range(1, 5):
+        ch_toks = {ch_init_token[ch]}
+        for pat in base.patterns:
+            for _n, tok, pc_toks in pattern_token_tracks[pat.id].get(ch, []):
+                ch_toks.add(tok)
+                ch_toks.update(pc_toks)
+        if len(ch_toks) > 1:
+            has_multi_inst_ch = True
+
+    has_v2_beh = False
+    for tok in used_tokens:
+        if tok[0] == "cat":
+            _p, beh = cat.resolve_profile_behavior(tok[1])
+            if beh is not None and beh.required_runtime_tier != "core_v1":
+                has_v2_beh = True
+        else:
+            oi = orig_inst_by_idx.get(tok[1])
+            if oi is not None and (
+                (oi.macro and any(s.is_v2_step() for s in oi.macro))
+                or (oi.pitch_envelope is not None and oi.pitch_envelope.duration_frames > 0)
+            ):
+                has_v2_beh = True
+
+    has_any_pc = any(
+        pc_toks
+        for pat in base.patterns
+        for ch_list in pattern_token_tracks[pat.id].values()
+        for _n, _tok, pc_toks in ch_list
+    )
+    est_requires_v2 = has_v2_beh or has_any_pc or has_multi_inst_ch or (len(used_tokens) > 4)
+
+    runtime_target = TARGET_V1_XEX if (ver_choice == "v1" or (ver_choice == "auto" and not est_requires_v2)) else TARGET_V2_ITER1_XEX
+    requests = [
+        ChannelAssignmentRequest(channel=ch, instrument_ids=tuple(cids))
+        for ch, cids in ch_catalog_profiles.items()
+        if cids
+    ]
+    rt_report: Optional[RuntimeResolutionReport] = (
+        POKEYRuntime().resolve(requests, cat, target=runtime_target)
+        if requests
+        else None
+    )
+    if rt_report is not None and not rt_report.is_compatible:
+        errs = "; ".join(d.message for d in rt_report.diagnostics if d.severity == "ERROR")
+        raise InstrumentPlanError(
+            errs,
+            code=next((d.code for d in rt_report.diagnostics if d.severity == "ERROR"), "RUNTIME_CONFLICT"),
+            diagnostics=rt_report.diagnostics,
+        )
+
+    # Materialize compact IRInstrument list (0..K-1)
+    token_to_new_id: Dict[Tuple[str, Any], int] = {}
+    final_instruments: List[IRInstrument] = []
+    for new_id, tok in enumerate(used_tokens):
+        token_to_new_id[tok] = new_id
+        if tok[0] == "cat":
+            prof, beh = cat.resolve_profile_behavior(tok[1])
+            final_instruments.append(IRInstrument.from_catalog_profile(new_id, prof, beh))
+        else:
+            oi = orig_inst_by_idx[tok[1]].model_copy(deep=True)
+            updates: Dict[str, Any] = {"id": new_id}
+            # v2 Iter 1 exporter refuses legacy vibrato on untouched v1 channels when promoted to v2
+            if est_requires_v2 and (oi.vibrato_depth != 0 or oi.vibrato_speed != 0):
+                updates["vibrato_depth"] = 0
+                updates["vibrato_speed"] = 0
+            final_instruments.append(oi.model_copy(update=updates))
+
+    for pat in base.patterns:
+        new_tracks: Dict[int, List[IRNote]] = {}
+        for ch, items in pattern_token_tracks[pat.id].items():
+            new_notes: List[IRNote] = []
+            for orig_n, tok, pc_toks in items:
+                new_id = token_to_new_id[tok]
+                new_pcs = tuple(token_to_new_id[p] for p in pc_toks)
+                new_notes.append(
+                    orig_n.model_copy(
+                        update={
+                            "instrument_id": new_id,
+                            "pending_program_changes": new_pcs,
+                        }
+                    )
+                )
+            new_tracks[ch] = new_notes
+        new_patterns.append(
+            IRPattern(id=pat.id, name=pat.name, rows=pat.rows, tracks=new_tracks)
+        )
+
+    uses_16bit_out = bool(base.uses_16bit_bass)
+    if 1 in assigned:
+        p1, _ = cat.resolve_profile_behavior(assigned[1])
+        if p1.hardware_constraints.divider_mode == "16bit_ch12":
+            uses_16bit_out = True
+        elif p1.hardware_constraints.divider_mode == "8bit" and base.uses_16bit_bass:
+            # Explicit 8-bit bass overrides 16-bit bass mode
+            uses_16bit_out = False
+
+    new_init_ch = {ch: token_to_new_id[ch_init_token[ch]] for ch in range(1, 5)}
+    candidate = base.model_copy(
+        update={
+            "instruments": final_instruments,
+            "patterns": new_patterns,
+            "uses_16bit_bass": uses_16bit_out,
+            "initial_channel_instruments": new_init_ch,
+        }
+    )
+
+    # Check whether song genuinely needs v2 once assembled cleanly (remove/static core_v1 can stay v1!)
+    candidate_no_init = candidate.model_copy(update={"initial_channel_instruments": None})
+    if not song_requires_v2(candidate_no_init):
+        candidate = candidate_no_init
+
+    final_reasons = song_requires_v2(candidate)
+    if ver_choice == "v1" and final_reasons:
+        raise InstrumentPlanError(
+            "selected arrangement requires format v2 (" + "; ".join(final_reasons) + ")",
+            code="FORMAT_VERSION_CONFLICT",
+        )
+
+    return candidate, rt_report
+
