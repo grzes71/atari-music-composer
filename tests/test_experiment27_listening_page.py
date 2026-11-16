@@ -22,6 +22,8 @@ import pytest
 from atari_music import pokey_octave_pulse_experiment as e27
 from scripts import build_experiment27_listening_page as builder
 
+pytestmark = pytest.mark.experimental
+
 LISTENING = builder.LISTENING_DIR
 EXPERIMENT = builder.EXPERIMENT_DIR
 

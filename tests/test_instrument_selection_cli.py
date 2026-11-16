@@ -53,6 +53,8 @@ from atari_music.cli import (
     cli,
 )
 
+pytestmark = [pytest.mark.core, pytest.mark.audio]
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LIBRARY_DIR = REPO_ROOT / "data" / "instrument_libraries" / "lead" / "v0.1"
 LIBRARY_PATH = LIBRARY_DIR / "library.json"

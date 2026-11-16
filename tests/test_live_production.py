@@ -22,6 +22,8 @@ from atari_music.ai.providers.base import CompositionRequest
 from atari_music.ai.schema import AICompositionDoc
 from atari_music.ai.validation import validate_composition_report
 
+pytestmark = pytest.mark.core
+
 
 def _get_live_credentials():
     """Retrieve credentials without leaking secrets."""

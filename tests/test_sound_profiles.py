@@ -174,6 +174,8 @@ def _wav_samples(path: Path) -> tuple:
 # ===========================================================================
 # Level 1 — profile loading
 # ===========================================================================
+@pytest.mark.core
+@pytest.mark.audio
 def test_bank_loads_and_verifies_every_profile(bank) -> None:
     assert bank.schema == "pokey-sound-profile-registry-1.0"
     # Stage 9B published the full library; the four profiles of the Stage 9 demo bank are in
@@ -196,11 +198,15 @@ def test_bank_loads_and_verifies_every_profile(bank) -> None:
         assert profile.document["playable_fingerprint"] == profile.fingerprint
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_recomputed_fingerprint_matches_the_registry(bank) -> None:
     for profile in bank.profiles.values():
         assert playable_fingerprint_of(profile.document) == profile.fingerprint
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_bank_exposes_the_hardware_facts_of_both_scopes(bank) -> None:
     voice = bank.get(VOICE_PROFILE)
     assert voice.scope == "VOICE"
@@ -233,6 +239,7 @@ def _profile_with_volume_gesture(volume: Any, *, playability: Any = None) -> Sou
     )
 
 
+@pytest.mark.experimental
 def test_the_volume_contour_is_the_measured_series_expanded_verbatim() -> None:
     profile = _profile_with_volume_gesture(
         {"present": True, "static": False, "runs": [[4, 3], [8, 2]], "unit": "audc_volume_level_0_15"}
@@ -242,6 +249,7 @@ def test_the_volume_contour_is_the_measured_series_expanded_verbatim() -> None:
     assert profile.volume_levels_outside_the_nibble == ()
 
 
+@pytest.mark.experimental
 def test_a_static_or_absent_contour_is_still_the_measured_series() -> None:
     """The accessor reports what was measured; whether it is useful is the consumer's call."""
     static = _profile_with_volume_gesture({"runs": [[6, 5]], "static": True})
@@ -251,6 +259,7 @@ def test_a_static_or_absent_contour_is_still_the_measured_series() -> None:
     assert _profile_with_volume_gesture({"runs": []}).volume_contour is None
 
 
+@pytest.mark.experimental
 def test_a_malformed_or_out_of_range_series_is_refused_not_repaired() -> None:
     """A level outside 0..15 is a corrupt reading, not a value to clamp."""
     assert _profile_with_volume_gesture({"runs": [[4, 3, 9]]}).volume_contour is None
@@ -263,6 +272,7 @@ def test_a_malformed_or_out_of_range_series_is_refused_not_repaired() -> None:
     assert out_of_range.volume_levels_outside_the_nibble == (20,)
 
 
+@pytest.mark.experimental
 def test_the_declared_gesture_availability_is_what_the_profile_says() -> None:
     profile = _profile_with_volume_gesture(
         {"runs": [[4, 3]]}, playability={"available": True, "enabled": False}
@@ -271,6 +281,8 @@ def test_the_declared_gesture_availability_is_what_the_profile_says() -> None:
     assert _profile_with_volume_gesture({"runs": [[4, 3]]}).volume_contour_declared == {}
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_exact_lookup_and_unknown_id_refusal(bank) -> None:
     assert bank.get(VOICE_PROFILE).profile_id == VOICE_PROFILE
     with pytest.raises(SoundProfileError) as err:
@@ -280,12 +292,16 @@ def test_exact_lookup_and_unknown_id_refusal(bank) -> None:
     assert VOICE_PROFILE in str(err.value)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_missing_bank_directory_is_refused(tmp_path: Path) -> None:
     with pytest.raises(SoundProfileError) as err:
         load_sound_profile_bank(tmp_path / "nope")
     assert err.value.code == PROFILE_BANK_MISSING
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_unsupported_registry_schema_is_refused(tmp_path: Path) -> None:
     bank_dir = _copy_bank(tmp_path)
     _rewrite_registry(bank_dir, lambda registry: registry.__setitem__("schema", "something/9"))
@@ -294,6 +310,8 @@ def test_unsupported_registry_schema_is_refused(tmp_path: Path) -> None:
     assert err.value.code == PROFILE_BANK_SCHEMA_UNSUPPORTED
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_tampered_profile_fails_fingerprint_verification(tmp_path: Path) -> None:
     """A profile whose content changed must be refused, not silently rendered."""
     bank_dir = _copy_bank(tmp_path)
@@ -313,6 +331,8 @@ def test_tampered_profile_fails_fingerprint_verification(tmp_path: Path) -> None
     assert bank.get(VOICE_PROFILE).distortion_nibble == 0xC
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_registry_entry_pointing_at_a_missing_file_is_refused(tmp_path: Path) -> None:
     bank_dir = _copy_bank(tmp_path)
     _rewrite_registry(bank_dir, lambda registry: registry["profiles"][0].__setitem__("file", "profiles/absent.json"))
@@ -321,6 +341,8 @@ def test_registry_entry_pointing_at_a_missing_file_is_refused(tmp_path: Path) ->
     assert err.value.code == PROFILE_FILE_MISSING
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_profile_id_mismatch_between_registry_and_file_is_refused(tmp_path: Path) -> None:
     bank_dir = _copy_bank(tmp_path)
     _rewrite_registry(
@@ -331,6 +353,8 @@ def test_profile_id_mismatch_between_registry_and_file_is_refused(tmp_path: Path
     assert err.value.code in (PROFILE_FILE_MISSING, PROFILE_INVALID)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_only_restriction_is_exact(bank) -> None:
     narrowed = load_sound_profile_bank(BANK_DIR, only=(VOICE_PROFILE,))
     assert narrowed.ids() == (VOICE_PROFILE,)
@@ -339,6 +363,8 @@ def test_only_restriction_is_exact(bank) -> None:
     assert err.value.code == PROFILE_NOT_FOUND
 
 
+@pytest.mark.core
+@pytest.mark.audio
 @pytest.mark.parametrize(
     ("nibble", "expected"),
     [("$A", 0xA0), ("$8", 0x80), ("$C", 0xC0), ("$0", 0x00), ("$6", 0x60), (0xA, 0xA0), ("A", 0xA0)],
@@ -356,6 +382,8 @@ def test_distortion_nibble_becomes_the_generator_byte(nibble, expected) -> None:
     assert profile.distortion_byte == expected
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_a_verbatim_nibble_copy_is_not_the_generator_byte() -> None:
     """``"$A"`` read as ``0x0A`` would be AUDC $0A: volume only, not pure tone."""
     document = {
@@ -373,6 +401,8 @@ def test_a_verbatim_nibble_copy_is_not_the_generator_byte() -> None:
     assert (profile.distortion_byte >> 4) == profile.distortion_nibble
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_loading_a_bank_does_not_need_the_archaeology_project() -> None:
     """The bank is self-sufficient: a bank directory, and nothing else."""
     assert not any(
@@ -392,6 +422,8 @@ def test_loading_a_bank_does_not_need_the_archaeology_project() -> None:
 # ===========================================================================
 # Level 2 — composition interpretation
 # ===========================================================================
+@pytest.mark.core
+@pytest.mark.audio
 def test_binding_document_loads_and_resolves_its_bank_relative_to_itself() -> None:
     binding = load_profile_binding(VAULTS_BINDING)
     assert binding.schema == BINDING_SCHEMA
@@ -402,6 +434,8 @@ def test_binding_document_loads_and_resolves_its_bank_relative_to_itself() -> No
     assert binding.bank_path(None).is_dir()
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_binding_schema_is_enforced(tmp_path: Path) -> None:
     path = tmp_path / "b.json"
     path.write_text(json.dumps({"schema": "wrong", "instruments": {"lead": VOICE_PROFILE}}), encoding="utf-8")
@@ -410,17 +444,23 @@ def test_binding_schema_is_enforced(tmp_path: Path) -> None:
     assert err.value.code == PROFILE_BINDING_INVALID
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_binding_without_an_instruments_object_is_invalid() -> None:
     with pytest.raises(SoundProfileError) as err:
         load_profile_binding({"schema": BINDING_SCHEMA})
     assert err.value.code == PROFILE_BINDING_INVALID
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_an_empty_binding_changes_nothing(vaults_result) -> None:
     same = apply_profile_binding(vaults_result, _binding({}), load_sound_profile_bank(BANK_DIR))
     assert same is vaults_result
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_a_voice_profile_changes_only_hardware_realization(vaults_doc, vaults_result, bank) -> None:
     bound = apply_profile_binding(vaults_result, _binding({"lead": VOICE_PROFILE}), bank, composition=vaults_doc)
 
@@ -450,6 +490,8 @@ def test_a_voice_profile_changes_only_hardware_realization(vaults_doc, vaults_re
     assert after[2] == before[2]
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_the_composition_velocity_remains_authoritative(vaults_doc, vaults_result, bank) -> None:
     """``volume.peak_level`` is evidence about the source, never the note's velocity.
 
@@ -482,6 +524,8 @@ def test_the_composition_velocity_remains_authoritative(vaults_doc, vaults_resul
     assert declared_peak != max(bound_volumes)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_a_pair_profile_keeps_the_composition_pitch_and_uses_the_profile_clock(vaults_doc, vaults_result, bank) -> None:
     """The note is the composer's; the profile supplies the clock, not the pitch."""
     bound = apply_profile_binding(vaults_result, _binding({"bass": PAIR_PROFILE}), bank, composition=vaults_doc)
@@ -512,6 +556,8 @@ def test_a_pair_profile_keeps_the_composition_pitch_and_uses_the_profile_clock(v
     )[1]
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_unbound_channels_are_untouched_by_a_binding(vaults_doc, vaults_result, bank) -> None:
     bound = apply_profile_binding(
         vaults_result, _binding({"bass": PAIR_PROFILE, "lead": VOICE_PROFILE}), bank, composition=vaults_doc
@@ -524,6 +570,8 @@ def test_unbound_channels_are_untouched_by_a_binding(vaults_doc, vaults_result, 
     np.testing.assert_array_equal(base_frames[:, 7], bound_frames[:, 7])
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_the_provenance_is_recorded_on_the_result(vaults_doc, vaults_result, bank) -> None:
     bound = apply_profile_binding(
         vaults_result, _binding({"bass": PAIR_PROFILE, "lead": VOICE_PROFILE}), bank, composition=vaults_doc
@@ -539,6 +587,8 @@ def test_the_provenance_is_recorded_on_the_result(vaults_doc, vaults_result, ban
     assert vaults_result.metadata.sound_profiles == []
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_binding_is_deterministic(vaults_doc, vaults_result, bank) -> None:
     binding = _binding({"bass": PAIR_PROFILE, "lead": VOICE_PROFILE})
     first = apply_profile_binding(vaults_result, binding, bank, composition=vaults_doc)
@@ -549,6 +599,8 @@ def test_binding_is_deterministic(vaults_doc, vaults_result, bank) -> None:
     )
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_unknown_instrument_is_refused(vaults_result, bank) -> None:
     with pytest.raises(SoundProfileError) as err:
         apply_profile_binding(
@@ -557,6 +609,8 @@ def test_unknown_instrument_is_refused(vaults_result, bank) -> None:
     assert err.value.code == PROFILE_BINDING_UNKNOWN_INSTRUMENT
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_unknown_profile_id_is_refused(vaults_doc, vaults_result, bank) -> None:
     with pytest.raises(SoundProfileError) as err:
         apply_profile_binding(
@@ -565,6 +619,8 @@ def test_unknown_profile_id_is_refused(vaults_doc, vaults_result, bank) -> None:
     assert err.value.code == PROFILE_NOT_FOUND
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_a_pair_profile_needs_the_pair_s_low_channel(bank) -> None:
     """A PAIR profile is driven from channel 1; notes on any other channel are refused."""
     doc = _composition(
@@ -578,6 +634,8 @@ def test_a_pair_profile_needs_the_pair_s_low_channel(bank) -> None:
     assert "channel" in str(err.value)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_a_pair_profile_refuses_independent_notes_on_channel_two(bank) -> None:
     """Channel 2 becomes the pair's high byte, so nothing else may live there."""
     doc = _composition(
@@ -592,6 +650,8 @@ def test_a_pair_profile_refuses_independent_notes_on_channel_two(bank) -> None:
     assert err.value.detail.get("existing_code") == "BASS16_CHANNEL_CONFLICT"
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_two_pair_profiles_cannot_share_one_pair(bank) -> None:
     """The composer has exactly one joined pair, so two PAIR profiles cannot coexist.
 
@@ -621,6 +681,8 @@ def test_two_pair_profiles_cannot_share_one_pair(bank) -> None:
     assert "one joined pair" in str(err.value)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_audctl_conflict_is_refused_when_the_channel_cannot_carry_the_profile(bank) -> None:
     """A 64 kHz VOICE profile on a channel the song joins as a 16-bit pair is a conflict."""
     doc = _composition(channels={"1": _one_note("bass")}, use_16bit_bass=True)
@@ -631,6 +693,8 @@ def test_audctl_conflict_is_refused_when_the_channel_cannot_carry_the_profile(ba
     assert "join bit" in str(err.value)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_a_voice_profile_on_an_unaffected_channel_is_fine(bank, vaults_doc, vaults_result) -> None:
     """Channel 3 is untouched by a 1+2 join, so a 64 kHz profile is satisfiable there."""
     bound = apply_profile_binding(
@@ -643,6 +707,8 @@ def test_a_voice_profile_on_an_unaffected_channel_is_fine(bank, vaults_doc, vaul
     np.testing.assert_array_equal(base_frames[:, 4], frames[:, 4])
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_explicit_distortion_that_disagrees_is_refused(bank) -> None:
     doc = _composition(
         channels={"1": _one_note("lead")},
@@ -655,6 +721,8 @@ def test_explicit_distortion_that_disagrees_is_refused(bank) -> None:
     assert "$80" in str(err.value)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_explicit_distortion_that_agrees_is_accepted(bank) -> None:
     doc = _composition(
         channels={"1": _one_note("lead")},
@@ -667,6 +735,8 @@ def test_explicit_distortion_that_agrees_is_accepted(bank) -> None:
     assert report["instruments"][0]["distortion_source"].startswith("profile (agrees")
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_an_explicit_composition_envelope_wins_over_the_profile(bank) -> None:
     """Contract C-5.2: the composition's explicit envelope is never overwritten."""
     doc = _composition(
@@ -693,6 +763,8 @@ def test_an_explicit_composition_envelope_wins_over_the_profile(bank) -> None:
     assert report["decay_frames"]["value"] == profile_frames["decay"]
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_an_unexpressible_profile_envelope_is_refused(tmp_path: Path) -> None:
     """Rather than clamp a requested envelope, the binding refuses it."""
     bank_dir = _copy_bank(tmp_path)
@@ -707,6 +779,8 @@ def test_an_unexpressible_profile_envelope_is_refused(tmp_path: Path) -> None:
     assert "25" in str(err.value)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_describe_binding_reports_the_same_configuration_it_applies(vaults_doc, vaults_result, bank) -> None:
     binding = _binding({"bass": PAIR_PROFILE, "lead": VOICE_PROFILE})
     report = describe_binding(vaults_result, binding, bank, composition=vaults_doc)
@@ -726,6 +800,8 @@ def test_describe_binding_reports_the_same_configuration_it_applies(vaults_doc, 
     assert set((frames[:, 5] & 0xE0).tolist()) - {0x00} == {0x80}
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_a_bank_without_a_binding_does_not_need_a_path(vaults_result, bank) -> None:
     """A binding that carries its own bank path needs no --sound-bank argument."""
     binding = load_profile_binding(VAULTS_BINDING)
@@ -735,6 +811,8 @@ def test_a_bank_without_a_binding_does_not_need_a_path(vaults_result, bank) -> N
 # ===========================================================================
 # Level 3 — end to end
 # ===========================================================================
+@pytest.mark.core
+@pytest.mark.audio
 def test_import_dsl_with_a_binding_renders_a_profile_bound_wav(tmp_path: Path) -> None:
     runner = CliRunner()
     out = tmp_path / "bound.wav"
@@ -761,6 +839,8 @@ def test_import_dsl_with_a_binding_renders_a_profile_bound_wav(tmp_path: Path) -
     assert max(abs(sample) for sample in samples) > 0, "the rendered WAV must not be silent"
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_the_bound_wav_differs_from_the_unbound_wav(tmp_path: Path) -> None:
     """The A/B proof that a profile is not decorative metadata."""
     runner = CliRunner()
@@ -793,6 +873,8 @@ def test_the_bound_wav_differs_from_the_unbound_wav(tmp_path: Path) -> None:
     assert differing > len(default_samples) // 2
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_the_exported_assembly_matches_the_frame_stream(vaults_doc, vaults_result, bank) -> None:
     """WAV and XEX must derive from one profile-aware representation."""
     bound = apply_profile_binding(
@@ -815,6 +897,8 @@ def test_the_exported_assembly_matches_the_frame_stream(vaults_doc, vaults_resul
     assert "$c0" in table[0]
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_the_assembly_header_no_longer_misreports_the_audctl(vaults_result) -> None:
     """The header used to claim ``$50`` for a song that writes ``$10``."""
     asm = export_mads_asm(vaults_result.pokey_ir)
@@ -826,6 +910,8 @@ def test_the_assembly_header_no_longer_misreports_the_audctl(vaults_result) -> N
     assert "$10" in data_line
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_build_xex_applies_the_binding_to_the_exported_data(tmp_path: Path, monkeypatch) -> None:
     """The XEX path uses the same profile-aware IR as the WAV path."""
     from atari_music.ai import client as client_module
@@ -887,6 +973,8 @@ def test_build_xex_applies_the_binding_to_the_exported_data(tmp_path: Path, monk
     assert "$50" in next(line for line in asm.splitlines() if line.startswith("; Mode:"))
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_sound_bank_without_bindings_is_refused(tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(
@@ -897,6 +985,8 @@ def test_sound_bank_without_bindings_is_refused(tmp_path: Path) -> None:
     assert "--profile-bindings" in result.output
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_an_unknown_profile_id_fails_the_cli_with_its_code(tmp_path: Path) -> None:
     binding_path = tmp_path / "bad.json"
     binding_path.write_text(
@@ -919,6 +1009,8 @@ def test_an_unknown_profile_id_fails_the_cli_with_its_code(tmp_path: Path) -> No
     assert PROFILE_NOT_FOUND in result.output
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_a_tampered_bank_fails_the_cli(tmp_path: Path) -> None:
     bank_dir = _copy_bank(tmp_path)
     profile_path = bank_dir / "profiles" / f"{VOICE_PROFILE}.json"
@@ -947,6 +1039,8 @@ def test_a_tampered_bank_fails_the_cli(tmp_path: Path) -> None:
     assert PROFILE_FINGERPRINT_MISMATCH in result.output
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_two_runs_with_the_same_inputs_are_byte_identical(tmp_path: Path) -> None:
     runner = CliRunner()
     outputs = []
@@ -976,6 +1070,8 @@ def test_two_runs_with_the_same_inputs_are_byte_identical(tmp_path: Path) -> Non
     assert asm_first == asm_second
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_the_pokey_ir_json_round_trips_with_and_without_the_new_fields(tmp_path: Path, vaults_doc, vaults_result, bank) -> None:
     """The exported IR stays loadable, and a document from before this stage still loads.
 
@@ -1017,6 +1113,8 @@ def test_the_pokey_ir_json_round_trips_with_and_without_the_new_fields(tmp_path:
     )
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_real_mads_xex_build(tmp_path: Path) -> None:
     """The full XEX build with the real assembler, when this checkout has one."""
     mads = REPO_ROOT / "tools" / "mads" / "mads.exe"

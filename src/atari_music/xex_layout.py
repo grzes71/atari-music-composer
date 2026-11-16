@@ -207,7 +207,7 @@ def validate_xex_layout(
 
     This is the whole check the pipeline needs after assembly: structure first, then where
     each segment lands. The file's *size* is deliberately not examined — the only byte limit
-    in this project applies to the assembled player (``stage15.PLAYER_SIZE_LIMIT_BYTES``).
+    in this project applies to the assembled player (``player_budget.PLAYER_SIZE_LIMIT_BYTES``).
 
     Returns
     -------

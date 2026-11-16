@@ -56,6 +56,8 @@ from atari_music.ai.validation import (
     validate_composition_report,
 )
 
+pytestmark = pytest.mark.core
+
 
 @pytest.fixture
 def canonical_valid_doc() -> Dict[str, Any]:

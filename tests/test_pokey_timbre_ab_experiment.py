@@ -35,6 +35,8 @@ from atari_music import ir
 from atari_music import pokey_timbre_ab_experiment as e30
 from atari_music.sound_profiles.bank import load_sound_profile_bank
 
+pytestmark = pytest.mark.experimental
+
 DELIVERED = e30.DEFAULT_OUTPUT_DIR
 
 EXPERIMENT_MODULES = {

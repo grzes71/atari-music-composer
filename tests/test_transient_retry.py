@@ -12,6 +12,8 @@ from atari_music.ai.providers.openai import (
 )
 from atari_music.ai.schema import AIProviderAPIError, AICompositionDoc
 
+pytestmark = pytest.mark.core
+
 
 def test_is_transient_http_error_detection():
     """Verify various forms of 503 and 429 errors are recognized."""

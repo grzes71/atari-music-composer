@@ -29,6 +29,8 @@ from click.testing import CliRunner
 from atari_music import stage15, stage18, stage20, stage21, stage22
 from atari_music.cli import cli
 
+pytestmark = pytest.mark.experimental
+
 requires_control = pytest.mark.skipif(
     not stage22.DEFAULT_SONGS_DIR.is_dir(),
     reason="the .dsl compositions are not present on this machine",

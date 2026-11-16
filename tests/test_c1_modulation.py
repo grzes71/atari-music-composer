@@ -43,6 +43,8 @@ from atari_music.mads_exporter import (
     joined_channels,
 )
 
+pytestmark = [pytest.mark.core, pytest.mark.audio]
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLAYER_COPIES = (REPO_ROOT / "player.asm", REPO_ROOT / "src" / "atari_music" / "asm" / "player.asm")
 MADS = REPO_ROOT / "tools" / "mads" / "mads.exe"

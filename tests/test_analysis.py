@@ -17,6 +17,8 @@ from atari_music.ai.schema import (
     AIPatternDef,
 )
 
+pytestmark = pytest.mark.core
+
 
 @pytest.fixture
 def base_doc() -> AICompositionDoc:

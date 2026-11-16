@@ -34,6 +34,7 @@ def bundle() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # 1. Determinism and read-only behaviour
 # ---------------------------------------------------------------------------
+@pytest.mark.experimental
 @requires_corpus
 class TestDeterminism:
     def test_two_runs_are_equal(self, bundle: Dict[str, Any]) -> None:
@@ -78,6 +79,7 @@ class TestDeterminism:
 # ---------------------------------------------------------------------------
 # 2. Reference-song selection
 # ---------------------------------------------------------------------------
+@pytest.mark.experimental
 @requires_corpus
 class TestSelection:
     def test_every_candidate_is_scored_and_the_winner_leads(self, bundle: Dict[str, Any]) -> None:
@@ -128,6 +130,7 @@ class TestSelection:
 # ---------------------------------------------------------------------------
 # 3. Trace reading and provenance
 # ---------------------------------------------------------------------------
+@pytest.mark.experimental
 @requires_corpus
 class TestTrace:
     def test_registers_are_frame_aligned(self, bundle: Dict[str, Any]) -> None:
@@ -175,6 +178,7 @@ class TestTrace:
 # ---------------------------------------------------------------------------
 # 4. Events and the artifact distinction
 # ---------------------------------------------------------------------------
+@pytest.mark.experimental
 @requires_corpus
 class TestEvents:
     def test_only_supported_event_classes_are_emitted(self, bundle: Dict[str, Any]) -> None:
@@ -252,6 +256,7 @@ class TestEvents:
 # ---------------------------------------------------------------------------
 # 5. Vocabulary and context dependence
 # ---------------------------------------------------------------------------
+@pytest.mark.experimental
 @requires_corpus
 class TestVocabularyAndContext:
     def test_occurrence_counts_match_the_events(self, bundle: Dict[str, Any]) -> None:
@@ -314,6 +319,7 @@ class TestVocabularyAndContext:
 # 6. The player analysis
 # ---------------------------------------------------------------------------
 class TestPlayer:
+    @pytest.mark.experimental
     def test_capabilities_are_read_from_the_source(self) -> None:
         capabilities = stage15.player_capabilities()
         assert capabilities["source"].endswith("player.asm")
@@ -322,6 +328,7 @@ class TestPlayer:
         assert capabilities["data_format"]["event_bytes"] == 3
         assert capabilities["data_format"]["instrument_count"] == 4
 
+    @pytest.mark.experimental
     def test_every_unsupported_claim_is_marked_unsupported(self) -> None:
         capabilities = stage15.player_capabilities()
         by_name = {item["capability"]: item for item in capabilities["capabilities"]}
@@ -331,12 +338,14 @@ class TestPlayer:
         for name in ("4_independent_channels", "sixteen_bit_pair_1_2"):
             assert by_name[name]["supported"] is True
 
+    @pytest.mark.experimental
     def test_supported_claims_cite_source_lines(self) -> None:
         capabilities = stage15.player_capabilities()
         for item in capabilities["capabilities"]:
             if item["supported"]:
                 assert item["evidence"], item["capability"]
 
+    @pytest.mark.experimental
     def test_size_split_is_consistent(self) -> None:
         capabilities = stage15.player_capabilities()
         size = stage15.player_size_analysis(capabilities, live_measure=False)
@@ -351,6 +360,8 @@ class TestPlayer:
     # The project's one hard binary limit bounds the *player*, not the complete XEX file. It is
     # exclusive: 2047 passes, 2048 fails. These tests are the enforcement of that policy.
 
+    @pytest.mark.core
+    @pytest.mark.audio
     def test_the_player_size_limit_is_exclusive(self) -> None:
         """2047 passes and 2048 fails — the boundary is ``<``, never ``<=``."""
         limit = stage15.PLAYER_SIZE_LIMIT_BYTES
@@ -360,6 +371,8 @@ class TestPlayer:
         assert stage15.player_size_limit_ok(limit + 1) is False
         assert stage15.player_size_limit_ok(0) is True
 
+    @pytest.mark.core
+    @pytest.mark.audio
     def test_the_player_size_check_accepts_2047_and_refuses_2048(self) -> None:
         limit = stage15.PLAYER_SIZE_LIMIT_BYTES
         assert stage15.check_player_size(limit - 1) == limit - 1
@@ -377,6 +390,7 @@ class TestPlayer:
         assert str(limit + 1) in str(over.value)
         assert str(limit) in str(over.value)
 
+    @pytest.mark.experimental
     def test_the_limit_bounds_the_player_and_nothing_else(self) -> None:
         """The scope is stated, and it does not mention the XEX file or the song data."""
         scope = stage15.PLAYER_SIZE_LIMIT_SCOPE.lower()
@@ -386,6 +400,7 @@ class TestPlayer:
         # `current_envelope_2KB` is the same number, defined from the limit so it cannot drift.
         assert stage15.PLAYER_SIZE_BUDGETS["current_envelope_2KB"] == stage15.PLAYER_SIZE_LIMIT_BYTES
 
+    @pytest.mark.experimental
     def test_the_analysis_reports_the_limit_verdict(self) -> None:
         capabilities = stage15.player_capabilities()
         size = stage15.player_size_analysis(capabilities, live_measure=False)
@@ -395,6 +410,8 @@ class TestPlayer:
         assert size["within_limit"] is stage15.player_size_limit_ok(size["assembled_bytes"])
         assert size["within_limit"] is True
 
+    @pytest.mark.core
+    @pytest.mark.audio
     def test_the_assembled_player_is_within_the_limit(self) -> None:
         """The real player, measured by the assembler when one is present."""
         live = stage15.measure_player_size(stage15.DEFAULT_PLAYER_ASM, stage15.DEFAULT_MADS)
@@ -403,6 +420,7 @@ class TestPlayer:
         assert stage15.check_player_size(live) == live
         assert live == stage15.PLAYER_ASSEMBLED_BYTES_RECORDED
 
+    @pytest.mark.experimental
     def test_the_recorded_measurement_matches_a_live_one_when_mads_is_present(self) -> None:
         capabilities = stage15.player_capabilities()
         live = stage15.measure_player_size(
@@ -413,6 +431,8 @@ class TestPlayer:
         recorded = stage15.player_size_analysis(capabilities, live_measure=False)
         assert live == recorded["assembled_bytes"]
 
+    @pytest.mark.core
+    @pytest.mark.audio
     def test_the_measurement_leaves_no_files_behind(self) -> None:
         stage15.measure_player_size(stage15.DEFAULT_PLAYER_ASM, stage15.DEFAULT_MADS)
         directory = stage15.DEFAULT_PLAYER_ASM.parent
@@ -420,6 +440,7 @@ class TestPlayer:
         assert sorted(path.name for path in directory.iterdir()) == ["player.asm"]
         assert not list(Path(tempfile.gettempdir()).glob("stage15_measure_*"))
 
+    @pytest.mark.experimental
     def test_the_gap_analysis_covers_every_technique(self, bundle: Dict[str, Any]) -> None:
         gap = bundle["player_gap_analysis"]
         assert len(gap["rows"]) == bundle["performance_vocabulary"]["technique_count"]
@@ -435,11 +456,13 @@ class TestPlayer:
                 "IR_LIMITATION", "COMPOSITION_LIMITATION", "UNKNOWN",
             }
 
+    @pytest.mark.experimental
     def test_unrolling_is_orders_of_magnitude_more_expensive(self, bundle: Dict[str, Any]) -> None:
         cost = bundle["player_unrolling_cost"]
         assert cost["unrolled_total_bytes"] > cost["current_format_bytes_for_those_notes"]
         assert cost["unrolled_to_current_ratio"] > 5
 
+    @pytest.mark.experimental
     def test_the_proposed_player_is_justified_only_by_the_song(self, bundle: Dict[str, Any]) -> None:
         design = bundle["hypothetical_player_design"]
         for item in design["commands"]:
@@ -452,6 +475,7 @@ class TestPlayer:
 # ---------------------------------------------------------------------------
 # 7. The artefact, the verdicts and the report
 # ---------------------------------------------------------------------------
+@pytest.mark.experimental
 @requires_corpus
 class TestArtefactAndVerdicts:
     def test_the_style_is_not_a_sound_profile(self, bundle: Dict[str, Any]) -> None:
@@ -565,6 +589,7 @@ class TestArtefactAndVerdicts:
 # ---------------------------------------------------------------------------
 # 8. CLI
 # ---------------------------------------------------------------------------
+@pytest.mark.experimental
 class TestCli:
     def test_the_command_is_registered(self) -> None:
         result = CliRunner().invoke(cli, ["--help"])

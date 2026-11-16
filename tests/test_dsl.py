@@ -24,6 +24,8 @@ from atari_music.ai.client import (
 )
 from atari_music.mads_exporter import export_mads_asm
 
+pytestmark = pytest.mark.core
+
 
 # =============================================================================
 # A. SYNTAX & PARSING TESTS
@@ -421,6 +423,7 @@ def test_json_to_dsl_to_json_equivalence_4channels():
     assert asm_json == asm_dsl
 
 
+@pytest.mark.audio
 def test_json_to_dsl_to_json_equivalence_16bit_bass():
     """Verify that a 16-bit bass JSON composition survives round-trip with identical POKEY IR and ASM."""
     json_doc = {
@@ -487,6 +490,7 @@ def test_json_to_dsl_to_json_equivalence_16bit_bass():
     assert asm_json == asm_dsl
 
 
+@pytest.mark.audio
 def test_wav_rendering_identity_between_json_and_dsl(tmp_path):
     """Verify that WAV frames synthesized from JSON and DSL are identical."""
     from atari_music.ir import compile_ir_to_pokey_frames
@@ -597,6 +601,7 @@ def test_cli_ai_compose_format_dsl():
     assert "{" not in result.output.strip()[:10]  # Not JSON at start
 
 
+@pytest.mark.audio
 def test_build_xex_directly_from_dsl_file(tmp_path: Path):
     """Verify build_xex_from_composition compiles .dsl file directly to Atari XEX binary."""
     from conftest import require_local_artifact
@@ -798,6 +803,7 @@ def test_dsl_v1_1_export_omits_lengths_by_default():
     assert re_doc.patterns[0].length_steps == 16
 
 
+@pytest.mark.audio
 def test_dsl_v1_1_builtin_equivalence_ir_asm_wav(tmp_path: Path):
     """Verify built-in composition JSON -> AICompositionDoc -> DSL v1.1 (no length) -> AICompositionDoc produces identical POKEY IR, MADS ASM, and WAV."""
     sample_doc_dict = {
@@ -885,6 +891,7 @@ def test_dsl_v1_1_builtin_equivalence_ir_asm_wav(tmp_path: Path):
     assert wav_json == wav_dsl, "WAV audio bytes mismatch on builtin test"
 
 
+@pytest.mark.audio
 @pytest.mark.parametrize("example_filename", [
     "action_fast.json",
     "dungeon_dark.json",

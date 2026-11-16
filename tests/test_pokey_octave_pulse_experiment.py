@@ -29,6 +29,8 @@ from atari_music import cli as cli_module
 from atari_music import pokey_octave_pulse_experiment as e27
 from atari_music import pokey_synth, pokey_timbre_experiment as e26
 
+pytestmark = pytest.mark.experimental
+
 #: Every production file the experiment must leave alone, plus Experiment 26's module, which it
 #: depends on and therefore must not modify.
 UNTOUCHED_FILES: Tuple[str, ...] = (

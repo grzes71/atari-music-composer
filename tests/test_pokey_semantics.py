@@ -42,6 +42,8 @@ from atari_music.mads_exporter import export_mads_asm
 from atari_music.pokey_synth import render_pokey_samples
 from atari_music import pokey_synth
 
+pytestmark = [pytest.mark.core, pytest.mark.audio]
+
 # Hardware reference: PAL CPU clock and the 64 kHz divider (both from pokey.h:
 # POKEY_DIV_64 = 28). Written literally so the test is independent of constants.py.
 PAL_CPU_HZ = 1773447.0

@@ -33,11 +33,13 @@ from typing import List, Tuple
 import pytest
 from click.testing import CliRunner
 
-from atari_music import stage15, xex_layout
+from atari_music import player_budget, xex_layout
 from atari_music.ai.client import build_xex_from_composition, load_composition_json
 from atari_music.cli import cli
 from atari_music.xex_layout import XexLayoutError
 from conftest import require_local_artifact
+
+pytestmark = [pytest.mark.core, pytest.mark.audio]
 
 REPO = Path(__file__).resolve().parent.parent
 MADS = REPO / "tools" / "mads" / "mads.exe"
@@ -391,9 +393,9 @@ class TestPlayerSizeLimit:
         assert _build(tmp_path, 0x6000, 0x8000).exists()
 
     def test_a_player_of_exactly_2048_bytes_is_refused(self, tmp_path: Path, monkeypatch) -> None:
-        monkeypatch.setattr(stage15, "measure_player_size", lambda *a, **k: 2048)
+        monkeypatch.setattr(player_budget, "measure_player_size", lambda *a, **k: 2048)
         out = tmp_path / "over.xex"
-        with pytest.raises(stage15.PlayerSizeError) as excinfo:
+        with pytest.raises(player_budget.PlayerSizeError) as excinfo:
             _build(tmp_path, 0x6000, 0x8000, name="over")
         assert "2048" in str(excinfo.value)
         assert "exclusive" in str(excinfo.value)
@@ -402,13 +404,13 @@ class TestPlayerSizeLimit:
     def test_a_player_of_2047_bytes_passes_when_the_layout_is_valid(
         self, tmp_path: Path, monkeypatch
     ) -> None:
-        monkeypatch.setattr(stage15, "measure_player_size", lambda *a, **k: 2047)
+        monkeypatch.setattr(player_budget, "measure_player_size", lambda *a, **k: 2047)
         assert _build(tmp_path, 0x6000, 0x8000, name="just_fits").exists()
 
     def test_the_limit_itself_is_strict(self) -> None:
-        assert stage15.PLAYER_SIZE_LIMIT_BYTES == 2048
-        assert stage15.player_size_limit_ok(2047) is True
-        assert stage15.player_size_limit_ok(2048) is False
+        assert player_budget.PLAYER_SIZE_LIMIT_BYTES == 2048
+        assert player_budget.player_size_limit_ok(2047) is True
+        assert player_budget.player_size_limit_ok(2048) is False
 
 
 # ---------------------------------------------------------------------------

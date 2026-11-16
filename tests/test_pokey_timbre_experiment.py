@@ -30,6 +30,8 @@ from atari_music import cli as cli_module
 from atari_music import ir, pokey_hw, pokey_synth
 from atari_music import pokey_timbre_experiment as e26
 
+pytestmark = pytest.mark.experimental
+
 PRODUCTION_FILES: Tuple[str, ...] = (
     "src/atari_music/pokey_synth.py",
     "src/atari_music/pokey_hw.py",

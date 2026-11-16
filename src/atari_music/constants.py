@@ -75,3 +75,17 @@ AUDCTL_9BIT_POLY = 0x80       # Bit 7: 9-bit poly noise instead of 17-bit
 
 # Note Names
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+# Scale intervals from root (semitones)
+SCALES = {
+    "major": [0, 2, 4, 5, 7, 9, 11],
+    "minor": [0, 2, 3, 5, 7, 8, 10],
+    "dorian": [0, 2, 3, 5, 7, 9, 10],
+    "pentatonic": [0, 3, 5, 7, 10],  # minor pentatonic
+}
+
+# Canonical root note base MIDI pitches (octave 4)
+KEY_BASE_MIDI = {
+    "C": 60, "C#": 61, "D": 62, "D#": 63, "E": 64, "F": 65,
+    "F#": 66, "G": 67, "G#": 68, "A": 69, "A#": 70, "B": 71,
+}
