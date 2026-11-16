@@ -46,9 +46,12 @@ if TYPE_CHECKING:
     )
 
 # Public m-sequences preserved verbatim for existing tests & experiment parity.
-POLY4_SEQ = np.array(pokey_hw.generate_lfsr4_sequence(), dtype=np.float32)
+POLY4_SEQ = np.array(
+    pokey_hw.generate_lfsr4_sequence(legacy_polarity=True), dtype=np.float32
+)
 POLY5_SEQ = np.array(
-    pokey_hw.generate_lfsr5_sequence(active_gate_polarity=False), dtype=np.float32
+    pokey_hw.generate_lfsr5_sequence(active_gate_polarity=False, legacy_order=True),
+    dtype=np.float32,
 )
 
 
@@ -67,8 +70,10 @@ def _generate_lfsr9_sequence() -> np.ndarray:
 POLY17_SEQ = _generate_lfsr17_sequence()
 POLY9_SEQ = _generate_lfsr9_sequence()
 
-# Internal uint8 lookup tables for fast vectorized CPU-cycle event evaluation.
-_POLY4_BITS = (POLY4_SEQ > 0.5).astype(np.uint8)
+# Internal uint8 lookup tables matching real POKEY silicon / ASAP bit order & polarity.
+_POLY4_BITS = np.asarray(
+    pokey_hw.generate_lfsr4_sequence(legacy_polarity=False), dtype=np.uint8
+)
 _POLY5_HW_GATE = np.asarray(
     pokey_hw.generate_lfsr5_sequence(active_gate_polarity=True), dtype=np.uint8
 )
@@ -138,11 +143,13 @@ def _evaluate_channel_ticks(
         gate = _POLY5_HW_GATE[ticks_cycle % pokey_hw.POLY5_PERIOD]
         poly = _POLY4_BITS[ticks_cycle % pokey_hw.POLY4_PERIOD]
         bits = _gated_sample_and_hold(poly, gate, out_bit)
-    else:  # POLY5_GATED_POLY9_17
+    elif waveform == pokey_hw.Waveform.POLY5_GATED_POLY9_17:
         gate = _POLY5_HW_GATE[ticks_cycle % pokey_hw.POLY5_PERIOD]
         noise = _POLY9_BITS if use_9bit else _POLY17_BITS
         poly = noise[ticks_cycle % len(noise)]
         bits = _gated_sample_and_hold(poly, gate, out_bit)
+    else:  # VOLUME_ONLY
+        bits = np.ones(k, dtype=np.uint8)
 
     return bits, int(bits[-1])
 
@@ -389,7 +396,7 @@ def render_pokey_samples(
                 k = 0
 
             ch_ticks[ch] = ticks_f
-            if k > 0:
+            if k > 0 and audible[ch]:
                 ticks_cycle = np.rint(ticks_f).astype(np.int64)
                 waveform = pokey_hw.decode_audc(audc_regs[ch])
                 bits, last_bit = _evaluate_channel_ticks(

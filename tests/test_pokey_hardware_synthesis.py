@@ -60,6 +60,35 @@ def _ac_rms(samples: np.ndarray) -> float:
     return float(np.sqrt(np.mean(x * x)))
 
 
+def _max_time_xcorr(a: np.ndarray, b: np.ndarray, *, win_len: int = 8000, max_lag: int = 4000) -> float:
+    """Fast exact normalized sliding-window cross-correlation max over lags [0, max_lag]."""
+    win_len = min(win_len, len(a), len(b) - 1)
+    max_lag = min(max_lag, len(b) - win_len)
+    if win_len < 64 or max_lag < 0:
+        return 0.0
+    a0 = a[:win_len].astype(np.float64)
+    a0 = a0 - np.mean(a0)
+    a_norm = float(np.linalg.norm(a0))
+    if a_norm < 1e-9:
+        return 0.0
+    a0 /= a_norm
+
+    bw = b[: win_len + max_lag].astype(np.float64)
+    cs = np.concatenate(([0.0], np.cumsum(bw)))
+    cs2 = np.concatenate(([0.0], np.cumsum(bw * bw)))
+    w_sum = cs[win_len:] - cs[:-win_len]
+    w_sum2 = cs2[win_len:] - cs2[:-win_len]
+    w_var = np.maximum(w_sum2 - (w_sum * w_sum) / float(win_len), 1e-12)
+    w_norms = np.sqrt(w_var)
+
+    n_fft = 1 << (len(bw) + win_len - 1).bit_length()
+    conv = np.fft.irfft(
+        np.fft.rfft(bw, n_fft) * np.conj(np.fft.rfft(a0, n_fft)), n=n_fft
+    )[: max_lag + 1]
+    corrs = conv / w_norms
+    return float(np.max(corrs))
+
+
 def _sap_stub_asm(frames: np.ndarray) -> str:
     """Minimal relocatable SAP TYPE B 6502 player writing (N, 9) frames at 50 Hz."""
     lines = [
@@ -179,9 +208,81 @@ def _render_via_asap(frames: np.ndarray) -> np.ndarray:
             return np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16)
 
 
+def _render_via_asap_stimer(row: Tuple[int, int, int, int, int, int, int, int, int], dur_s: float = 0.6) -> np.ndarray:
+    """Render steady POKEY register state in ASAP with immediate STIMER synchronization at t=0."""
+    asm = f"""
+AUDF1_REG = $D200
+AUDCTL_REG = $D208
+STIMER_REG = $D209
+SKCTL_REG = $D20F
+    org $2000
+    jmp init
+    jmp player
+init:
+    lda #0
+    sta AUDCTL_REG
+    ldx #8
+@clr:
+    sta AUDF1_REG,x
+    dex
+    bpl @clr
+    lda #$03
+    sta SKCTL_REG
+    lda #${int(row[8]) & 0xFF:02x}
+    sta AUDCTL_REG
+    lda #${int(row[0]) & 0xFF:02x}
+    sta $D200
+    lda #${int(row[1]) & 0xFF:02x}
+    sta $D201
+    lda #${int(row[2]) & 0xFF:02x}
+    sta $D202
+    lda #${int(row[3]) & 0xFF:02x}
+    sta $D203
+    lda #${int(row[4]) & 0xFF:02x}
+    sta $D204
+    lda #${int(row[5]) & 0xFF:02x}
+    sta $D205
+    lda #${int(row[6]) & 0xFF:02x}
+    sta $D206
+    lda #${int(row[7]) & 0xFF:02x}
+    sta $D207
+    sta STIMER_REG
+    rts
+player:
+    rts
+"""
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td)
+        (p / "s.asm").write_text(asm, encoding="ascii")
+        subprocess.run(
+            [str(MADS_EXE), str(p / "s.asm"), f"-o:{p / 's.xex'}"],
+            check=True,
+            capture_output=True,
+        )
+        hdr = (
+            f"SAP\r\nTYPE B\r\nINIT 2000\r\nPLAYER 2003\r\n"
+            f"TIME 00:{int(dur_s):02d}.{int((dur_s % 1.0) * 100):02d}\r\n\r\n"
+        ).encode("ascii")
+        (p / "s.sap").write_bytes(hdr + (p / "s.xex").read_bytes())
+        subprocess.run(
+            [str(ASAPCONV_EXE), "-o", str(p / "s.wav"), str(p / "s.sap")],
+            check=True,
+            capture_output=True,
+        )
+        with wave.open(str(p / "s.wav"), "rb") as wf:
+            return np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16)
+
+
 # ===========================================================================
 # 1. Hardware POLY4 / POLY5 LFSR correctness & stalls
 # ===========================================================================
+# Independent hardware truth bitstreams from Atari POKEY XNOR shift registers:
+#   POLY4 (15 bits): a[0..3]=0,0,0,0; a[n] = ~(a[n-4] ^ a[n-3])  (7 ones, 8 zeros)
+#   POLY5 (31 bits): a[0..4]=0,0,0,0,0; a[n] = ~(a[n-5] ^ a[n-3]) (15 active gate ones, 16 zeros)
+REF_HW_POLY4 = (0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1)
+REF_HW_POLY5_ACTIVE_GATE = (
+    0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1
+)
 
 
 def test_lfsr4_and_lfsr5_periods_state_order_and_determinism() -> None:
@@ -189,16 +290,96 @@ def test_lfsr4_and_lfsr5_periods_state_order_and_determinism() -> None:
     p5 = pokey_hw.generate_lfsr5_sequence(active_gate_polarity=False)
     p5_hw = pokey_hw.generate_lfsr5_sequence(active_gate_polarity=True)
 
+    # Exact bit-for-bit order, period, and polarity against independent POKEY reference
     assert len(p4) == pokey_hw.POLY4_PERIOD == 15
-    assert len(p5) == pokey_hw.POLY5_PERIOD == 31
-    assert len(p5_hw) == 31
-    assert sum(p4) == 8
-    assert sum(p5) == 16
+    assert p4 == REF_HW_POLY4
+    assert sum(p4) == 7
+    assert p4 != REF_HW_POLY4[::-1]
+    assert tuple(1 - b for b in p4) != REF_HW_POLY4
+
+    assert len(p5_hw) == pokey_hw.POLY5_PERIOD == 31
+    assert p5_hw == REF_HW_POLY5_ACTIVE_GATE
     assert sum(p5_hw) == 15  # XNOR polarity -> odd active count -> 62-tick toggle period
+    assert p5_hw != REF_HW_POLY5_ACTIVE_GATE[::-1]
+
+    assert len(p5) == 31
+    assert p5 == tuple(1 - b for b in REF_HW_POLY5_ACTIVE_GATE)
+    assert sum(p5) == 16
+
+    # Renderer lookup tables match silicon sequences while preserving legacy POLY4_SEQ polarity
+    assert tuple(pokey_synth._POLY4_BITS.tolist()) == REF_HW_POLY4
+    assert tuple(pokey_synth._POLY5_HW_GATE.tolist()) == REF_HW_POLY5_ACTIVE_GATE
+    assert len(pokey_synth.POLY4_SEQ) == 15 and int(np.sum(pokey_synth.POLY4_SEQ)) == 8
 
     # Repeatability across repeated calls
     assert p4 == pokey_hw.generate_lfsr4_sequence()
     assert p5_hw == pokey_hw.generate_lfsr5_sequence(active_gate_polarity=True)
+
+
+@pytest.mark.skipif(
+    not (MADS_EXE.is_file() and ASAPCONV_EXE.is_file()),
+    reason="MADS or ASAP tools not installed in tools/",
+)
+def test_lfsr4_and_lfsr5_exact_stimer_order_and_time_direction_vs_asap() -> None:
+    """Verify exact bit sequence order after STIMER and non-reversed time-domain waves vs ASAP."""
+    cps_per_sample = PAL_CLOCK_HZ / float(SR)
+
+    # 1. POLY4 step-by-step after STIMER: AUDF=246 -> period=6916 cycles (6916 % 15 == 1)
+    s_p4 = _render_via_asap_stimer((246, 0xCF, 0, 0, 0, 0, 0, 0, 0x00), dur_s=0.35)
+    asap_p4_steps = tuple(
+        1
+        if float(
+            np.mean(
+                s_p4[
+                    int(((st + 0.25) * 6916) / cps_per_sample) : int(
+                        ((st + 0.75) * 6916) / cps_per_sample
+                    )
+                ]
+            )
+        )
+        > 0.0
+        else 0
+        for st in range(1, 16)
+    )
+    expected_from_tick1 = REF_HW_POLY4[1:] + REF_HW_POLY4[:1]
+    assert asap_p4_steps == expected_from_tick1
+    assert asap_p4_steps == tuple(int(pokey_synth._POLY4_BITS[(st * 6916) % 15]) for st in range(1, 16))
+
+    # 2. POLY5 gate step-by-step after STIMER: AUDF=226 -> period=6356 cycles (6356 % 31 == 1)
+    s_p5 = _render_via_asap_stimer((226, 0x2F, 0, 0, 0, 0, 0, 0, 0x00), dur_s=0.55)
+    signs_p5 = [
+        1
+        if float(
+            np.mean(
+                s_p5[
+                    int(((st + 0.25) * 6356) / cps_per_sample) : int(
+                        ((st + 0.75) * 6356) / cps_per_sample
+                    )
+                ]
+            )
+        )
+        > 0.0
+        else 0
+        for st in range(33)
+    ]
+    asap_p5_gates = tuple(signs_p5[i] ^ signs_p5[i + 1] for i in range(0, 31))
+    expected_p5_from_tick1 = REF_HW_POLY5_ACTIVE_GATE[1:] + REF_HW_POLY5_ACTIVE_GATE[:1]
+    assert asap_p5_gates == expected_p5_from_tick1
+    assert asap_p5_gates == tuple(
+        int(pokey_synth._POLY5_HW_GATE[(st * 6356) % 31]) for st in range(1, 32)
+    )
+
+    # 3. Direct time-domain forward correlation beats time-reversed correlation on $C0 and $20
+    for row in (
+        (76, DISTORTION_4BIT_POLY | 0x0F, 0, 0, 0, 0, 0, 0, 0x00),
+        (24, DISTORTION_5BIT_POLY_1 | 0x0F, 0, 0, 0, 0, 0, 0, 0x00),
+    ):
+        a = _render_via_asap_stimer(row, dur_s=0.6)[4410:]
+        w = pokey_synth.render_pokey_samples(np.tile(np.array(row, dtype=np.uint8), (30, 1)), SR, FR)[4410:]
+        fwd = _max_time_xcorr(a, w, win_len=8000, max_lag=4000)
+        rev = _max_time_xcorr(a, w[::-1], win_len=8000, max_lag=4000)
+        assert fwd >= 0.97, f"low forward xcorr {fwd:.3f} for {row}"
+        assert fwd > rev + 0.30, f"waveform time direction ambiguous: fwd={fwd:.3f} rev={rev:.3f}"
 
 
 def test_poly4_and_poly5_clock_stalls_and_coprime_recovery() -> None:
@@ -427,3 +608,130 @@ def test_asap_noise_statistical_parity_9bit_vs_17bit() -> None:
 
         assert _zcr(wav_hi) > 3.0 * _zcr(wav_lo)
         assert _zcr(asap_hi) > 3.0 * _zcr(asap_lo)
+
+
+@pytest.mark.skipif(
+    not (MADS_EXE.is_file() and ASAPCONV_EXE.is_file()),
+    reason="MADS or ASAP tools not installed in tools/",
+)
+@pytest.mark.parametrize("audf", [2, 4, 24, 76])
+def test_poly5_gating_poly4_audc_40_time_domain_parity_vs_asap(audf: int) -> None:
+    """Verify $40 (POLY5 gating POLY4) matches ASAP event order in the time domain."""
+    row = (audf, DISTORTION_5_AND_4BIT | 0x0F, 0, 0, 0, 0, 0, 0, 0x00)
+    a = _render_via_asap_stimer(row, dur_s=0.9)[4410:]
+    w = pokey_synth.render_pokey_samples(
+        np.tile(np.array(row, dtype=np.uint8), (50, 1)), SR, FR
+    )[4410:]
+
+    fwd = _max_time_xcorr(a, w, win_len=8000, max_lag=28000)
+    rev = _max_time_xcorr(a, w[::-1], win_len=8000, max_lag=28000)
+    assert fwd >= 0.96, f"$40 AUDF={audf}: time-domain xcorr {fwd:.3f} < 0.96"
+    assert fwd > rev + 0.30, f"$40 AUDF={audf}: time-reversal not separated (fwd={fwd:.3f}, rev={rev:.3f})"
+
+
+@pytest.mark.skipif(
+    not (MADS_EXE.is_file() and ASAPCONV_EXE.is_file()),
+    reason="MADS or ASAP tools not installed in tools/",
+)
+def test_poly4_stalls_mod5_vs_mod15_and_stimer_phase_dependence() -> None:
+    """Verify mod-15 total stalls vs phase-dependent mod-5 stalls against ASAP."""
+    # (N+1) % 15 == 0 -> always silent in both ASAP (with/without STIMER) and pokey_synth
+    for audf_15 in (14, 29, 0xFE):
+        row = (audf_15, DISTORTION_4BIT_POLY | 0x0F, 0, 0, 0, 0, 0, 0, 0x00)
+        assert _ac_rms(_render_steady(row)[882 * 4 :]) == 0.0
+        assert _ac_rms(_render_via_asap_stimer(row, dur_s=0.4)[882 * 4 :]) < 5.0
+        assert _ac_rms(_render_via_asap(np.tile(np.array(row, dtype=np.uint8), (20, 1)))[882 * 4 :]) < 5.0
+
+    # (N+1) % 5 == 0 -> oscillating phase {0,5,10} (STIMER) vs stalled constant coset {4,9,14}
+    assert len({REF_HW_POLY4[(4 + 5 * k) % 15] for k in range(3)}) == 1  # phase +4 stalls at 1
+    assert len({REF_HW_POLY4[(0 + 5 * k) % 15] for k in range(3)}) == 2  # phase 0 oscillates
+    for audf_5 in (4, 9, 19, 24):
+        row = (audf_5, DISTORTION_4BIT_POLY | 0x0F, 0, 0, 0, 0, 0, 0, 0x00)
+        w = pokey_synth.render_pokey_samples(
+            np.tile(np.array(row, dtype=np.uint8), (30, 1)), SR, FR
+        )[4410:]
+        a_stimer = _render_via_asap_stimer(row, dur_s=0.6)[4410:]
+        assert _ac_rms(w) > 5000.0
+        assert _ac_rms(a_stimer) > 5000.0
+        assert _max_time_xcorr(a_stimer, w, win_len=8000, max_lag=4000) >= 0.96
+
+        # In non-STIMER VBI polling loop, these div-5 dividers hit the aligned silent coset {4,9,14}
+        a_vbi = _render_via_asap(np.tile(np.array(row, dtype=np.uint8), (20, 1)))[882 * 4 :]
+        assert _ac_rms(a_vbi) < 50.0
+
+
+@pytest.mark.skipif(
+    not (MADS_EXE.is_file() and ASAPCONV_EXE.is_file()),
+    reason="MADS or ASAP tools not installed in tools/",
+)
+@pytest.mark.parametrize(
+    "name,row,expected_hz",
+    [
+        ("JOIN34_08_64k", (0, 0, 0, 0, 0x2C, 0x00, 0x01, 0xAF, AUDCTL_JOIN_3_4_16BIT), 105.6),
+        ("JOIN34_09_15k", (0, 0, 0, 0, 0x40, 0x00, 0x00, 0xAF, AUDCTL_JOIN_3_4_16BIT | AUDCTL_15KHZ), 119.4),
+        ("JOIN34_28_179m", (0, 0, 0, 0, 0xEB, 0x00, 0x07, 0xAF, AUDCTL_JOIN_3_4_16BIT | AUDCTL_CH3_179MHZ), 436.1),
+    ],
+)
+def test_16bit_ch3_ch4_asap_time_and_spectral_parity_all_clocks(
+    name: str, row: Tuple[int, int, int, int, int, int, int, int, int], expected_hz: float
+) -> None:
+    """Verify CH3+CH4 16-bit joining in 64 kHz ($08), 15 kHz ($09), and 1.79 MHz ($28) vs ASAP."""
+    a = _render_via_asap_stimer(row, dur_s=0.6)[4410:]
+    w = pokey_synth.render_pokey_samples(
+        np.tile(np.array(row, dtype=np.uint8), (30, 1)), SR, FR
+    )[4410:]
+    assert _dominant_hz(a) == pytest.approx(expected_hz, abs=2.5), name
+    assert _dominant_hz(w) == pytest.approx(_dominant_hz(a), abs=2.0), name
+    assert _max_time_xcorr(a, w, win_len=8000, max_lag=2000) >= 0.98, name
+
+
+@pytest.mark.skipif(
+    not (MADS_EXE.is_file() and ASAPCONV_EXE.is_file()),
+    reason="MADS or ASAP tools not installed in tools/",
+)
+def test_dynamic_8bit_and_16bit_ch3_ch4_switching_vs_asap() -> None:
+    """Switch CH3+CH4 between 16-bit $28, independent 8-bit $00, and 16-bit $08 cleanly."""
+    frames = np.zeros((45, 9), dtype=np.uint8)
+    # Segment 0 (0..14): 16-bit CH3+CH4 @ 1.79 MHz ($28) -> ~436.1 Hz
+    frames[0:15] = (0, 0, 0, 0, 0xEB, 0x00, 0x07, 0xAF, AUDCTL_JOIN_3_4_16BIT | AUDCTL_CH3_179MHZ)
+    # Segment 1 (15..29): independent 8-bit CH3 (~220 Hz) and CH4 (~586 Hz) @ 64 kHz ($00)
+    frames[15:30] = (0, 0, 0, 0, 143, 0xAC, 53, 0xAA, 0x00)
+    # Segment 2 (30..44): 16-bit CH3+CH4 @ 64 kHz ($08) -> ~105.6 Hz
+    frames[30:45] = (0, 0, 0, 0, 0x2C, 0x00, 0x01, 0xAF, AUDCTL_JOIN_3_4_16BIT)
+
+    s_asap = _render_via_asap(frames)
+    s_wav = pokey_synth.render_pokey_samples(frames, SR, FR)
+
+    assert _dominant_hz(s_wav[882 * 2 : 882 * 13]) == pytest.approx(
+        _dominant_hz(s_asap[882 * 2 : 882 * 13]), abs=3.0
+    )
+    assert _dominant_hz(s_wav[882 * 17 : 882 * 28]) == pytest.approx(
+        _dominant_hz(s_asap[882 * 17 : 882 * 28]), abs=4.0
+    )
+    assert _dominant_hz(s_wav[882 * 32 : 882 * 43]) == pytest.approx(
+        _dominant_hz(s_asap[882 * 32 : 882 * 43]), abs=3.0
+    )
+
+
+@pytest.mark.skipif(
+    not (MADS_EXE.is_file() and ASAPCONV_EXE.is_file()),
+    reason="MADS or ASAP tools not installed in tools/",
+)
+def test_hpf_control_channel_volume_only_zero_matches_pure_zero_and_asap() -> None:
+    """AUDC3=$10 (VOLUME_ONLY, vol=0) clocks HPF identically to $A0 without state pollution."""
+    row_a0 = (143, 0xAF, 0, 0, 144, 0xA0, 0, 0, AUDCTL_HIPASS_CH1_CH3)
+    row_10 = (143, 0xAF, 0, 0, 144, 0x10, 0, 0, AUDCTL_HIPASS_CH1_CH3)
+
+    a_a0 = _render_via_asap_stimer(row_a0, dur_s=0.4)[4410:]
+    a_10 = _render_via_asap_stimer(row_10, dur_s=0.4)[4410:]
+    assert np.array_equal(a_a0, a_10)
+
+    # Multi-frame sequence starting with muted CH3 ($10 vs $A0) then unmuting CH3 ($AF)
+    fr_a0 = np.tile(np.array(row_a0, dtype=np.uint8), (24, 1))
+    fr_10 = np.tile(np.array(row_10, dtype=np.uint8), (24, 1))
+    fr_a0[12:, 5] = 0xAF
+    fr_10[12:, 5] = 0xAF
+    w_a0 = pokey_synth.render_pokey_samples(fr_a0, SR, FR)
+    w_10 = pokey_synth.render_pokey_samples(fr_10, SR, FR)
+    assert np.array_equal(w_a0, w_10)
+    assert _max_time_xcorr(a_10, w_10[4410 : 882 * 11], win_len=4000, max_lag=1500) >= 0.98

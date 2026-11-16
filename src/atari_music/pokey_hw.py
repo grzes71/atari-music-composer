@@ -230,19 +230,46 @@ def _lfsr_sequence(bits: int, tap_a: int, tap_b: int, *, invert: bool = False) -
     return tuple(seq)
 
 
-def generate_lfsr4_sequence() -> Tuple[int, ...]:
-    """Generate the 15-state POKEY 4-bit polynomial sequence (x^4 + x^3 + 1)."""
-    return _lfsr_sequence(4, 3, 0)
+def _hw_lfsr_xnor_sequence(bits: int, tap_bit: int, *, invert: bool = False) -> Tuple[int, ...]:
+    """Simulate real POKEY right-shift XNOR polynomial counter from post-reset 0 state."""
+    length = (1 << bits) - 1
+    msb_shift = bits - 1
+    state = 0
+    seq: List[int] = []
+    for _ in range(length):
+        bit = state & 1
+        seq.append(1 - bit if invert else bit)
+        new_bit = (~(state ^ (state >> tap_bit))) & 1
+        state = (state >> 1) | (new_bit << msb_shift)
+    return tuple(seq)
 
 
-def generate_lfsr5_sequence(*, active_gate_polarity: bool = False) -> Tuple[int, ...]:
-    """Generate the 31-state POKEY 5-bit polynomial sequence (x^5 + x^3 + 1).
+def generate_lfsr4_sequence(*, legacy_polarity: bool = False) -> Tuple[int, ...]:
+    """Generate the 15-state POKEY 4-bit polynomial sequence matching silicon/ASAP order.
 
-    When ``active_gate_polarity=True``, returns POKEY's XNOR-inverted active gate
-    polarity (15 gating pulses per 31 states), producing the hardware 62-tick
-    subharmonic toggle doubling observed on ASAP / real hardware for ``$20``/``$60``.
+    On POKEY hardware, the 4-bit counter shifts right with XNOR feedback ``~(b0 ^ b1)``
+    starting from zeroed reset state (7 ones, 8 zeros). Pass ``legacy_polarity=True``
+    only for legacy m-sequence callers expecting inverted polarity with 8 ones.
     """
-    return _lfsr_sequence(5, 4, 1, invert=active_gate_polarity)
+    if legacy_polarity:
+        return _lfsr_sequence(4, 3, 0)
+    return _hw_lfsr_xnor_sequence(4, 1, invert=False)
+
+
+def generate_lfsr5_sequence(
+    *, active_gate_polarity: bool = True, legacy_order: bool = False
+) -> Tuple[int, ...]:
+    """Generate the 31-state POKEY 5-bit polynomial sequence matching silicon/ASAP order.
+
+    POKEY's 5-bit counter shifts right with XNOR feedback ``~(b0 ^ b2)``. With
+    ``active_gate_polarity=True`` (default), returns the active gating stream (15 gating
+    pulses per 31 clocks, causing the 62-tick toggle period on ``$20``/``$60``);
+    with ``active_gate_polarity=False``, returns the complement (16 ones).
+    Pass ``legacy_order=True`` only to preserve legacy ``POLY5_SEQ`` compatibility.
+    """
+    if legacy_order:
+        return _lfsr_sequence(5, 4, 1, invert=active_gate_polarity)
+    return _hw_lfsr_xnor_sequence(5, 2, invert=not active_gate_polarity)
 
 
 def generate_lfsr9_sequence() -> Tuple[int, ...]:
