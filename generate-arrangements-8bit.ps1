@@ -10,7 +10,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$MadsPath,
 
-    [string]$PythonPath,
+    [string]$AtariMusicPath,
 
     [switch]$Force
 )
@@ -21,19 +21,19 @@ $ErrorActionPreference = "Stop"
 # Generates one WAV and one XEX per instrument combination.
 # Intended only for compositions that do NOT use 16-bit bass.
 
-function Resolve-AtariMusicPython {
+function Resolve-AtariMusicExe {
     param([string]$RequestedPath)
 
     if ($RequestedPath) {
         if (-not (Test-Path -LiteralPath $RequestedPath -PathType Leaf)) {
-            throw "Specified Python executable not found: $RequestedPath"
+            throw "Specified atari-music executable not found: $RequestedPath"
         }
         return (Resolve-Path -LiteralPath $RequestedPath).Path
     }
 
     $venvCandidates = @(
-        (Join-Path $PSScriptRoot ".venv\Scripts\python.exe"),
-        (Join-Path $PSScriptRoot ".venv/bin/python")
+        (Join-Path $PSScriptRoot ".venv\Scripts\atari-music.exe"),
+        (Join-Path $PSScriptRoot ".venv/bin/atari-music")
     )
     foreach ($candidate in $venvCandidates) {
         if (Test-Path -LiteralPath $candidate -PathType Leaf) {
@@ -41,24 +41,26 @@ function Resolve-AtariMusicPython {
         }
     }
 
-    $cmd = Get-Command python -ErrorAction SilentlyContinue
-    if ($cmd) {
-        return $cmd.Source
+    foreach ($cmdName in @("atari-music.exe", "atari-music")) {
+        $cmd = Get-Command $cmdName -ErrorAction SilentlyContinue
+        if ($cmd) {
+            return $cmd.Source
+        }
     }
 
-    throw "Python executable not found in .venv or PATH."
+    throw "atari-music executable not found in .venv or PATH. Activate .venv, ensure atari-music.exe is in PATH, or pass -AtariMusicPath."
 }
 
 function Invoke-AtariMusicCli {
     param(
-        [string]$PythonExe,
+        [string]$Executable,
         [string[]]$CliArgs
     )
 
     $prevPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        & $PythonExe @CliArgs 2>&1 | ForEach-Object {
+        & $Executable @CliArgs 2>&1 | ForEach-Object {
             if ($_ -is [System.Management.Automation.ErrorRecord]) {
                 [Console]::Error.WriteLine($_.ToString())
             }
@@ -121,6 +123,11 @@ $variants = @(
         Lead        = "lead_c1_octave_pulse"
         Perc        = "perc_kick_tight"
         Description = "Punchy bass, soft square harmony, pulsing lead, kick"
+    },
+    @{
+        Name          = "vanilla"
+        PlayerVersion = "v1"
+        Description   = "Original composition instruments compiled with legacy v1 player"
     }
 )
 
@@ -128,11 +135,11 @@ Write-Host ""
 Write-Host "Atari Music Composer - Arrangement Batch" -ForegroundColor Cyan
 Write-Host "----------------------------------------"
 
-$pythonExe = Resolve-AtariMusicPython -RequestedPath $PythonPath
+$atariMusicExe = Resolve-AtariMusicExe -RequestedPath $AtariMusicPath
 
-$importCheckExit = Invoke-AtariMusicCli -PythonExe $pythonExe -CliArgs @("-c", "import atari_music")
-if ($importCheckExit -ne 0) {
-    throw "Selected Python ($pythonExe) cannot import 'atari_music'. Activate .venv or pass -PythonPath."
+$versionCheckExit = Invoke-AtariMusicCli -Executable $atariMusicExe -CliArgs @("--version")
+if ($versionCheckExit -ne 0) {
+    throw "Selected CLI ($atariMusicExe) failed '--version' check (exit code: $versionCheckExit)."
 }
 
 if (-not (Test-Path -LiteralPath $InputFile -PathType Leaf)) {
@@ -158,8 +165,7 @@ try {
     if ($isDslInput) {
         $tempConvertedJson = Join-Path ([System.IO.Path]::GetTempPath()) ("atari_music_dsl_" + [guid]::NewGuid().ToString("N") + ".json")
         Write-Host "Converting Music DSL to temporary JSON..." -ForegroundColor Cyan
-        $dslExitCode = Invoke-AtariMusicCli -PythonExe $pythonExe -CliArgs @(
-            "-m", "atari_music",
+        $dslExitCode = Invoke-AtariMusicCli -Executable $atariMusicExe -CliArgs @(
             "import-dsl",
             $inputFullPath,
             "--output-json", $tempConvertedJson
@@ -203,7 +209,7 @@ composition has actually been prepared for independent 8-bit playback.
 
     New-Item -ItemType Directory -Force -Path $outputFullPath | Out-Null
 
-    Write-Host "Python:   $pythonExe"
+    Write-Host "CLI:      $atariMusicExe"
     Write-Host "Input:    $inputFullPath$(if ($isDslInput) { ' (Music DSL -> temp JSON)' })"
     Write-Host "Output:   $outputFullPath"
     Write-Host "MADS:     $madsFullPath"
@@ -228,27 +234,46 @@ composition has actually been prepared for independent 8-bit playback.
             continue
         }
 
+        $playerVersion = if ($variant.PlayerVersion) { $variant.PlayerVersion } else { "v2" }
+        $hasChannelOverrides = [bool]($variant.Bass -or $variant.Harmony -or $variant.Lead -or $variant.Perc)
         $cliArgs = @(
-            "-m", "atari_music",
             "arrange",
-            $arrangeInputPath,
-            "--channel-instrument", "1=$($variant.Bass)",
-            "--channel-instrument", "2=$($variant.Harmony)",
-            "--channel-instrument", "3=$($variant.Lead)",
-            "--channel-instrument", "4=$($variant.Perc)",
-            "--program-change-policy", "replace",
-            "--player-version", "v2",
+            $arrangeInputPath
+        )
+        if ($variant.Bass) {
+            $cliArgs += @("--channel-instrument", "1=$($variant.Bass)")
+        }
+        if ($variant.Harmony) {
+            $cliArgs += @("--channel-instrument", "2=$($variant.Harmony)")
+        }
+        if ($variant.Lead) {
+            $cliArgs += @("--channel-instrument", "3=$($variant.Lead)")
+        }
+        if ($variant.Perc) {
+            $cliArgs += @("--channel-instrument", "4=$($variant.Perc)")
+        }
+        if ($hasChannelOverrides) {
+            $cliArgs += @("--program-change-policy", "replace")
+        }
+        $cliArgs += @(
+            "--player-version", $playerVersion,
             "--output-wav", $wavPath,
             "-o", $xexPath,
             "--mads", $madsFullPath
         )
 
-        Write-Host "CH1 Bass:    $($variant.Bass)"
-        Write-Host "CH2 Harmony: $($variant.Harmony)"
-        Write-Host "CH3 Lead:    $($variant.Lead)"
-        Write-Host "CH4 Perc:    $($variant.Perc)"
+        Write-Host "Player:      $playerVersion"
+        if ($hasChannelOverrides) {
+            Write-Host "CH1 Bass:    $($variant.Bass)"
+            Write-Host "CH2 Harmony: $($variant.Harmony)"
+            Write-Host "CH3 Lead:    $($variant.Lead)"
+            Write-Host "CH4 Perc:    $($variant.Perc)"
+        }
+        else {
+            Write-Host "Instruments: original (no catalog overrides)"
+        }
 
-        $exitCode = Invoke-AtariMusicCli -PythonExe $pythonExe -CliArgs $cliArgs
+        $exitCode = Invoke-AtariMusicCli -Executable $atariMusicExe -CliArgs $cliArgs
 
         if ($exitCode -ne 0) {
             Write-Host "FAILED (exit code: $exitCode)" -ForegroundColor Red
