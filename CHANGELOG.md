@@ -1,6 +1,95 @@
 # CHANGELOG
 
 
+## v0.9.0 (2026-11-16)
+
+### Bug Fixes
+
+- Align POLY4 and POLY5 timing with POKEY hardware
+  ([`920e406`](https://github.com/grzes71/atari-music-composer/commit/920e406135a756b2e2147a32f77c26cc93614046))
+
+- Enforce instrument divider and AUDCTL consistency
+  ([`4b7eaa6`](https://github.com/grzes71/atari-music-composer/commit/4b7eaa6dc74f21e659e26ad65ee442e4264baa7b))
+
+- **audio**: Resolve POKEY ADSR envelope timing and channel muting
+  ([`0abc06e`](https://github.com/grzes71/atari-music-composer/commit/0abc06efb6cb759b1ef116f6cdaf8dcd54feafd4))
+
+- **ci,tests**: Unignore core fixtures and align release workflow with core suite
+  ([`6f277f4`](https://github.com/grzes71/atari-music-composer/commit/6f277f4b198e383df831ea423f0d4696892c1e84))
+
+- **ir,exporter**: Preserve Composer v4 v1 export and harden v2 stream bounds
+  ([`cbb9419`](https://github.com/grzes71/atari-music-composer/commit/cbb94194b660f76b95f7c86b6e5fb55326467b23))
+
+### Documentation
+
+- **readme**: Document Stages A-E instrument system, arrangement workflow, and current CLI
+  ([`742e014`](https://github.com/grzes71/atari-music-composer/commit/742e01467a5c474a05a7496f75b894f1f03fc369))
+
+- **stage-c**: Add SONG_FORMAT_V2 specification and update HISTORY.md
+  ([`c73e381`](https://github.com/grzes71/atari-music-composer/commit/c73e3818ffed8106d9111499adece9f191dee9d9))
+
+### Features
+
+- Implement instrument catalog and POKEY runtime foundation
+  ([`2bf8c1f`](https://github.com/grzes71/atari-music-composer/commit/2bf8c1fa47a036974200eb96b4ffd92c64b0ad69))
+
+- Improve POKEY hardware-accurate WAV synthesis
+  ([`0cd82e0`](https://github.com/grzes71/atari-music-composer/commit/0cd82e038063e3b8ecf43b51cff776371b254796))
+
+- **ai**: Integrate SSOT instrument catalog and runtime validation into AI generator
+  ([`2d23bdb`](https://github.com/grzes71/atari-music-composer/commit/2d23bdb87b810703ba8f91fcae603e7871c4b0de))
+
+- **cli,tests**: Add arrange CLI command and Stage E arrangement pipeline tests
+  ([`821bf09`](https://github.com/grzes71/atari-music-composer/commit/821bf096462665f967dc5a09de1157fcd6a28f17))
+
+- **cli,tests**: Add catalog CLI commands, v2 options, and Stage D tests
+  ([`4f71fe9`](https://github.com/grzes71/atari-music-composer/commit/4f71fe9e919c1f66e2322a42a07074d963bc8a52))
+
+- **composer,api**: Add opt-in catalog instruments and PROGRAM_CHANGE to Composer v4
+  ([`6b3aa84`](https://github.com/grzes71/atari-music-composer/commit/6b3aa84b8c461b7f298b3e01651cd9871c8d2b36))
+
+- **exporter**: Add SONG_FORMAT_VERSION=2 SoA export and stream validation
+  ([`2098bd0`](https://github.com/grzes71/atari-music-composer/commit/2098bd07c5210599c9266cd9ebc884fb6af6d3c4))
+
+- **instruments**: Add CORE channel instrument planner and v1/v2 format resolver
+  ([`f8c65d9`](https://github.com/grzes71/atari-music-composer/commit/f8c65d9694b5534b5928c88948c5ccee7deac94e))
+
+- **instruments,api,ai**: Add decoupled arrange_song, composition fingerprint, and shared XEX
+  builder
+  ([`2ee6254`](https://github.com/grzes71/atari-music-composer/commit/2ee625433bd2e7cc606f1fc48b1487aa1b9c3cdd))
+
+- **ir**: Add v2 multi-instrument, macro, and pitch envelope IR models
+  ([`18b1075`](https://github.com/grzes71/atari-music-composer/commit/18b1075bcba3c7e2f6e97d5ac35f55f37bdd238e))
+
+- **player**: Add SONG_FORMAT_VERSION=2 dispatch, SoA loader, and PROGRAM_CHANGE
+  ([`1015e95`](https://github.com/grzes71/atari-music-composer/commit/1015e95f99791dee1d2b8e40b185f8ce34a70d03))
+
+- **player**: Add Transient Macro Engine and Pitch Envelope to player.asm
+  ([`6751ffd`](https://github.com/grzes71/atari-music-composer/commit/6751ffd10e4a0c3efbc233a3e7f1acbfcf89cc17))
+
+- **scripts**: Add 8-bit and 16-bit PowerShell batch arrangement scripts
+  ([`2ba9c06`](https://github.com/grzes71/atari-music-composer/commit/2ba9c06f928b934f0d884845fce76f2c38a41136))
+
+- **scripts**: Add automatic Music DSL to JSON conversion in batch scripts
+  ([`6f633ff`](https://github.com/grzes71/atari-music-composer/commit/6f633ff3996a933437b87b794e63e16de6e9e119))
+
+- **scripts,tests**: Add automated instrument test suite generator
+  ([`6d64327`](https://github.com/grzes71/atari-music-composer/commit/6d643277c3bbe31bdc4c546cf255a3ea3e00acc6))
+
+### Refactoring
+
+- Isolate CORE boundaries and classify pytest profiles
+  ([`dcbb009`](https://github.com/grzes71/atari-music-composer/commit/dcbb00926ae63f041ee2158428ec2eedcfc02793))
+
+### Testing
+
+- Harden architecture boundary checks
+  ([`d25d5b0`](https://github.com/grzes71/atari-music-composer/commit/d25d5b024ceeeef62716869b344000883ba2279d))
+
+- **stage-c**: Add Python frame oracle, py65 parity, and ASAP 8.0.0 v2 suite
+  ([`7f4da84`](https://github.com/grzes71/atari-music-composer/commit/7f4da8466a94d56221565e973ad6cd5ea988696f))
+
+
 ## v0.8.0 (2026-09-29)
 
 ### Features
