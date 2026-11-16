@@ -54,6 +54,8 @@ from atari_music.sound_profiles.binding import (
     PROFILE_STATUS_UNKNOWN,
 )
 
+pytestmark = pytest.mark.experimental
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "tests" / "data" / "sound_profiles"
 BANK_DIR = DATA_DIR / "bank"

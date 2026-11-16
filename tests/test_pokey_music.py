@@ -22,6 +22,7 @@ from atari_music.models import PokeyEvent
 from conftest import require_local_artifact
 
 
+@pytest.mark.legacy
 def test_midi_to_note_name():
     assert midi_to_note_name(69) == "A4"
     assert midi_to_note_name(60) == "C4"
@@ -29,6 +30,7 @@ def test_midi_to_note_name():
     assert midi_to_note_name(72) == "C5"
 
 
+@pytest.mark.legacy
 def test_calculate_channel_frequency_8bit():
     # 64 kHz clock, AUDF = 71 -> 63920.89 / (2 * 72) ≈ 443.89 Hz (near A4)
     freq, conf = calculate_channel_frequency(channel_idx=1, audf_val=71, audctl_val=0)
@@ -37,6 +39,7 @@ def test_calculate_channel_frequency_8bit():
     assert conf >= 0.90
 
 
+@pytest.mark.legacy
 def test_calculate_channel_frequency_16bit():
     # Joined 1+2, 1.77 MHz clock: div_16 = 2000 -> 1773447 / (2 * 2007) ≈ 441.8 Hz
     pair_low = 2000 % 256
@@ -50,6 +53,7 @@ def test_calculate_channel_frequency_16bit():
     assert conf == 0.99
 
 
+@pytest.mark.legacy
 def test_frequency_to_musical_pitch_pure_tone():
     # 440.0 Hz should map exactly to A4 with high confidence
     note, conf, midi, cents = frequency_to_musical_pitch(440.0, DISTORTION_PURE_TONE)
@@ -59,6 +63,7 @@ def test_frequency_to_musical_pitch_pure_tone():
     assert cents == 0.0
 
 
+@pytest.mark.legacy
 def test_frequency_to_musical_pitch_noise_rejected():
     # White noise should not map to musical pitch
     note, conf, midi, cents = frequency_to_musical_pitch(440.0, DISTORTION_WHITE_NOISE)
@@ -66,6 +71,7 @@ def test_frequency_to_musical_pitch_noise_rejected():
     assert conf == 0.0
 
 
+@pytest.mark.legacy
 def test_parse_dump_tokens_mono():
     line = "  0.04: 61 00  67 AC  00 00  00 00  78\n"
     res = parse_dump_tokens(line)
@@ -79,6 +85,7 @@ def test_parse_dump_tokens_mono():
     assert p1 is None
 
 
+@pytest.mark.legacy
 def test_parse_dump_tokens_stereo():
     line = "  0.00: 0E C4  00 A5  00 A4  01 10  02  |  0E C4  00 A5  00 A4  01 10  00\n"
     res = parse_dump_tokens(line)
@@ -91,6 +98,7 @@ def test_parse_dump_tokens_stereo():
     assert p1[8] == 0x00
 
 
+@pytest.mark.legacy
 def test_pokey_state_reconstructor():
     recon = PokeyStateReconstructor(is_stereo=False)
     evt1 = PokeyEvent(frame=0, time_ms=0.0, pokey=0, register="AUDF1", old=0, new=97)
@@ -105,6 +113,7 @@ def test_pokey_state_reconstructor():
     assert st["pokey1"] is None
 
 
+@pytest.mark.legacy
 def test_ir_creation_and_size_budget():
     """Verify procedural generation creates valid IR adhering strictly to < 2KB memory budget."""
     from atari_music.generator import generate_song
@@ -121,6 +130,7 @@ def test_ir_creation_and_size_budget():
     assert size_bytes > 200, "Song IR too small or unpopulated"
 
 
+@pytest.mark.legacy
 def test_compile_ir_to_pokey_frames():
     """Verify IR compiles cleanly into 50Hz POKEY register frames."""
     from atari_music.generator import generate_song
@@ -136,6 +146,8 @@ def test_compile_ir_to_pokey_frames():
     assert bool(frames[0, 8] & 0x10) is True
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_pokey_synth_wav_rendering(tmp_path):
     """Verify POKEY software synthesizer renders frames to valid 16-bit PCM WAV."""
     import numpy as np
@@ -160,6 +172,7 @@ def test_pokey_synth_wav_rendering(tmp_path):
         assert wf.getnframes() == 100 * (44100 // 50)
 
 
+@pytest.mark.legacy
 def test_archetypes_mining():
     """Verify empirical archetype mining extracts archetypes for all 4 categories."""
     from atari_music.archetypes import mine_archetypes_from_dataset
@@ -173,6 +186,7 @@ def test_archetypes_mining():
     assert len(lib.percussion_archetypes) >= 3
 
 
+@pytest.mark.legacy
 def test_control_generator():
     """Verify naive control generator respects POKEY constraints and creates valid IR."""
     from atari_music.control_generator import generate_control_song
@@ -190,6 +204,7 @@ def test_control_generator():
     assert frames.shape[0] >= 500
 
 
+@pytest.mark.legacy
 def test_listening_test_artifacts():
     """Verify blinded listening test folder contains all 30 WAVs, CSV, README, and answer key."""
     test_dir = Path("listening_test")
@@ -206,6 +221,7 @@ def test_listening_test_artifacts():
         assert w.stat().st_size == 1764044
 
 
+@pytest.mark.legacy
 def test_memorization_and_novelty_metrics():
     """Verify longest common substring and novelty evaluation works accurately."""
     from atari_music.memorization_analysis import longest_common_substring, evaluate_song_novelty, DatasetCorpus
@@ -228,6 +244,7 @@ def test_memorization_and_novelty_metrics():
     assert 0.0 <= res["composite_novelty"] <= 1.0
 
 
+@pytest.mark.legacy
 def test_composer_v2_music_ir_and_seed():
     """Verify Music IR structure and deterministic generation with fixed seed."""
     from atari_music.composer_v2 import compose_song_v2, ComposerV2Config
@@ -248,6 +265,7 @@ def test_composer_v2_music_ir_and_seed():
     assert res1.quality_report.memory_size <= 2048
 
 
+@pytest.mark.legacy
 def test_composer_v2_channel_limits():
     """Verify min_channels and max_channels limits (e.g. strict 2-channel mode)."""
     from atari_music.composer_v2 import compose_song_v2, ComposerV2Config
@@ -263,6 +281,7 @@ def test_composer_v2_channel_limits():
     assert res_2ch.quality_report.memory_size <= 2048
 
 
+@pytest.mark.core
 def test_composer_v2_motivic_mutation():
     """Verify motivic mutations generate new phrases maintaining contour/rhythm properties."""
     from atari_music.music_ir import MusicPhrase, MelodicContour
@@ -287,6 +306,8 @@ def test_composer_v2_motivic_mutation():
     assert (phrase_var.intervals != phrase_a.intervals) or (phrase_var.rhythm != phrase_a.rhythm)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_composer_v2_memory_deduplication():
     """Verify pattern deduplication compresses identical patterns."""
     from atari_music.ir import IRSong, IRPattern, IRNote, calculate_ir_binary_size
@@ -320,6 +341,7 @@ def test_composer_v2_memory_deduplication():
 
 
 
+@pytest.mark.legacy
 def test_composer_v2_generation_failure_handling():
     """Verify generator raises RuntimeError when strict impossible budget cannot be satisfied."""
     import pytest
@@ -333,6 +355,7 @@ def test_composer_v2_generation_failure_handling():
         compose_song_v2(impossible_cfg)
 
 
+@pytest.mark.legacy
 def test_listening_test_v2_artifacts_and_validation():
     """Verify Stage 6.5 listening test v2 artifacts, 80 samples, keys, and validation checks."""
     from atari_music.listening_test_v2 import validate_listening_test_v2
@@ -361,6 +384,7 @@ def test_listening_test_v2_artifacts_and_validation():
     assert report_p.stat().st_size > 1000
 
 
+@pytest.mark.legacy
 def test_diversity_audit_artifacts_and_selection():
     """Verify Stage 6.6 diversity audit artifacts, 30 selected WAVs, and representation quotas."""
     from pathlib import Path
@@ -404,6 +428,7 @@ def test_diversity_audit_artifacts_and_selection():
     assert report_p.stat().st_size > 5000
 
 
+@pytest.mark.legacy
 def test_composer_v3_profile_constraints():
     """Verify all 6 profiles satisfy their tempo bounds, allowed modes, and register limits."""
     from atari_music.composer_v3 import compose_song_v3
@@ -423,6 +448,7 @@ def test_composer_v3_profile_constraints():
         assert q.memory_size <= 2048
 
 
+@pytest.mark.legacy
 def test_composer_v3_determinism():
     """Verify strict determinism: identical seed = identical song; different seed = distinct song."""
     from atari_music.composer_v3 import compose_song_v3
@@ -441,6 +467,7 @@ def test_composer_v3_determinism():
     assert r1.music_ir.title != r3.music_ir.title
 
 
+@pytest.mark.legacy
 def test_composer_v3_profile_separation():
     """Verify measurable musical separation between contrasting profiles."""
     from atari_music.composer_v3 import compose_song_v3
@@ -462,6 +489,7 @@ def test_composer_v3_profile_separation():
     assert dungeon_song.quality_report.tempo <= 90
 
 
+@pytest.mark.legacy
 def test_composer_v3_memory_budget_and_18_tracks():
     """Verify 18 experimental tracks in experiments/composer_v3/ all pass memory <= 2048 B."""
     import json
@@ -485,6 +513,7 @@ def test_composer_v3_memory_budget_and_18_tracks():
     assert total_tracks == 18
 
 
+@pytest.mark.legacy
 def test_listening_test_v3_artifacts_and_validation():
     """Verify Stage 7.1 blind listening test artifacts, 18 samples, keys, and report."""
     import json
@@ -531,6 +560,7 @@ def test_listening_test_v3_artifacts_and_validation():
     assert "Weryfikacja kryteriów akceptacji" in report_text
 
 
+@pytest.mark.core
 def test_composer_v4_max_4_channels_and_valid_roles():
     """Verify Composer v4 strictly uses <= 4 channels and official roles."""
     from atari_music.composer_v4 import compose_song_v4
@@ -548,6 +578,7 @@ def test_composer_v4_max_4_channels_and_valid_roles():
                     assert n.channel_role in ("melody", "bass", "harmony", "percussion")
 
 
+@pytest.mark.core
 def test_composer_v4_determinism():
     """Verify strict determinism: identical profile + seed yields identical result."""
     from atari_music.composer_v4 import compose_song_v4
@@ -572,6 +603,7 @@ def test_composer_v4_determinism():
                 assert n1.volume == n2.volume
 
 
+@pytest.mark.core
 def test_composer_v4_presence_of_second_voice_and_no_dummy_notes():
     """Verify genuine COUNTER/HARMONY second voice with real notes (no zero-velocity dummies)."""
     from atari_music.composer_v4 import compose_song_v4
@@ -591,6 +623,7 @@ def test_composer_v4_presence_of_second_voice_and_no_dummy_notes():
         assert ch2_notes_found > 0, f"Profile {prof} missing second voice notes on channel 2!"
 
 
+@pytest.mark.core
 def test_composer_v4_dynamic_section_activity():
     """Verify dynamic orchestration: sections breathe (e.g. Intro has fewer voices than B)."""
     from atari_music.composer_v4 import compose_song_v4
@@ -608,6 +641,7 @@ def test_composer_v4_dynamic_section_activity():
     assert res_act.quality_report.section_channel_counts.get("A") == 4
 
 
+@pytest.mark.legacy
 def test_composer_v4_memory_budget_and_18_tracks():
     """Verify 18 experimental tracks in experiments/composer_v4/ all satisfy memory <= 2048 B."""
     import json
@@ -632,6 +666,7 @@ def test_composer_v4_memory_budget_and_18_tracks():
     assert total_tracks == 18
 
 
+@pytest.mark.core
 def test_composer_v4_compilation_and_report():
     """Verify POKEY frame synthesis and Stage 8 comparative report presence."""
     from atari_music.composer_v4 import compose_song_v4
@@ -650,6 +685,7 @@ def test_composer_v4_compilation_and_report():
     assert "Aktywność Kanałów w Poszczególnych Sekcjach" in report_text
 
 
+@pytest.mark.core
 def test_api_generate_music_all_profiles():
     """Test 1: All 6 canonical profiles successfully generate a valid MusicGenerationResult."""
     from atari_music.api import MusicGenerationResult, generate_music
@@ -664,6 +700,7 @@ def test_api_generate_music_all_profiles():
         assert len(res.pokey_ir.sequence) > 0
 
 
+@pytest.mark.core
 def test_api_determinism():
     """Test 2: Identical profile + seed + parameters must yield identical results."""
     from atari_music.api import generate_music
@@ -678,6 +715,7 @@ def test_api_determinism():
     assert len(res1.pokey_ir.patterns) == len(res2.pokey_ir.patterns)
 
 
+@pytest.mark.core
 def test_api_seed_variation():
     """Test 3: Different seeds within the same profile produce different musical variations."""
     from atari_music.api import generate_music
@@ -691,6 +729,7 @@ def test_api_seed_variation():
     assert notes_a != notes_b or res_a.pokey_ir.sequence != res_b.pokey_ir.sequence
 
 
+@pytest.mark.core
 def test_api_parameter_validation():
     """Test 4: Strict validation rejects invalid profiles, seeds, keys, tempos, lengths, and ranges."""
     import pytest
@@ -734,6 +773,7 @@ def test_api_parameter_validation():
         generate_music(variation=1.2)
 
 
+@pytest.mark.core
 def test_api_profile_separation():
     """Test 5: Preserves categorical separation between high-energy and atmospheric profiles."""
     from atari_music.api import generate_music
@@ -746,6 +786,7 @@ def test_api_profile_separation():
     assert action_song.metadata.tempo - dungeon_song.metadata.tempo >= 65
 
 
+@pytest.mark.core
 def test_api_memory_and_channels_guarantee():
     """Test 6 & 7: Guarantees <= 2048 B memory footprint and 4-channel polyphony across variations."""
     from atari_music.api import generate_music
@@ -756,6 +797,8 @@ def test_api_memory_and_channels_guarantee():
         assert res.metadata.channels_used == 4
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_mads_exporter_syntax_and_structure():
     """Etap 10: Verify MADS Exporter generates valid MADS syntax with song headers and 4 channels."""
     from atari_music.api import generate_music
@@ -774,6 +817,8 @@ def test_mads_exporter_syntax_and_structure():
     assert ".byte $ff" in asm_text  # End of track marker
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_mads_end_to_end_compilation_and_relocation():
     """Etap 10: End-to-end compilation with MADS to Atari XEX under multiple base addresses."""
     import subprocess
@@ -817,6 +862,8 @@ main:
         assert xex_p.stat().st_size > 0
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_mads_compilation_all_6_profiles():
     """Etap 10: Verify all 6 canonical profiles successfully compile with player to valid Atari XEX.
 
@@ -871,6 +918,8 @@ entry:
         assert raw[0] == 0xFF and raw[1] == 0xFF, f"Invalid Atari DOS header for {p}"
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_stage11_standalone_xex_build_and_headers():
     """Etap 11: Verify all 6 standalone XEX files in stage11_xex are built with valid DOS headers.
 
@@ -890,6 +939,8 @@ def test_stage11_standalone_xex_build_and_headers():
         assert size >= 1000, f"XEX suspiciously small for {prof}: {size} bytes"
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_stage11_zero_page_relocation_and_dungeon_16bit():
     """Etap 11: Verify Zero Page reconfigurability, Dungeon 16-bit bass audit, and API call sequences."""
     import sys
@@ -915,6 +966,8 @@ def test_stage11_zero_page_relocation_and_dungeon_16bit():
         assert ok is True, f"API scenario check failed for {scen}"
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_pokey_noise_audf_frequency_response():
     """Verify DISTORTION_WHITE_NOISE ($E0) frequency and transition rate scale with AUDF."""
     import numpy as np
@@ -944,6 +997,8 @@ def test_pokey_noise_audf_frequency_response():
     assert zc_low < 1500
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_pokey_noise_determinism():
     """Verify POKEY noise synthesis produces bit-for-bit identical output for identical inputs."""
     import numpy as np
@@ -960,6 +1015,8 @@ def test_pokey_noise_determinism():
     assert np.array_equal(samples1, samples2)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_pokey_noise_9bit_vs_17bit():
     """Verify AUDCTL_9BIT_POLY flag produces distinct noise texture from default 17-bit."""
     import numpy as np
@@ -980,6 +1037,8 @@ def test_pokey_noise_9bit_vs_17bit():
     assert not np.array_equal(samples_17, samples_9)
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_game_over_percussion_rendering(tmp_path):
     """Verify Game Over composition percussion event (A2 Comic Thud) generates proper punchy WAV."""
     from pathlib import Path
@@ -1047,6 +1106,8 @@ def test_game_over_percussion_rendering(tmp_path):
         assert np.max(np.abs(samples)) > 1000
 
 
+@pytest.mark.core
+@pytest.mark.audio
 def test_mads_export_percussion_consistency():
     """Regression test: MADS export matches POKEY IR and WAV renderer semantics for percussion channel.
 

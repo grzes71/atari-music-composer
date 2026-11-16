@@ -8,6 +8,8 @@ from atari_music.ai.prompts import build_system_prompt, build_user_prompt
 from atari_music.ai.providers.base import CompositionRequest
 from atari_music.ai.validation import validate_composition
 
+pytestmark = pytest.mark.core
+
 
 def test_system_prompt_separation_of_responsibilities():
     """Verify system prompt clearly defines composer role and engine execution role."""

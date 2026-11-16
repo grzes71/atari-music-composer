@@ -27,6 +27,8 @@ from atari_music.logging_config import (
     setup_logging,
 )
 
+pytestmark = pytest.mark.core
+
 
 @pytest.fixture(autouse=True)
 def clean_logging_state():

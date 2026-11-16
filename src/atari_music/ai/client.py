@@ -552,7 +552,7 @@ def _validate_built_xex(
     that looks runnable — the same contract as a failed assembly, which writes nothing.
     The generated ``.asm`` beside it is kept, because it is what makes the failure debuggable.
     """
-    from atari_music import stage15
+    from atari_music import player_budget
 
     try:
         validate_xex_layout(
@@ -560,10 +560,10 @@ def _validate_built_xex(
             player_address=_numeric_address(player_address),
             music_address=_numeric_address(music_address),
         )
-        player_bytes = stage15.measure_player_size(player_asm_path, mads_exe)
+        player_bytes = player_budget.measure_player_size(player_asm_path, mads_exe)
         if player_bytes is not None:
-            stage15.check_player_size(player_bytes)
-    except (XexLayoutError, stage15.PlayerSizeError):
+            player_budget.check_player_size(player_bytes)
+    except (XexLayoutError, player_budget.PlayerSizeError):
         path.unlink(missing_ok=True)
         raise
 

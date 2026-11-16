@@ -18,6 +18,8 @@ from click.testing import CliRunner
 from atari_music import stage13a
 from atari_music.cli import cli
 
+pytestmark = pytest.mark.experimental
+
 
 @pytest.fixture(scope="module")
 def bundle() -> Dict[str, Any]:

@@ -11,8 +11,6 @@ import click
 
 from atari_music import __version__
 from atari_music import pokey_hw
-from atari_music.dataset import build_full_dataset
-from atari_music.extractor import extract_raw_dump
 from atari_music.logging_config import setup_logging
 from atari_music.xex_layout import XexLayoutError
 
@@ -637,6 +635,8 @@ def extract_cmd(
     limit: Optional[int],
 ) -> None:
     """Execute full 3-layer extraction on all SAP files and generate dataset.jsonl."""
+    from atari_music.dataset import build_full_dataset
+
     click.echo(f"Starting full POKEY extraction using inventory {inventory}...")
     success, fail, failed_items = build_full_dataset(
         inventory_path=inventory,
@@ -2214,97 +2214,6 @@ def run_stage11b_cmd(
     click.echo(f"  listening package: {'prepared' if bundle['listening']['justified'] else 'not prepared'}")
     for name, path in sorted(written.items()):
         click.echo(f"  {name}: {path}")
-
-
-@cli.command("run-stage12a")
-@click.option(
-    "--reports-dir",
-    type=click.Path(path_type=Path),
-    default=Path("reports/stage12a"),
-    help="Where to write the Stage 12A machine record.",
-)
-@click.option(
-    "--docs-dir",
-    type=click.Path(path_type=Path),
-    default=Path("docs"),
-    help="Where to write stage12a_decoration_experiment.md.",
-)
-@click.option(
-    "--archaeology-dir",
-    type=click.Path(path_type=Path),
-    default=None,
-    help="The producer repository (defaults to the module's DEFAULT_ARCHAEOLOGY_DIR).",
-)
-def run_stage12a_cmd(reports_dir: Path, docs_dir: Path, archaeology_dir: Optional[Path]) -> None:
-    """Run the Stage 12A decoration-vs-replacement experiment with the renderer unchanged.
-
-    Read-only with respect to production: it renders with the existing frame compiler and
-    synthesiser, reads the existing binding as the control, and writes only Stage 12A artefacts.
-    """
-    from atari_music import stage12a
-
-    archaeology = archaeology_dir or stage12a.DEFAULT_ARCHAEOLOGY_DIR
-    bundle = stage12a.run_experiment(arch_root=archaeology)
-    written = stage12a.write_experiment(bundle, stage12a_dir=reports_dir, docs_dir=docs_dir)
-
-    hypotheses = bundle["hypotheses"]
-    usable = [c for c in bundle["cases"] if "variants" in c]
-    failures = [c for c in bundle["cases"] if "technical_failure" in c]
-    click.echo(f"Cases: {len(bundle['cases'])} ({len(usable)} usable, {len(failures)} failure).")
-    click.echo(
-        f"  H1 decoration preserves composer tuning: "
-        f"{hypotheses['H1_decoration_preserves_composer_tuning']['count']}/{len(usable)}"
-    )
-    click.echo(
-        f"  H2 decoration changes the sound: "
-        f"{hypotheses['H2_decoration_changes_the_sound']['count']}/{len(usable)}"
-    )
-    click.echo(
-        f"  C closer to the reference than B in: "
-        f"{bundle['listening'].get('C_closer_to_reference_than_B_in')}"
-    )
-    click.echo(
-        f"  listening package: {'prepared' if bundle['listening']['justified'] else 'not prepared'}"
-    )
-    for name, path in sorted(written.items()):
-        click.echo(f"  {name}: {path}")
-
-
-@cli.command("prepare-stage12a-listening")
-@click.option(
-    "--package-dir",
-    type=click.Path(path_type=Path),
-    default=Path("examples/stage12a_listening"),
-    help="Where to write the blinded listening package.",
-)
-@click.option(
-    "--archaeology-dir",
-    type=click.Path(path_type=Path),
-    default=None,
-    help="The producer repository (defaults to the module's DEFAULT_ARCHAEOLOGY_DIR).",
-)
-def prepare_stage12a_listening_cmd(package_dir: Path, archaeology_dir: Optional[Path]) -> None:
-    """Build the small blinded listening package for the decoration experiment.
-
-    It is prepared only because the analysis found a case where decoration is measurably closer
-    to the archaeology reference than replacement; if that were not true the command would say
-    so rather than emit a package.
-    """
-    from atari_music import stage12a
-
-    archaeology = archaeology_dir or stage12a.DEFAULT_ARCHAEOLOGY_DIR
-    bundle = stage12a.run_experiment(arch_root=archaeology)
-    if not bundle["listening"]["justified"]:
-        raise click.ClickException(
-            "no listening package is justified: " + bundle["listening"]["reason"]
-        )
-    manifest = stage12a.build_listening_package(
-        bundle, out_dir=package_dir, arch_root=archaeology
-    )
-    click.echo(f"Wrote {len(manifest['trials'])} blinded pairs to {package_dir}")
-    for trial in manifest["trials"]:
-        click.echo(f"  {trial['trial_id']}: {trial['sides']}")
-    click.echo("Fill " + str(Path(package_dir) / "evaluation_stage12a.csv"))
 
 
 @cli.command("run-stage12a")

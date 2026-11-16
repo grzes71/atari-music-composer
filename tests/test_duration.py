@@ -18,6 +18,8 @@ from atari_music.ai.schema import (
     AIPatternDef,
 )
 
+pytestmark = pytest.mark.core
+
 
 def _make_composition(
     patterns_def: list[tuple[str, int]],  # (pattern_id, length_steps)
@@ -272,6 +274,7 @@ def test_composition_above_120_seconds_fails_range():
     assert res["status"] == "FAIL"
 
 
+@pytest.mark.audio
 def test_6502_player_multi_pattern_sequence_advance_regression(tmp_path):
     """13. Regression test: 6502 player advances patterns without clobbering X or truncating."""
     pytest.importorskip("py65")
@@ -360,6 +363,7 @@ def test_6502_player_multi_pattern_sequence_advance_regression(tmp_path):
     assert 4 in steps_observed
 
 
+@pytest.mark.audio
 def test_xex_harness_graphical_timer_display(tmp_path):
     """14. Verifies graphical timer and layout metadata is generated in XEX harness."""
     from pathlib import Path
@@ -389,6 +393,7 @@ def test_xex_harness_graphical_timer_display(tmp_path):
     assert "lbl_step:" in asm_text
 
 
+@pytest.mark.audio
 def test_xex_harness_channel_mute_and_colors(tmp_path: Path):
     """Verify XEX harness includes channel muting via keys 1-4 and dark green background/border ($C4)."""
     from conftest import require_local_artifact

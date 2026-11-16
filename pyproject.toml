@@ -33,9 +33,13 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = [".", "src"]
 testpaths = ["tests"]
-addopts = "-m 'not live'"
+addopts = "--strict-markers -m 'not live'"
 markers = [
     "live: live tests requiring real LLM API access and credentials",
+    "core: tests verifying the active CORE production pipeline and contracts",
+    "experimental: tests verifying research experiments (stages 9c-25, E26-E30, lead library spec)",
+    "legacy: tests verifying historical stages 1-8 and deprecated v1-v3 generators",
+    "audio: fast CORE subset protecting POKEY semantics, IR, MADS export, player.asm, XEX layout and sound profiles",
 ]
 
 [tool.semantic_release]

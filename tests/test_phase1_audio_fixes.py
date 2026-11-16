@@ -23,6 +23,8 @@ from atari_music.constants import (
 from atari_music.ir import IREnvelope, IRInstrument, IRNote, IRPattern, IRSong
 from atari_music.mads_exporter import export_mads_asm
 
+pytestmark = [pytest.mark.core, pytest.mark.audio]
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MADS = REPO_ROOT / "tools" / "mads" / "mads.exe"
 PLAYER_ASM = REPO_ROOT / "player.asm"

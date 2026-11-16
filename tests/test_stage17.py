@@ -21,6 +21,8 @@ from atari_music import stage15
 from atari_music import stage17
 from atari_music.cli import cli
 
+pytestmark = pytest.mark.experimental
+
 requires_corpus = pytest.mark.skipif(
     not stage17.DEFAULT_ARCHAEOLOGY_DIR.is_dir()
     or not any(stage15.trace_dir(stage17.DEFAULT_ARCHAEOLOGY_DIR).glob("*.frames.json")),

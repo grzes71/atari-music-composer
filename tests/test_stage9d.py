@@ -26,6 +26,8 @@ from click.testing import CliRunner
 from atari_music import stage9d
 from atari_music.cli import cli
 
+pytestmark = pytest.mark.experimental
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_DIR = REPO_ROOT / "examples" / "sound_profile_listening"
 OUTPUTS = ("profile_scores", "correlations", "hypotheses", "categories", "coverage", "shortlist",

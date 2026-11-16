@@ -10,6 +10,8 @@ from click.testing import CliRunner
 from config import Config, ConfigValidationError, create_arg_parser
 from atari_music.cli import cli
 
+pytestmark = pytest.mark.core
+
 
 def _clear_ai_env(monkeypatch):
     """Helper to remove all AI configuration environment variables."""

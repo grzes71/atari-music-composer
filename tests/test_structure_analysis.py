@@ -22,6 +22,8 @@ from atari_music.ai.structure_analysis import (
     find_repeated_subsequences,
 )
 
+pytestmark = pytest.mark.core
+
 
 def _make_pattern(pat_id: str, length: int = 16, notes: list[tuple[int, str, int]] | None = None) -> AIPatternDef:
     """Helper to build an AIPatternDef with Ch1 events [(step, note, dur), ...]."""

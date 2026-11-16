@@ -48,12 +48,13 @@ from atari_music.constants import (
     DISTORTION_4BIT_POLY,
     DISTORTION_PURE_TONE,
     DISTORTION_WHITE_NOISE,
+    KEY_BASE_MIDI,
+    SCALES,
 )
 from atari_music.contour_engine import (
     generate_archetype_intervals,
     realize_pitches_from_intervals,
 )
-from atari_music.generator import KEY_BASE_MIDI, SCALES
 from atari_music.harmony_engine import (
     ChordStep,
     get_chord_tones,
@@ -336,7 +337,7 @@ def _execute_composer_v4(config: ComposerV4Config) -> ComposerV4Result:
         )
 
         # 10. CONSTRAINT CHECK & MEMORY DEDUPLICATION (< 2048 B)
-        from atari_music.composer_v2 import deduplicate_pokey_patterns
+        from atari_music.ir_optimizer import deduplicate_pokey_patterns
         pokey_song, _ = deduplicate_pokey_patterns(pokey_song)
         mem_size = calculate_ir_binary_size(pokey_song)
 

@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import pytest
 from click.testing import CliRunner
 
 from atari_music.cli import cli
@@ -13,6 +14,8 @@ from atari_music.ai.schema import (
     AIPatternChannelEvent,
     AIPatternDef,
 )
+
+pytestmark = pytest.mark.core
 
 
 def _create_minimal_composition() -> AICompositionDoc:
@@ -227,6 +230,7 @@ def test_cli_build_xex_help_shows_player_asm():
     assert "defaults to current directory" in " ".join(result.output.split())
 
 
+@pytest.mark.audio
 def test_client_build_xex_explicit_player_asm_not_found(tmp_path: Path):
     """Verify build_xex_from_composition raises FileNotFoundError when player_asm does not exist."""
     import pytest
@@ -237,6 +241,7 @@ def test_client_build_xex_explicit_player_asm_not_found(tmp_path: Path):
         build_xex_from_composition(doc, output_path=tmp_path / "out.xex", player_asm=tmp_path / "missing_player.asm")
 
 
+@pytest.mark.audio
 def test_client_build_xex_cwd_player_asm_lookup(tmp_path: Path, monkeypatch):
     """Verify build_xex_from_composition prioritizes player.asm in current working directory."""
     import pytest
@@ -257,6 +262,7 @@ def test_client_build_xex_cwd_player_asm_lookup(tmp_path: Path, monkeypatch):
     assert "MADS assembler not found" in str(excinfo.value)
 
 
+@pytest.mark.audio
 def test_cli_build_xex_subprocess_execution(tmp_path: Path, monkeypatch):
     """Verify build-xex invokes subprocess.run successfully without NameError."""
     import subprocess

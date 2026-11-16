@@ -33,6 +33,8 @@ from atari_music.ai.providers.base import CompositionRequest
 from atari_music.ai.providers.mock import MockAICompositionProvider
 from atari_music.ai.providers.openai import OpenAICompositionProvider
 
+pytestmark = pytest.mark.core
+
 
 @pytest.fixture
 def base_valid_doc() -> dict:
@@ -344,6 +346,7 @@ def test_openai_api_error_masks_api_key():
 # 5. END-TO-END: MOCK PROVIDER -> MUSIC IR -> POKEY IR -> XEX
 # =============================================================================
 
+@pytest.mark.audio
 def test_e2e_mock_provider_to_xex_compilation(tmp_path):
     """End-to-end integration test: Mock Provider -> Validated AI JSON -> Music IR -> POKEY IR -> Atari XEX."""
     from conftest import require_local_artifact

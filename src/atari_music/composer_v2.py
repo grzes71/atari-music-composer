@@ -35,6 +35,7 @@ from atari_music.constants import (
 from atari_music.contour_engine import generate_contour_intervals, realize_pitches_from_intervals
 from atari_music.generator import KEY_BASE_MIDI, SCALES
 from atari_music.harmony_engine import get_chord_tones, select_progression
+from atari_music.ir_optimizer import deduplicate_pokey_patterns
 from atari_music.ir import (
     IREnvelope,
     IRInstrument,
@@ -420,44 +421,6 @@ def _compile_music_to_pokey_ir(
         sequence=music_song.sequence,
         uses_16bit_bass=uses_16bit,
     )
-
-
-def deduplicate_pokey_patterns(song: IRSong) -> Tuple[IRSong, int]:
-    """Pattern deduplication: merge identical patterns and remap sequence entries."""
-    unique_patterns: List[IRPattern] = []
-    remap: Dict[int, int] = {}
-    old_to_new_id: Dict[int, int] = {}
-
-    for p in song.patterns:
-        match = None
-        for u in unique_patterns:
-            if u.rows == p.rows and len(u.tracks) == len(p.tracks):
-                if repr(u.tracks) == repr(p.tracks):
-                    match = u.id
-                    break
-        if match is not None:
-            remap[p.id] = match
-        else:
-            unique_patterns.append(p)
-            remap[p.id] = p.id
-
-    # Renumber unique patterns consecutively 0, 1, ...
-    for new_idx, pat in enumerate(unique_patterns):
-        old_id = pat.id
-        old_to_new_id[old_id] = new_idx
-        pat.id = new_idx
-
-    final_sequence = []
-    for seq_item in song.sequence:
-        if isinstance(seq_item, list):
-            final_sequence.append([old_to_new_id.get(remap.get(x, x), 0) for x in seq_item])
-        else:
-            final_sequence.append(old_to_new_id.get(remap.get(seq_item, seq_item), 0))
-
-    removed_count = len(song.patterns) - len(unique_patterns)
-    song.patterns = unique_patterns
-    song.sequence = final_sequence
-    return song, removed_count
 
 
 def _optimize_pokey_song_memory(song: IRSong, max_size: int) -> IRSong:

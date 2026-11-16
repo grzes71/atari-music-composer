@@ -33,6 +33,8 @@ from atari_music.sound_profiles.bank import (
     playable_fingerprint_of,
 )
 
+pytestmark = pytest.mark.experimental
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LIBRARY_DIR = REPO_ROOT / "data" / "instrument_libraries" / "lead" / "v0.1"
 LIBRARY_PATH = LIBRARY_DIR / "library.json"

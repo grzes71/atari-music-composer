@@ -44,6 +44,8 @@ from atari_music.sound_profiles import (
     load_sound_profile_bank,
 )
 
+pytestmark = pytest.mark.experimental
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BANK_DIR = REPO_ROOT / "tests" / "data" / "sound_profiles" / "bank"
 STAGE9C_PACKAGE = REPO_ROOT / "examples" / "sound_profile_listening"

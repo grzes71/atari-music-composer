@@ -27,6 +27,8 @@ from atari_music.ai.client import generate_music_from_composition
 from atari_music.cli import cli
 from atari_music.sound_profiles import apply_profile_binding, load_profile_binding, load_sound_profile_bank
 
+pytestmark = pytest.mark.experimental
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BANK_DIR = REPO_ROOT / "tests" / "data" / "sound_profiles" / "bank"
 STAGE9C_PACKAGE = REPO_ROOT / "examples" / "sound_profile_listening"

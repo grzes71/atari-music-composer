@@ -35,8 +35,6 @@ import hashlib
 import json
 import math
 import re
-import subprocess
-import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -53,14 +51,24 @@ from atari_music.constants import (
     AUDCTL_JOIN_3_4_16BIT,
     PAL_CLOCK_HZ,
 )
+from atari_music.player_budget import (
+    DEFAULT_MADS,
+    DEFAULT_PLAYER_ASM,
+    PLAYER_SIZE_BUDGETS,
+    PLAYER_SIZE_LIMIT_BYTES,
+    PLAYER_SIZE_LIMIT_SCOPE,
+    PLAYER_ZERO_PAGE_BYTES,
+    PlayerSizeError,
+    check_player_size,
+    measure_player_size,
+    player_size_limit_ok,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPORTS_DIR = REPO_ROOT / "reports"
 DEFAULT_STAGE15_DIR = DEFAULT_REPORTS_DIR / "stage15"
 DEFAULT_DOCS_DIR = REPO_ROOT / "docs"
 DEFAULT_ARCHAEOLOGY_DIR = Path(r"C:\Users\grzes\Documents\Projects\pokey-sound-architecture")
-DEFAULT_PLAYER_ASM = REPO_ROOT / "src" / "atari_music" / "asm" / "player.asm"
-DEFAULT_MADS = REPO_ROOT / "tools" / "mads" / "mads.exe"
 
 ANALYSIS_VERSION = "stage15/1"
 
@@ -103,9 +111,6 @@ CONTEXT_ETA2_THRESHOLD = 0.14
 #: per kind, so truncation can never hide a whole event class; the full counts always travel
 #: with the sample, and the full stream is reproducible by re-running the analysis.
 MAX_EVENTS_PER_KIND = 200
-
-#: Zero-page bytes the player consumes from the caller (``PLAYER_ZP_BASE + 0..9``).
-PLAYER_ZERO_PAGE_BYTES = 10
 
 
 class Stage15Error(RuntimeError):
@@ -2084,76 +2089,6 @@ PLAYER_ASSEMBLED_BYTES_METHOD = (
     "mads.exe tools/mads/mads.exe on a wrapper: org $6000 / player_start: icl '../player.asm'"
 )
 
-#: The project's one hard binary limit. It bounds the **player**, not the file.
-#:
-#: It is **exclusive**: a player of exactly ``PLAYER_SIZE_LIMIT_BYTES`` bytes fails. A player of
-#: ``PLAYER_SIZE_LIMIT_BYTES - 1`` bytes passes.
-#:
-#: The limit was previously applied to the complete XEX file. That was a proxy for this rule and
-#: the proxy stopped being equivalent when the C1 per-channel modulation grew the player; the
-#: whole-file rule was removed on 2026-10-09 (see ``HISTORY.md``) and nothing replaced it, because
-#: no byte budget on the file was ever justified by the hardware.
-PLAYER_SIZE_LIMIT_BYTES = 2048
-
-#: What ``PLAYER_SIZE_LIMIT_BYTES`` does and does not bound. Written down once, here, because the
-#: four quantities below are easy to conflate and only the first is a policy limit:
-#:
-#: * **player** — the assembled ``player.asm`` (code + runtime state), as measured by
-#:   :func:`measure_player_size`. **Strictly below** the limit. This is the only quantity the
-#:   limit governs.
-#: * **song data** — the exported MADS data block (patterns, sequence, instrument table). Bounded
-#:   by its own, far smaller POKEY-IR budget (``composer_v*.max_size``), never by this limit.
-#: * **XEX file** — the complete DOS binary (harness + player + song data). **Not bounded at all.**
-#: * **loaded segments** — the start address and length of each ``org`` block. Bounded by the
-#:   Atari memory map, not by a byte budget.
-PLAYER_SIZE_LIMIT_SCOPE = (
-    "the assembled player (code + runtime state), strictly below the limit; the complete XEX "
-    "file and the song data are not bounded by it"
-)
-
-#: Kept for the Stage 15 report and its historical comparisons. ``current_envelope_2KB`` is the
-#: same number as ``PLAYER_SIZE_LIMIT_BYTES`` and is defined from it so the two cannot drift;
-#: ``hypothetical_4KB`` is a *counterfactual* the stage weighs, not a second limit.
-PLAYER_SIZE_BUDGETS = {
-    "current_envelope_2KB": PLAYER_SIZE_LIMIT_BYTES,
-    "hypothetical_4KB": 4096,
-    "atari_minimum_free_ram_16KB": 16384,
-}
-
-
-class PlayerSizeError(ValueError):
-    """The assembled player reached or exceeded :data:`PLAYER_SIZE_LIMIT_BYTES`."""
-
-
-def player_size_limit_ok(assembled_bytes: int) -> bool:
-    """The single statement of the player-size policy: **strictly** below the limit.
-
-    Exclusive by construction, so ``2047`` is ``True`` and ``2048`` is ``False``. Every caller
-    that needs to know whether a player fits asks here rather than comparing against 2048
-    itself, so the boundary is stated once and cannot drift between callers.
-    """
-    return int(assembled_bytes) < PLAYER_SIZE_LIMIT_BYTES
-
-
-def check_player_size(assembled_bytes: int) -> int:
-    """Return *assembled_bytes* when it fits the player limit, else raise.
-
-    Raises
-    ------
-    PlayerSizeError
-        When the player is at or above the limit. The message names both numbers, because the
-        boundary is exclusive and "2048 > 2048" is the kind of thing that reads like a bug.
-    """
-    size = int(assembled_bytes)
-    if not player_size_limit_ok(size):
-        raise PlayerSizeError(
-            f"assembled player is {size} bytes; the player limit is "
-            f"{PLAYER_SIZE_LIMIT_BYTES} bytes and is exclusive (a player of exactly "
-            f"{PLAYER_SIZE_LIMIT_BYTES} bytes fails). The limit applies to the player, not to "
-            f"the XEX file or the song data."
-        )
-    return size
-
 #: A technique a 1-VBL pitch step can simulate, because the player can always write a new
 #: note. Everything here is therefore a DATA problem, not a code problem, unless listed in
 #: ``CODE_ONLY``.
@@ -2183,37 +2118,6 @@ TECHNIQUE_MECHANISM = {
     "CHANNEL_COUPLING_CHANGE": "audctl_change_mid_song",
     "REGISTER_PATTERN_CHANGE": "effect_column",
 }
-
-
-def measure_player_size(asm_path: Path, mads: Path) -> Optional[int]:
-    """Re-measure the assembled player size, if MADS is present.
-
-    Everything happens in a throwaway directory: the player source is copied in and the wrapper
-    includes the copy, so a "read-only" stage never writes into the source tree. Returns
-    ``None`` when the assembler is missing or fails, so the analysis degrades to the recorded
-    measurement instead of failing.
-    """
-    if not Path(mads).is_file():
-        return None
-    try:
-        with tempfile.TemporaryDirectory(prefix="stage15_measure_") as workspace:
-            directory = Path(workspace)
-            (directory / "player.asm").write_text(
-                Path(asm_path).read_text(encoding="utf-8"), encoding="utf-8"
-            )
-            (directory / "measure.asm").write_text(
-                "    org $6000\nplayer_start:\n    icl 'player.asm'\n", encoding="utf-8"
-            )
-            binary = directory / "measure.bin"
-            result = subprocess.run(
-                [str(mads), "measure.asm", "-b:$6000", "-o:measure.bin"],
-                capture_output=True, text=True, check=False, cwd=str(directory),
-            )
-            if result.returncode != 0 or not binary.is_file():
-                return None
-            return binary.stat().st_size
-    except OSError:
-        return None
 
 
 def player_gap_analysis(

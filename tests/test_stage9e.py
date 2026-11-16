@@ -34,6 +34,8 @@ from atari_music.stage9e import (
     leaf_paths,
 )
 
+pytestmark = pytest.mark.experimental
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BANK_DIR = REPO_ROOT / "tests" / "data" / "sound_profiles" / "bank"
 PACKAGE_DIR = REPO_ROOT / "examples" / "sound_profile_listening"

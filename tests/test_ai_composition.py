@@ -45,6 +45,8 @@ from atari_music.music_ir import (
     SymbolicTrack,
 )
 
+pytestmark = pytest.mark.core
+
 
 @pytest.fixture
 def minimal_valid_doc() -> dict:
@@ -408,6 +410,7 @@ def test_interpreter_4_channels_with_all_instruments(minimal_valid_doc):
     assert len(pokey_ir.sequence) == 2
 
 
+@pytest.mark.audio
 def test_interpreter_16bit_bass_flag_propagation(minimal_valid_doc):
     """Test E.3: 16-bit bass mode sets uses_16bit_bass in resulting POKEY IRSong."""
     doc_dict = dict(minimal_valid_doc)
@@ -456,6 +459,7 @@ def test_openai_provider_missing_key_security():
 # G. END-TO-END MADS & XEX COMPILATION TESTS
 # =========================================================================
 
+@pytest.mark.audio
 def test_end_to_end_example_artifacts_compilation():
     """Test G: End-to-end verification that all example JSONs compile to valid Atari XEX binaries.
 
@@ -507,6 +511,7 @@ def test_end_to_end_example_artifacts_compilation():
     )
 
 
+@pytest.mark.audio
 def test_an_unloadable_player_address_is_still_rejected(tmp_path):
     """An invalid load address is refused, so removing the file-size rule weakened nothing.
 
