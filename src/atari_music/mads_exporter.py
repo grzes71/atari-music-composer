@@ -161,7 +161,7 @@ def validate_v2_track_bytes(track_bytes: Sequence[int], instrument_count: int) -
             raise StreamValidationError(f"truncated record in v2 track stream at offset {idx}")
         b1 = int(track_bytes[idx + 1]) & 0xFF
         if b0 == 0 and b1 == 0:
-            if idx + 3 >= n:
+            if idx + 3 >= n - 1:
                 raise StreamValidationError(f"truncated 4-byte command at offset {idx}")
             opcode = int(track_bytes[idx + 2])
             param = int(track_bytes[idx + 3])
@@ -178,7 +178,7 @@ def validate_v2_track_bytes(track_bytes: Sequence[int], instrument_count: int) -
                 )
             idx += 4
         else:
-            if idx + 2 >= n:
+            if idx + 2 >= n - 1:
                 raise StreamValidationError(f"truncated 3-byte note/rest event at offset {idx}")
             audf = b0
             dur = b1

@@ -767,7 +767,8 @@ def song_requires_v2(song: IRSong) -> List[str]:
 
     init_ch = resolve_initial_channel_instruments(song)
     id_to_index = {inst.id: idx for idx, inst in enumerate(song.instruments)}
-    used_indices: set[int] = set()
+    non_legacy_used: set[int] = set()
+    legacy_ignored_ch4: set[int] = set()
     for ch in range(1, 5):
         if song.uses_16bit_bass and ch == 2:
             continue
@@ -776,12 +777,12 @@ def song_requires_v2(song: IRSong) -> List[str]:
             for note in pat.tracks.get(ch, []):
                 if note.pending_program_changes:
                     reasons.append(f"channel {ch} contains explicit PROGRAM_CHANGE commands")
-                    used_indices.update(
+                    non_legacy_used.update(
                         id_to_index[i] for i in note.pending_program_changes if i in id_to_index
                     )
                 if not note.is_rest and note.instrument_id in id_to_index:
                     note_idx = id_to_index[note.instrument_id]
-                    used_indices.add(note_idx)
+                    non_legacy_used.add(note_idx)
                     if note_idx != cur_idx:
                         inst_old = song.instruments[cur_idx]
                         inst_new = song.instruments[note_idx]
@@ -791,7 +792,25 @@ def song_requires_v2(song: IRSong) -> List[str]:
                             and not any(s.is_v2_step() for s in (inst_old.macro or []))
                             and not any(s.is_v2_step() for s in (inst_new.macro or []))
                         )
-                        if not both_legacy_placeholder:
+                        is_legacy_composer_v4_ch4 = (
+                            ch == 4
+                            and {inst_old.name, inst_new.name} <= {"Percussion Voice", "Ornament Voice", "Counter Harmony"}
+                            and inst_old.profile_id is None
+                            and inst_new.profile_id is None
+                            and inst_old.behavior_id is None
+                            and inst_new.behavior_id is None
+                            and not (inst_old.macro or inst_new.macro)
+                            and inst_old.pitch_envelope is None
+                            and inst_new.pitch_envelope is None
+                        )
+                        if both_legacy_placeholder or is_legacy_composer_v4_ch4:
+                            # Legacy generator/Composer v4 CH4 tracks are ignored per-note by v1 exporter.
+                            if is_legacy_composer_v4_ch4:
+                                if inst_new.name == "Ornament Voice":
+                                    legacy_ignored_ch4.add(note_idx)
+                                if inst_old.name == "Ornament Voice":
+                                    legacy_ignored_ch4.add(cur_idx)
+                        else:
                             reasons.append(
                                 f"channel {ch} switches instrument mid-track ({cur_idx} -> {note_idx})"
                             )
@@ -799,7 +818,7 @@ def song_requires_v2(song: IRSong) -> List[str]:
 
     non_legacy_used = {
         idx
-        for idx in used_indices
+        for idx in (non_legacy_used - legacy_ignored_ch4)
         if not (
             song.instruments[idx].macro
             and not any(s.is_v2_step() for s in (song.instruments[idx].macro or []))
