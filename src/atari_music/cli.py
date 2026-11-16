@@ -2087,6 +2087,137 @@ def validate_instruments_cmd(catalog_path: Optional[Path]) -> None:
     )
 
 
+@cli.command("arrange")
+@click.argument("input_composition", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--channel-instrument",
+    "channel_instruments_raw",
+    multiple=True,
+    metavar="CH=INSTRUMENT_ID",
+    help="Assign SSOT catalog instrument to channel 1..4 or role (repeatable; leaves unassigned channels unchanged).",
+)
+@click.option(
+    "--program-change-policy",
+    type=click.Choice(["preserve", "replace", "remove"], case_sensitive=False),
+    default="preserve",
+    help="How to handle existing PROGRAM_CHANGE events on overridden channels (preserve, replace, remove; default: preserve).",
+)
+@click.option(
+    "--instrument-catalog",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional SSOT instrument catalog JSON path (default: data/instruments/catalog.json).",
+)
+@click.option(
+    "--player-version",
+    type=click.Choice(["auto", "v1", "v2"], case_sensitive=False),
+    default="auto",
+    help="Target player format version (auto, v1, v2; default: auto).",
+)
+@click.option("--output-json", "--output-ir", "output_json", type=click.Path(path_type=Path), default=None, help="Output arranged POKEY IR JSON path")
+@click.option("--output-wav", type=click.Path(path_type=Path), default=None, help="Output WAV path")
+@click.option("--output-asm", type=click.Path(path_type=Path), default=None, help="Output MADS assembly (.asm) path")
+@click.option("--output-xex", "-o", "output_xex", type=click.Path(path_type=Path), default=None, help="Output Atari XEX binary path")
+@click.option("--player-address", type=str, default="0x6000", help="Relocatable player address for XEX (default: 0x6000)")
+@click.option("--music-address", type=str, default="0x8000", help="Relocatable music data address for XEX (default: 0x8000)")
+@click.option("--zp-base", type=str, default="0x80", help="Zero-page base address for XEX (default: 0x80)")
+@click.option("--mads", type=click.Path(path_type=Path), default=Path("tools/mads/mads.exe"), help="Path to mads.exe for XEX compilation")
+@click.option("--player-asm", type=click.Path(exists=True, path_type=Path), default=None, help="Optional explicit path to player.asm")
+def arrange_cmd(
+    input_composition: Path,
+    channel_instruments_raw: Tuple[str, ...],
+    program_change_policy: str,
+    instrument_catalog: Optional[Path],
+    player_version: str,
+    output_json: Optional[Path],
+    output_wav: Optional[Path],
+    output_asm: Optional[Path],
+    output_xex: Optional[Path],
+    player_address: str,
+    music_address: str,
+    zp_base: str,
+    mads: Path,
+    player_asm: Optional[Path],
+) -> None:
+    """Re-arrange an existing composition JSON with new POKEY channel instruments without calling AI."""
+    from atari_music.ai.schema import MusicCompositionError
+    from atari_music.api import arrange_song
+    from atari_music.instruments import (
+        CatalogError,
+        InstrumentPlanError,
+        parse_channel_instrument_specs,
+    )
+    from atari_music.mads_exporter import FormatVersionError, StreamValidationError
+
+    def _parse_addr(val: str) -> int:
+        s = val.strip()
+        if s.startswith("$"):
+            return int(s[1:], 16)
+        if s.lower().startswith("0x"):
+            return int(s, 16)
+        return int(s)
+
+    try:
+        ch_map = parse_channel_instrument_specs(channel_instruments_raw) if channel_instruments_raw else None
+        arranged = arrange_song(
+            input_composition,
+            channel_instruments=ch_map,
+            program_change_policy=program_change_policy,
+            instrument_catalog_path=instrument_catalog,
+            player_version=player_version,
+        )
+    except (InstrumentPlanError, CatalogError, MusicCompositionError, ValueError, FileNotFoundError) as err:
+        raise click.ClickException(str(err)) from err
+
+    m = arranged.metadata
+    click.echo(
+        f"Arranged '{arranged.pokey_ir.title}' (Format: v{m.format_version}, Policy: {program_change_policy.lower()}, "
+        f"Mem: {m.memory_size_bytes} B, Channels: {m.channels_used})"
+    )
+
+    if output_json:
+        arranged.save_json(output_json)
+        click.echo(f"Saved arranged POKEY IR -> {output_json}")
+
+    if output_wav:
+        arranged.render_wav(output_wav)
+        click.echo(f"Rendered WAV -> {output_wav}")
+
+    if output_asm:
+        try:
+            arranged.export_mads(output_asm, player_version=player_version)
+        except (FormatVersionError, StreamValidationError, InstrumentPlanError) as err:
+            raise click.ClickException(str(err)) from err
+        click.echo(f"Exported MADS ASM (v{m.format_version}) -> {output_asm}")
+
+    if output_xex:
+        try:
+            p_addr = _parse_addr(player_address)
+            m_addr = _parse_addr(music_address)
+            z_addr = _parse_addr(zp_base)
+            arranged.build_xex(
+                output_xex,
+                player_address=p_addr,
+                music_address=m_addr,
+                zp_base=z_addr,
+                mads_bin=mads,
+                player_asm=player_asm,
+                player_version=player_version,
+                keep_asm=False,
+            )
+        except (
+            XexLayoutError,
+            FormatVersionError,
+            StreamValidationError,
+            InstrumentPlanError,
+            MusicCompositionError,
+            FileNotFoundError,
+            ValueError,
+        ) as err:
+            raise click.ClickException(str(err)) from err
+        click.echo(f"Compiled XEX -> {output_xex} ({output_xex.stat().st_size} bytes)")
+
+
 @cli.command("prepare-listening-test-9c")
 @click.option(
     "--package-dir",
