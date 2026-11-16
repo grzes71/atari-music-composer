@@ -66,6 +66,7 @@ CORE_MODULES: Set[str] = {
     "instruments/models",
     "instruments/catalog",
     "instruments/runtime",
+    "instruments/planner",
 }
 
 #: Hidden LEGACY CLI commands (`@cli.command(..., hidden=True)`) permitted to lazy-import
