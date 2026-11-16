@@ -129,7 +129,57 @@ def test_model_range_and_bitmask_validations() -> None:
     with pytest.raises(ValidationError):
         HardwareConstraints(channels_allowed=(1, 5))
     with pytest.raises(ValidationError):
-        HardwareConstraints(divider_mode="16bit_ch12", channels_allowed=(2, 3))
+        HardwareConstraints(
+            divider_mode="16bit_ch12",
+            required_audctl_bits=0x10,
+            channels_allowed=(2, 3),
+        )
+    with pytest.raises(ValidationError):
+        HardwareConstraints(
+            divider_mode="16bit_ch34",
+            required_audctl_bits=0x08,
+            channels_allowed=(1, 4),
+        )
+
+    # Valid 16-bit CH1+CH2 and CH3+CH4 declarations (preserving non-join AUDCTL bits)
+    hc_12 = HardwareConstraints(
+        divider_mode="16bit_ch12",
+        required_audctl_bits=0x50,
+        channels_allowed=(1,),
+    )
+    assert hc_12.required_audctl_bits == 0x50
+    hc_34 = HardwareConstraints(
+        divider_mode="16bit_ch34",
+        required_audctl_bits=0x28,
+        channels_allowed=(3,),
+    )
+    assert hc_34.required_audctl_bits == 0x28
+    hc_8bit_clocked = HardwareConstraints(
+        divider_mode="8bit",
+        required_audctl_bits=0x41,
+        channels_allowed=(1,),
+    )
+    assert hc_8bit_clocked.required_audctl_bits == 0x41
+
+    # Contradictions between divider_mode and required_audctl_bits
+    for bad_mode, bad_bits, chans in (
+        ("8bit", 0x10, (1,)),
+        ("8bit", 0x08, (3,)),
+        ("16bit_ch12", 0x00, (1,)),
+        ("16bit_ch12", 0x40, (1,)),
+        ("16bit_ch12", 0x08, (1,)),
+        ("16bit_ch12", 0x18, (1,)),
+        ("16bit_ch34", 0x00, (3,)),
+        ("16bit_ch34", 0x20, (3,)),
+        ("16bit_ch34", 0x10, (3,)),
+        ("16bit_ch34", 0x18, (3,)),
+    ):
+        with pytest.raises(ValidationError):
+            HardwareConstraints(
+                divider_mode=bad_mode,
+                required_audctl_bits=bad_bits,
+                channels_allowed=chans,
+            )
 
     # Macro limits (>8 steps, ambiguous fixed_audf + audf_offset, bad distortion)
     step = TransientMacroStep(duration_frames=1, distortion_nibble=0xA0, audf_offset=0, volume=12)

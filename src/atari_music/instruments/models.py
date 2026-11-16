@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Tuple
+from typing import Dict, Literal, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from atari_music.constants import AUDCTL_JOIN_1_2_16BIT, AUDCTL_JOIN_3_4_16BIT
 
 InstrumentFamily = Literal["lead", "bass", "pad", "harmony", "percussion", "fx"]
 DividerMode = Literal["8bit", "16bit_ch12", "16bit_ch34"]
@@ -30,6 +32,12 @@ SourceKind = Literal["curated_preset", "sound_profile_bank", "sound_design_demo"
 ChannelRoleName = Literal["melody", "bass", "harmony", "rhythm", "percussion"]
 
 _VALID_ID_PATTERN = r"^[a-z][a-z0-9_]*$"
+_ALL_JOIN_AUDCTL_BITS = AUDCTL_JOIN_1_2_16BIT | AUDCTL_JOIN_3_4_16BIT
+_DIVIDER_JOIN_MASK: Dict[DividerMode, int] = {
+    "8bit": 0,
+    "16bit_ch12": AUDCTL_JOIN_1_2_16BIT,
+    "16bit_ch34": AUDCTL_JOIN_3_4_16BIT,
+}
 
 
 def _validate_audc_distortion_nibble(value: int) -> int:
@@ -95,6 +103,13 @@ class HardwareConstraints(BaseModel):
         if self.required_audctl_bits & self.forbidden_audctl_bits:
             raise ValueError(
                 "required_audctl_bits and forbidden_audctl_bits must be disjoint"
+            )
+        expected_join = _DIVIDER_JOIN_MASK[self.divider_mode]
+        actual_join = self.required_audctl_bits & _ALL_JOIN_AUDCTL_BITS
+        if actual_join != expected_join:
+            raise ValueError(
+                f"divider_mode={self.divider_mode!r} requires exact AUDCTL join bits "
+                f"0x{expected_join:02x}, got 0x{actual_join:02x} in required_audctl_bits=0x{self.required_audctl_bits:02x}"
             )
         if self.divider_mode == "16bit_ch12" and 1 not in self.channels_allowed:
             raise ValueError("16bit_ch12 divider_mode requires channel 1 in channels_allowed")
