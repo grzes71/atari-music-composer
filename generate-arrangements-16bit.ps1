@@ -144,7 +144,7 @@ if (-not (Test-Path -LiteralPath $MadsPath -PathType Leaf)) {
 
 $inputFullPath = (Resolve-Path -LiteralPath $InputFile).Path
 $madsFullPath = (Resolve-Path -LiteralPath $MadsPath).Path
-$outputFullPath = [System.IO.Path]::GetFullPath($OutputDirectory)
+$outputFullPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
 $isDslInput = [System.IO.Path]::GetExtension($inputFullPath).Equals(".dsl", [System.StringComparison]::OrdinalIgnoreCase)
 $arrangeInputPath = $inputFullPath
 $tempConvertedJson = $null
