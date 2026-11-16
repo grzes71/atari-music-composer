@@ -16,18 +16,44 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Sequence, Tuple
 
 import numpy as np
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from atari_music import pokey_hw
 from atari_music.constants import (
     AUDCTL_JOIN_1_2_16BIT,
     DISTORTION_PURE_TONE,
+    DISTORTION_WHITE_NOISE,
     NOTE_NAMES,
     PAL_64KHZ_CLOCK,
 )
+
+if TYPE_CHECKING:
+    from atari_music.instruments.models import (
+        InstrumentBehavior,
+        InstrumentProfile,
+        PitchEnvelopeSpec,
+        TransientMacroStep,
+    )
+
+# ---------------------------------------------------------------------------
+# Binary Format v2 Limits & Constants
+# ---------------------------------------------------------------------------
+
+MAX_V2_INSTRUMENTS = 32
+MAX_V2_MACRO_STEPS = 8
+MAX_V2_CONSECUTIVE_COMMANDS = 4
+MAX_V2_OPCODE = 0x01
+OPCODE_PROGRAM_CHANGE = 0x01
+MACRO_NO_OFFSET = 0xFF
+MACRO_END_MARKER = 0x00
+
+MACRO_FLAG_AUDF_FIXED = 0x01
+MACRO_FLAG_USE_STEP_DIST = 0x02
+MACRO_FLAG_USE_VOL_OVERRIDE = 0x04
+INST_FLAG_MOD_OCTAVE_PULSE = 0x01
 
 
 class IREnvelope(BaseModel):
@@ -39,64 +65,151 @@ class IREnvelope(BaseModel):
 
 
 class IRMacroStep(BaseModel):
-    """Micro-envelope step for percussion or ornaments.
+    """Active transient/percussion macro step for SONG_FORMAT_VERSION = 2.
 
-    RESERVED — not rendered and not exported. The 6502 player sets AUDC once per
-    channel and has no per-frame pitch modulation, and the tracker format has no
-    macro encoding, so macro steps would make the WAV preview diverge from what the
-    Atari actually plays (see ``_render_note_to_frames``). Percussion is still
-    audible because an unpitched hit now falls back to
-    ``pokey_hw.PERCUSSION_DEFAULT_AUDF`` with the instrument's own distortion and
-    envelope; only the per-step sweep/volume ramp is missing.
+    Supports both legacy attributes (``audf_offset``, ``distortion``, ``volume``) and
+    full v2 semantics (``frames_per_step``, ``audf_mode``, ``fixed_audf``,
+    ``audc_dist``, ``vol_override``). Exported to v2 only when requested explicitly;
+    ``SONG_FORMAT_VERSION = 1`` continues to ignore/reject v2 macros safely.
     """
+
     audf_offset: int = 0
     distortion: int = DISTORTION_PURE_TONE
     volume: int = 15
+    frames_per_step: int = Field(default=1, ge=1, le=255)
+    audf_mode: Literal["offset", "fixed"] = "offset"
+    fixed_audf: Optional[int] = Field(default=None, ge=0, le=0xFE)
+    audc_dist: Optional[int] = None
+    vol_override: Optional[int] = Field(default=None, ge=0, le=15)
+    is_v2: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _infer_v2_marker(self) -> "IRMacroStep":
+        if self.is_v2 is None:
+            has_v2_field = (
+                self.audc_dist is not None
+                or self.vol_override is not None
+                or self.fixed_audf is not None
+                or self.audf_mode == "fixed"
+                or self.frames_per_step != 1
+            )
+            self.is_v2 = bool(has_v2_field)
+        return self
+
+    def is_v2_step(self) -> bool:
+        """True if this step carries active v2 behavior fields (not legacy placeholder)."""
+        return bool(self.is_v2)
+
+    @classmethod
+    def from_transient_step(cls, step: "TransientMacroStep") -> "IRMacroStep":
+        """Build an IRMacroStep from a validated Stage A ``TransientMacroStep``."""
+        is_fixed = step.fixed_audf is not None
+        return cls(
+            frames_per_step=int(step.duration_frames),
+            audc_dist=step.distortion_nibble,
+            distortion=step.distortion_nibble if step.distortion_nibble is not None else DISTORTION_PURE_TONE,
+            audf_mode="fixed" if is_fixed else "offset",
+            fixed_audf=step.fixed_audf,
+            audf_offset=int(step.audf_offset),
+            vol_override=step.volume,
+            volume=int(step.volume) if step.volume is not None else 15,
+            is_v2=True,
+        )
+
+
+class IRPitchEnvelope(BaseModel):
+    """Frame-timed initial pitch deviation / punch compatible with PitchEnvelopeSpec."""
+
+    start_audf_delta: int = Field(ge=-127, le=127)
+    duration_frames: int = Field(ge=0, le=15)
+    step_delta: int = Field(ge=-16, le=16)
+
+    @classmethod
+    def from_spec(cls, spec: "PitchEnvelopeSpec") -> "IRPitchEnvelope":
+        """Construct from SSOT ``PitchEnvelopeSpec``."""
+        return cls(
+            start_audf_delta=int(spec.start_audf_delta),
+            duration_frames=int(spec.duration_frames),
+            step_delta=int(spec.step_delta),
+        )
+
+    def to_spec(self) -> "PitchEnvelopeSpec":
+        """Convert to SSOT ``PitchEnvelopeSpec``."""
+        from atari_music.instruments.models import PitchEnvelopeSpec
+
+        return PitchEnvelopeSpec(
+            start_audf_delta=self.start_audf_delta,
+            duration_frames=self.duration_frames,
+            step_delta=self.step_delta,
+        )
 
 
 class IRInstrument(BaseModel):
-    """POKEY Instrument Definition."""
+    """POKEY Instrument Definition (v1 static fields + v2 behavior metadata)."""
     id: int
     name: str
     distortion: int = DISTORTION_PURE_TONE
     role: str = "melody"  # "melody", "bass", "harmony", "percussion"
     envelope: IREnvelope = Field(default_factory=IREnvelope)
-    macro: Optional[List[IRMacroStep]] = None  # RESERVED: not rendered/exported, see IRMacroStep
+    macro: Optional[List[IRMacroStep]] = None
+    pitch_envelope: Optional[IRPitchEnvelope] = None
+    behavior_id: Optional[str] = None
     vibrato_depth: int = 0
     vibrato_speed: int = 0
     is_16bit: bool = False
-    #: A bound profile's measured volume contour: one AUDC volume level (0..15) per VBL
-    #: frame, in the order the archaeology measured them. ``None`` means "no contour", which
-    #: is the case for every instrument that was not bound, and for the nine profiles whose
-    #: measurement carries none.
-    #:
-    #: It is *applied* by the frame compiler (see ``apply_volume_contour``) as a relative
-    #: modulation of the composer's own envelope, never as a replacement for it. It reaches
-    #: the WAV preview; the 6502 player cannot express a per-frame volume macro, so the MADS
-    #: exporter refuses to export a song while this is set rather than let the preview and the
-    #: hardware diverge (see ``mads_exporter``).
     volume_contour: Optional[List[int]] = None
-    #: Explicit AUDCTL this instrument requires, when it was bound to a profile whose
-    #: hardware configuration is known. ``None`` means "no requirement": the song's own
-    #: ``uses_16bit_bass`` flag decides. Requirements of several instruments are OR-ed
-    #: (see ``resolve_audctl_mode``); a profile's bits never silently replace another's.
     audctl: Optional[int] = None
-    #: Provenance of a bound profile, so an artefact says which profile realized it.
-    #: Empty when the instrument was not bound, which is the normal case.
     profile_id: Optional[str] = None
     profile_fingerprint: Optional[str] = None
-    #: Per-channel modulation the 6502 player applies to this instrument's divider, as a
-    #: descriptor from :mod:`atari_music.pokey_hw`. ``MODULATION_NONE`` (0) for every
-    #: instrument the composer produces by itself, which is every instrument that did not
-    #: come from a Lead Library entry that declares one.
-    #:
-    #: ``MODULATION_OCTAVE_PULSE`` is C1: the divider alternates ``N`` / ``N // 2`` once per
-    #: 50 Hz frame for the whole note. It reaches both outputs — the WAV frame stream through
-    #: :func:`_render_note_to_frames` and the XEX instrument table through
-    #: :func:`atari_music.mads_exporter.export_mads_asm` — so the preview and the hardware
-    #: cannot disagree about it.
     modulation: int = pokey_hw.MODULATION_NONE
 
+    @classmethod
+    def from_catalog_profile(
+        cls,
+        id_num: int,
+        profile: "InstrumentProfile",
+        behavior: Optional["InstrumentBehavior"] = None,
+    ) -> "IRInstrument":
+        """Construct an IRInstrument directly from a curated SSOT profile and behavior."""
+        role = profile.intended_roles[0] if profile.intended_roles else "melody"
+        env = IREnvelope(
+            attack_frames=profile.envelope.attack_frames,
+            decay_frames=profile.envelope.decay_frames,
+            sustain_vol=profile.envelope.sustain_vol,
+            release_frames=profile.envelope.release_frames,
+        )
+        mod = pokey_hw.MODULATION_NONE
+        macro_steps: Optional[List[IRMacroStep]] = None
+        pitch_env: Optional[IRPitchEnvelope] = None
+        beh_id: Optional[str] = profile.behavior_id
+        if behavior is not None:
+            beh_id = behavior.behavior_id
+            if behavior.modulation_mode == "octave_pulse":
+                mod = pokey_hw.MODULATION_OCTAVE_PULSE
+            if behavior.transient_macro is not None:
+                macro_steps = [
+                    IRMacroStep.from_transient_step(s) for s in behavior.transient_macro.steps
+                ]
+            if behavior.pitch_envelope is not None:
+                pitch_env = IRPitchEnvelope.from_spec(behavior.pitch_envelope)
+
+        hc = profile.hardware_constraints
+        audctl_bits = int(hc.required_audctl_bits) if hc.required_audctl_bits else None
+        return cls(
+            id=id_num,
+            name=profile.display_name,
+            distortion=profile.base_distortion,
+            role=role,
+            envelope=env,
+            macro=macro_steps,
+            pitch_envelope=pitch_env,
+            behavior_id=beh_id,
+            is_16bit=(hc.divider_mode in ("16bit_ch12", "16bit_ch34")),
+            audctl=audctl_bits,
+            profile_id=profile.instrument_id,
+            profile_fingerprint=profile.provenance.profile_fingerprint,
+            modulation=mod,
+        )
 
 
 class IRNote(BaseModel):
@@ -111,6 +224,7 @@ class IRNote(BaseModel):
     is_rest: bool = False
     slide_semitones: int = 0
     arpeggio_offsets: List[int] = Field(default_factory=list)
+    pending_program_changes: Tuple[int, ...] = ()
 
 
 class IRPattern(BaseModel):
@@ -135,6 +249,7 @@ class IRSong(BaseModel):
     patterns: List[IRPattern] = Field(default_factory=list)
     sequence: List[int] = Field(default_factory=list)  # Pattern ID per section/bar
     uses_16bit_bass: bool = False
+    initial_channel_instruments: Optional[Dict[int, int]] = None
 
     def to_json_file(self, path: Path) -> None:
         """Serialize song to pretty JSON."""
@@ -560,58 +675,328 @@ def _calculate_envelope_volume(
 # Compact Binary Representation & Memory Budget Validation (< 2 KB)
 # ---------------------------------------------------------------------------
 
-def calculate_ir_binary_size(song: IRSong) -> int:
-    """Calculate exact compact 6502 tracker memory footprint in bytes.
-    
-    Header:
-      - tempo_bpm (1B)
-      - frames_per_tick (1B)
-      - num_instruments (1B)
-      - num_patterns (1B)
-      - sequence_length (1B)
-      - flags (1B: 16bit, etc.)
-      Total Header = 6 bytes.
-      
-    Instruments:
-      - distortion (1B)
-      - role (1B)
-      - ADSR envelope (2B packed)
-      - macro length (1B)
-      - macro steps (2B per step)
-      Average = 6..12 bytes per instrument.
-      
-    Sequence Order List:
-      - 1 byte per sequence step x 4 channels = 4 * len(sequence) bytes.
-      
-    Patterns:
-      - Tracker compact row encoding:
-        Note event: Note byte (6 bits pitch, 2 bits flag) + Inst/Vol byte (4 bits inst, 4 bits vol) = 2 bytes.
-        Empty / Rest row run (RLE compressed): 1 byte.
-    """
-    size = 6  # Header
+def _macro_dedup_key(
+    macro: Sequence[IRMacroStep], base_distortion: int
+) -> Tuple[Tuple[int, int, int, int, int], ...]:
+    """Canonical deduplication key for an active transient macro sequence."""
+    key_steps: List[Tuple[int, int, int, int, int]] = []
+    for step in macro:
+        use_step_dist = 1 if step.audc_dist is not None else 0
+        dist_val = int(step.audc_dist) & 0xE0 if use_step_dist else int(base_distortion) & 0xE0
+        is_fixed = 1 if step.audf_mode == "fixed" else 0
+        audf_byte = int(step.fixed_audf or 0) & 0xFF if is_fixed else (int(step.audf_offset) & 0xFF)
+        use_vol = 1 if step.vol_override is not None else 0
+        vol_val = int(step.vol_override) & 0x0F if use_vol else 0
+        flags = (is_fixed * MACRO_FLAG_AUDF_FIXED) | (use_step_dist * MACRO_FLAG_USE_STEP_DIST) | (use_vol * MACRO_FLAG_USE_VOL_OVERRIDE)
+        key_steps.append((int(step.frames_per_step), flags, dist_val | vol_val, audf_byte, 0))
+    return tuple(key_steps)
 
-    # Instruments
-    for inst in song.instruments:
-        size += 5  # distortion, role, env (2B), macro_len
-        if inst.macro:
-            size += len(inst.macro) * 2
 
-    # Sequence
-    size += len(song.sequence) * 4
-
-    # Patterns
-    for pat in song.patterns:
-        size += 2  # pattern header (rows, track count)
+def resolve_initial_channel_instruments(song: IRSong) -> Dict[int, int]:
+    """Resolve deterministic starting instrument index (0..N-1) per channel 1..4 for v2."""
+    id_to_index = {inst.id: idx for idx, inst in enumerate(song.instruments)}
+    max_idx = max(0, len(song.instruments) - 1)
+    if song.initial_channel_instruments:
+        resolved: Dict[int, int] = {}
         for ch in range(1, 5):
-            notes = pat.tracks.get(ch, [])
-            for note in notes:
-                if note.is_rest or (not note.pitch and note.midi_pitch is None and note.channel_role != "percussion"):
-                    # RLE rest
-                    size += 1
-                else:
-                    # Active note event (Pitch byte + Vol/Inst byte)
-                    size += 2
-                    if note.arpeggio_offsets or note.slide_semitones != 0:
-                        size += 1  # effect byte
+            raw_id = song.initial_channel_instruments.get(ch)
+            if raw_id is None:
+                raw_id = ch - 1
+            if raw_id in id_to_index:
+                resolved[ch] = id_to_index[raw_id]
+            elif 0 <= raw_id <= max_idx:
+                resolved[ch] = raw_id
+            else:
+                resolved[ch] = 0
+        return resolved
 
-    return size
+    out: Dict[int, int] = {}
+    for ch in range(1, 5):
+        if song.uses_16bit_bass and ch == 2:
+            out[ch] = out[1]
+            continue
+        chosen: Optional[int] = None
+        for pat in song.patterns:
+            for note in pat.tracks.get(ch, []):
+                if not note.is_rest and note.instrument_id in id_to_index:
+                    chosen = id_to_index[note.instrument_id]
+                    break
+            if chosen is not None:
+                break
+        if chosen is None:
+            for pat in song.patterns:
+                for note in pat.tracks.get(ch, []):
+                    if note.instrument_id in id_to_index:
+                        chosen = id_to_index[note.instrument_id]
+                        break
+                if chosen is not None:
+                    break
+        if chosen is None:
+            for pat in song.patterns:
+                for note in pat.tracks.get(ch, []):
+                    if note.channel_role == "percussion":
+                        for idx, inst in enumerate(song.instruments):
+                            if inst.role == "percussion" or inst.distortion == DISTORTION_WHITE_NOISE:
+                                chosen = idx
+                                break
+                        break
+                if chosen is not None:
+                    break
+        if chosen is None:
+            if (ch - 1) in id_to_index:
+                chosen = id_to_index[ch - 1]
+            elif song.instruments:
+                chosen = 0
+            else:
+                chosen = 0
+        out[ch] = chosen
+    return out
+
+
+def song_requires_v2(song: IRSong) -> List[str]:
+    """Return reasons why *song* requires SONG_FORMAT_VERSION = 2 (empty if v1-compatible)."""
+    reasons: List[str] = []
+    if song.initial_channel_instruments is not None:
+        reasons.append("song specifies explicit v2 initial_channel_instruments")
+
+    for inst in song.instruments:
+        if inst.macro and any(step.is_v2_step() for step in inst.macro):
+            reasons.append(f"instrument {inst.name!r} carries a v2 transient macro")
+        if inst.pitch_envelope is not None and inst.pitch_envelope.duration_frames > 0:
+            reasons.append(f"instrument {inst.name!r} carries a v2 pitch envelope")
+
+    init_ch = resolve_initial_channel_instruments(song)
+    id_to_index = {inst.id: idx for idx, inst in enumerate(song.instruments)}
+    used_indices: set[int] = set()
+    for ch in range(1, 5):
+        if song.uses_16bit_bass and ch == 2:
+            continue
+        cur_idx = init_ch[ch]
+        for pat in song.patterns:
+            for note in pat.tracks.get(ch, []):
+                if note.pending_program_changes:
+                    reasons.append(f"channel {ch} contains explicit PROGRAM_CHANGE commands")
+                    used_indices.update(
+                        id_to_index[i] for i in note.pending_program_changes if i in id_to_index
+                    )
+                if not note.is_rest and note.instrument_id in id_to_index:
+                    note_idx = id_to_index[note.instrument_id]
+                    used_indices.add(note_idx)
+                    if note_idx != cur_idx:
+                        inst_old = song.instruments[cur_idx]
+                        inst_new = song.instruments[note_idx]
+                        both_legacy_placeholder = (
+                            bool(inst_old.macro)
+                            and bool(inst_new.macro)
+                            and not any(s.is_v2_step() for s in (inst_old.macro or []))
+                            and not any(s.is_v2_step() for s in (inst_new.macro or []))
+                        )
+                        if not both_legacy_placeholder:
+                            reasons.append(
+                                f"channel {ch} switches instrument mid-track ({cur_idx} -> {note_idx})"
+                            )
+                        cur_idx = note_idx
+
+    non_legacy_used = {
+        idx
+        for idx in used_indices
+        if not (
+            song.instruments[idx].macro
+            and not any(s.is_v2_step() for s in (song.instruments[idx].macro or []))
+        )
+    }
+    if len(non_legacy_used) > 4:
+        reasons.append(f"song uses {len(non_legacy_used)} distinct instruments on tracks (v1 supports max 4)")
+
+    return list(dict.fromkeys(reasons))
+
+
+def plan_v2_pattern_streams(
+    song: IRSong,
+) -> Tuple[Dict[int, int], Dict[int, Dict[int, List[Tuple[str, Tuple[int, ...], str]]]]]:
+    """Build deterministic v2 event sequences per unique pattern & channel.
+
+    Returns ``(initial_ch_inst, pat_streams)`` where each channel stream is a list of
+    ``(kind, raw_bytes, comment)`` tuples (``kind in {'cmd', 'note', 'end'}``) shared
+    between :func:`calculate_ir_binary_size` and :func:`atari_music.mads_exporter.export_mads_asm`.
+    """
+    init_ch = resolve_initial_channel_instruments(song)
+    id_to_index = {inst.id: idx for idx, inst in enumerate(song.instruments)}
+    audctl_val = resolve_audctl_mode(song)
+    pattern_map = {p.id: p for p in song.patterns}
+
+    # Simulate two passes of seq_order (including loop wraparound) to know all possible
+    # incoming instrument indices entering each pattern on each channel.
+    seq_order = list(song.sequence) if song.sequence else sorted(pattern_map.keys())
+    incoming_sets: Dict[int, Dict[int, set[int]]] = {
+        pid: {c: set() for c in range(1, 5)} for pid in pattern_map
+    }
+    sim_ch_inst = dict(init_ch)
+    for _pass in range(2):
+        for pat_id in seq_order:
+            pat = pattern_map.get(pat_id)
+            if pat is None:
+                continue
+            for ch in range(1, 5):
+                eff_ch = 1 if (song.uses_16bit_bass and ch == 2) else ch
+                incoming_sets[pat_id][ch].add(sim_ch_inst[eff_ch])
+            for ch in range(1, 5):
+                if song.uses_16bit_bass and ch == 2:
+                    continue
+                for note in pat.tracks.get(ch, []):
+                    if note.pending_program_changes:
+                        last_raw = note.pending_program_changes[-1]
+                        sim_ch_inst[ch] = id_to_index.get(last_raw, last_raw)
+                    elif not note.is_rest and note.instrument_id in id_to_index:
+                        sim_ch_inst[ch] = id_to_index[note.instrument_id]
+
+    pat_streams: Dict[int, Dict[int, List[Tuple[str, Tuple[int, ...], str]]]] = {}
+    for pat_id in sorted(pattern_map.keys()):
+        pat = pattern_map[pat_id]
+        ch_dict: Dict[int, List[Tuple[str, Tuple[int, ...], str]]] = {}
+
+        for ch in range(1, 5):
+            events: List[Tuple[str, Tuple[int, ...], str]] = []
+            incoming = incoming_sets[pat_id][ch]
+            if song.uses_16bit_bass and ch == 2:
+                notes = pat.tracks.get(1, [])
+                if not notes:
+                    events.append(("note", (0x00, max(1, min(255, pat.rows)), 0x00), f"rest ({pat.rows} rows)"))
+                    events.append(("end", (0xFF,), "end of track"))
+                    ch_dict[ch] = events
+                    continue
+                cur_set: Optional[set[int]] = incoming
+                cur_idx = next(iter(incoming)) if len(incoming) == 1 else init_ch[1]
+                for note in notes:
+                    if note.pending_program_changes:
+                        for raw_id in note.pending_program_changes:
+                            tgt = id_to_index.get(raw_id, raw_id)
+                            events.append(("cmd", (0x00, 0x00, OPCODE_PROGRAM_CHANGE, tgt), f"PROGRAM_CHANGE inst={tgt}"))
+                            cur_idx = tgt
+                        cur_set = {cur_idx}
+                    elif not note.is_rest and note.instrument_id in id_to_index:
+                        tgt = id_to_index[note.instrument_id]
+                        if (cur_set is not None and cur_set != {tgt}) or (cur_set is None and tgt != cur_idx):
+                            events.append(("cmd", (0x00, 0x00, OPCODE_PROGRAM_CHANGE, tgt), f"PROGRAM_CHANGE inst={tgt}"))
+                            cur_idx = tgt
+                        cur_set = {tgt}
+                    dur = max(1, min(255, int(note.duration)))
+                    midi_val = note.midi_pitch
+                    if midi_val is None and note.pitch and str(note.pitch).upper() not in ("---", "REST", "OFF", "SIL", ""):
+                        midi_val = note_name_to_midi(str(note.pitch))
+                    if note.is_rest or midi_val is None:
+                        events.append(("note", (0x00, dur, 0x00), f"rest ({dur} rows)"))
+                    else:
+                        freq = midi_pitch_to_frequency(midi_val)
+                        _, div_hi = frequency_to_audf_16bit(freq, audctl=audctl_val, channel=1)
+                        audf = pokey_hw.clamp_audf_for_tracker(div_hi)
+                        vol = min(15, max(0, int(note.volume)))
+                        events.append(("note", (audf, dur, vol), f"16-bit hi {note.pitch or 'bass'} ({dur} rows)"))
+                events.append(("end", (0xFF,), "end of track"))
+                ch_dict[ch] = events
+                continue
+
+            notes = pat.tracks.get(ch, [])
+            if not notes:
+                events.append(("note", (0x00, max(1, min(255, pat.rows)), 0x00), f"rest ({pat.rows} rows)"))
+                events.append(("end", (0xFF,), "end of track"))
+                ch_dict[ch] = events
+                continue
+
+            cur_set = incoming
+            cur_idx = next(iter(incoming)) if len(incoming) == 1 else init_ch[ch]
+            for note in notes:
+                if note.pending_program_changes:
+                    for raw_id in note.pending_program_changes:
+                        tgt = id_to_index.get(raw_id, raw_id)
+                        events.append(("cmd", (0x00, 0x00, OPCODE_PROGRAM_CHANGE, tgt), f"PROGRAM_CHANGE inst={tgt}"))
+                        cur_idx = tgt
+                    cur_set = {cur_idx}
+                elif not note.is_rest and note.instrument_id in id_to_index:
+                    tgt = id_to_index[note.instrument_id]
+                    if (cur_set is not None and cur_set != {tgt}) or (cur_set is None and tgt != cur_idx):
+                        events.append(("cmd", (0x00, 0x00, OPCODE_PROGRAM_CHANGE, tgt), f"PROGRAM_CHANGE inst={tgt}"))
+                        cur_idx = tgt
+                    cur_set = {tgt}
+
+                dur = max(1, min(255, int(note.duration)))
+                midi_val = note.midi_pitch
+                if midi_val is None and note.pitch and str(note.pitch).upper() not in ("---", "REST", "OFF", "SIL", ""):
+                    midi_val = note_name_to_midi(str(note.pitch))
+                unpitched_perc = pokey_hw.is_unpitched_percussion(midi_val, note.channel_role)
+                if note.is_rest or (midi_val is None and not unpitched_perc):
+                    audf = 0
+                    vol = 0
+                    comment = f"rest ({dur} rows)"
+                elif unpitched_perc:
+                    audf = pokey_hw.clamp_audf_for_tracker(pokey_hw.PERCUSSION_DEFAULT_AUDF)
+                    vol = min(15, max(0, int(note.volume)))
+                    comment = f"perc ({dur} rows)"
+                else:
+                    freq = midi_pitch_to_frequency(midi_val)
+                    if song.uses_16bit_bass and ch == 1:
+                        div_low, _ = frequency_to_audf_16bit(freq, audctl=audctl_val, channel=1)
+                        audf = pokey_hw.clamp_audf_for_tracker(div_low)
+                        vol = 0
+                    else:
+                        audf = pokey_hw.clamp_audf_for_tracker(
+                            frequency_to_audf_8bit(freq, audctl=audctl_val, channel=ch)
+                        )
+                        vol = min(15, max(0, int(note.volume)))
+                    comment = f"{note.pitch or 'note'} ({dur} rows)"
+                events.append(("note", (audf, dur, vol), comment))
+            events.append(("end", (0xFF,), "end of track"))
+            ch_dict[ch] = events
+        pat_streams[pat_id] = ch_dict
+
+    return init_ch, pat_streams
+
+
+def calculate_ir_binary_size(song: IRSong, format_version: int = 1) -> int:
+    """Calculate exact MADS exported binary size in bytes for format v1 or v2.
+
+    Matches the actual bytes emitted by :func:`atari_music.mads_exporter.export_mads_asm`:
+    - v1: 6 B header + 25 B instrument block + sequence + unique pattern track tables & streams.
+    - v2: 6 B header + 8 B v2 inst header + 10*N B SoA tables + macro directory/pool + sequence + patterns.
+    """
+    if format_version not in (1, 2):
+        raise ValueError(f"unsupported format_version {format_version!r}; expected 1 or 2")
+
+    seq_bytes = len(song.sequence) * 2 + 2
+
+    if format_version == 1:
+        size = 6 + 25 + seq_bytes
+        for pat in song.patterns:
+            size += 8  # 4 track .word pointers
+            for ch in range(1, 5):
+                if song.uses_16bit_bass and ch == 2:
+                    notes = pat.tracks.get(1, [])
+                else:
+                    notes = pat.tracks.get(ch, [])
+                event_count = len(notes) if notes else 1
+                size += event_count * 3 + 1  # 3-byte events + $FF end marker
+        return size
+
+    # format_version == 2
+    inst_count = max(1, len(song.instruments))
+    soa_bytes = 6 + 8 + 10 * inst_count
+
+    unique_macros: Dict[Tuple[Tuple[int, int, int, int, int], ...], int] = {}
+    macro_pool_bytes = 0
+    for inst in song.instruments:
+        if inst.macro and any(s.is_v2_step() for s in inst.macro):
+            key = _macro_dedup_key(inst.macro, inst.distortion)
+            if key not in unique_macros:
+                unique_macros[key] = len(unique_macros)
+                macro_pool_bytes += len(inst.macro) * 4 + 1  # 4B per step + 1B $00 end
+    macro_dir_bytes = len(unique_macros) * 2 if unique_macros else 2
+
+    _, pat_streams = plan_v2_pattern_streams(song)
+    pat_bytes = 0
+    for pat_id in sorted(pat_streams.keys()):
+        pat_bytes += 8  # 4 .word track pointers
+        for ch in range(1, 5):
+            for _kind, raw_bytes, _comment in pat_streams[pat_id][ch]:
+                pat_bytes += len(raw_bytes)
+
+    return soa_bytes + macro_dir_bytes + macro_pool_bytes + seq_bytes + pat_bytes
