@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.10.0 (2026-11-16)
+
+### Features
+
+- **scripts**: Use atari-music.exe, add vanilla v1 variant, and track HISTORY.md
+  ([`ee1d6ac`](https://github.com/grzes71/atari-music-composer/commit/ee1d6acbaac3b8f565d8e4fe10246d770a338624))
+
+
 ## v0.9.1 (2026-11-16)
 
 ### Bug Fixes
