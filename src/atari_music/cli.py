@@ -1172,6 +1172,32 @@ def stage7_1_report_cmd(test_dir: Path, output_report: Path) -> None:
 @click.option("--length", "-l", type=click.Choice(["short", "medium", "long"], case_sensitive=False), default=None, help="Duration intent: short, medium, long")
 @click.option("--intensity", type=float, default=None, help="Expected intensity (0.0 .. 1.0)")
 @click.option("--variation", "-v", type=float, default=None, help="Motivic variation level (0.0 .. 1.0)")
+@click.option(
+    "--channel-instrument",
+    "channel_instruments_raw",
+    multiple=True,
+    metavar="CH=INSTRUMENT_ID",
+    help="Assign SSOT catalog instrument to channel 1..4 or role (e.g. 1=bass_poly4_punch, 3=lead_attack_bite).",
+)
+@click.option(
+    "--program-change",
+    "program_changes_raw",
+    multiple=True,
+    metavar="CH@TARGET[:NOTE]=INSTRUMENT_ID",
+    help="Schedule mid-song PROGRAM_CHANGE (e.g. 3@B=lead_attack_bite or 4@1:2=perc_snare_crisp).",
+)
+@click.option(
+    "--instrument-catalog",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional SSOT instrument catalog JSON path (default: data/instruments/catalog.json).",
+)
+@click.option(
+    "--player-version",
+    type=click.Choice(["auto", "v1", "v2"], case_sensitive=False),
+    default="auto",
+    help="Target player format version for MADS export & validation (default: auto).",
+)
 @click.option("--output-json", type=click.Path(path_type=Path), default=None, help="Path for output JSON")
 @click.option("--output-wav", type=click.Path(path_type=Path), default=None, help="Path for output WAV")
 @click.option("--output-asm", type=click.Path(path_type=Path), default=None, help="Path for output MADS assembly (.asm)")
@@ -1183,26 +1209,55 @@ def compose_cmd(
     length: Optional[str],
     intensity: Optional[float],
     variation: Optional[float],
+    channel_instruments_raw: Tuple[str, ...],
+    program_changes_raw: Tuple[str, ...],
+    instrument_catalog: Optional[Path],
+    player_version: str,
     output_json: Optional[Path],
     output_wav: Optional[Path],
     output_asm: Optional[Path],
 ) -> None:
     """Generate Atari POKEY music via the public Music Generation API."""
     from atari_music.api import generate_music
-    from atari_music.mads_exporter import export_mads_asm
-
-    res = generate_music(
-        profile=profile,
-        seed=seed,
-        key=key,
-        tempo=tempo,
-        length=length,
-        intensity=intensity,
-        variation=variation,
+    from atari_music.instruments import (
+        CatalogError,
+        InstrumentPlanError,
+        parse_channel_instrument_specs,
+        parse_program_change_specs,
+        resolve_export_format_version,
     )
+    from atari_music.mads_exporter import FormatVersionError, StreamValidationError, export_mads_asm
+
+    ch_map = None
+    pc_specs = None
+    try:
+        if channel_instruments_raw:
+            ch_map = parse_channel_instrument_specs(channel_instruments_raw)
+        if program_changes_raw:
+            pc_specs = parse_program_change_specs(program_changes_raw)
+
+        res = generate_music(
+            profile=profile,
+            seed=seed,
+            key=key,
+            tempo=tempo,
+            length=length,
+            intensity=intensity,
+            variation=variation,
+            channel_instruments=ch_map,
+            program_changes=pc_specs,
+            instrument_catalog_path=instrument_catalog,
+            player_version=player_version,
+        )
+    except (InstrumentPlanError, CatalogError, ValueError) as err:
+        raise click.ClickException(str(err)) from err
+
     m = res.metadata
     click.echo(f"Generated [{m.profile.upper()}]: '{res.music_ir.title}' (Seed: {m.seed})")
-    click.echo(f"Key: {m.key} {m.mode}, Tempo: {m.tempo} BPM, Form: {m.form}, Dur: {m.duration:.1f}s, Mem: {m.memory_size_bytes} B, Channels: {m.channels_used}")
+    click.echo(
+        f"Key: {m.key} {m.mode}, Tempo: {m.tempo} BPM, Form: {m.form}, "
+        f"Dur: {m.duration:.1f}s, Mem: {m.memory_size_bytes} B, Channels: {m.channels_used}, Format: v{m.format_version}"
+    )
 
     if output_json:
         res.save_json(output_json)
@@ -1213,21 +1268,37 @@ def compose_cmd(
         click.echo(f"Rendered WAV -> {output_wav}")
 
     if output_asm:
-        export_mads_asm(res, output_asm)
-        click.echo(f"Exported MADS ASM -> {output_asm}")
+        try:
+            export_ver = resolve_export_format_version(res.pokey_ir, player_version)
+            export_mads_asm(res, output_asm, format_version=export_ver)
+        except (FormatVersionError, StreamValidationError, InstrumentPlanError) as err:
+            raise click.ClickException(str(err)) from err
+        click.echo(f"Exported MADS ASM (v{export_ver}) -> {output_asm}")
 
 
 @cli.command("export-mads")
 @click.argument("input_json", type=click.Path(exists=True, path_type=Path))
 @click.option("--output-asm", "-o", type=click.Path(path_type=Path), required=True, help="Destination MADS assembly path")
-def export_mads_cmd(input_json: Path, output_asm: Path) -> None:
+@click.option(
+    "--player-version", "--format-version",
+    "player_version",
+    type=click.Choice(["auto", "v1", "v2"], case_sensitive=False),
+    default="auto",
+    help="Target player format version (auto, v1, v2; default: auto preserves v1 when sufficient)",
+)
+def export_mads_cmd(input_json: Path, output_asm: Path, player_version: str) -> None:
     """Convert an existing POKEY IR JSON into relocatable MADS assembly data."""
+    from atari_music.instruments import InstrumentPlanError, resolve_export_format_version
     from atari_music.ir import IRSong
-    from atari_music.mads_exporter import export_mads_asm
+    from atari_music.mads_exporter import FormatVersionError, StreamValidationError, export_mads_asm
 
     song = IRSong.from_json_file(input_json)
-    export_mads_asm(song, output_asm)
-    click.echo(f"Successfully exported '{song.title}' -> {output_asm}")
+    try:
+        export_ver = resolve_export_format_version(song, player_version)
+        export_mads_asm(song, output_asm, format_version=export_ver)
+    except (FormatVersionError, StreamValidationError, InstrumentPlanError) as err:
+        raise click.ClickException(str(err)) from err
+    click.echo(f"Successfully exported '{song.title}' (v{export_ver}) -> {output_asm}")
 
 
 @cli.command("compose-v4", hidden=True)
@@ -1334,6 +1405,12 @@ def stage8_report_cmd(v3_summary: Path, v4_summary: Path, output_report: Path) -
     default=None,
     help=f"Optional Lead Library directory (default: {DEFAULT_INSTRUMENT_LIBRARY})",
 )
+@click.option(
+    "--player-version",
+    type=click.Choice(["auto", "v1", "v2"], case_sensitive=False),
+    default="auto",
+    help="Target MADS export format version (auto, v1, v2; default: auto)",
+)
 def import_json_cmd(
     composition_json: Path,
     output_wav: Optional[Path],
@@ -1343,11 +1420,13 @@ def import_json_cmd(
     profile_bindings: Optional[Path],
     instrument: Tuple[str, ...],
     instrument_library: Optional[Path],
+    player_version: str,
 ) -> None:
     """Validate and import an AI composition JSON document."""
     from atari_music.ai.client import load_composition_json, generate_music_from_composition
     from atari_music.ai.schema import MusicCompositionError
-    from atari_music.mads_exporter import export_mads_asm
+    from atari_music.instruments import InstrumentPlanError, resolve_export_format_version
+    from atari_music.mads_exporter import FormatVersionError, StreamValidationError, export_mads_asm
 
     assignments = _parse_instrument_assignments(instrument)
 
@@ -1380,8 +1459,12 @@ def import_json_cmd(
             res.render_wav(output_wav)
             click.echo(f"Rendered WAV -> {output_wav}")
         if output_asm:
-            export_mads_asm(res.pokey_ir, output_asm)
-            click.echo(f"Exported MADS ASM -> {output_asm}")
+            try:
+                export_ver = resolve_export_format_version(res.pokey_ir, player_version)
+                export_mads_asm(res.pokey_ir, output_asm, format_version=export_ver)
+            except (FormatVersionError, StreamValidationError, InstrumentPlanError) as err:
+                raise click.ClickException(str(err)) from err
+            click.echo(f"Exported MADS ASM (v{export_ver}) -> {output_asm}")
 
 
 @cli.command("import-dsl")
@@ -1417,6 +1500,12 @@ def import_json_cmd(
     default=None,
     help=f"Optional Lead Library directory (default: {DEFAULT_INSTRUMENT_LIBRARY})",
 )
+@click.option(
+    "--player-version",
+    type=click.Choice(["auto", "v1", "v2"], case_sensitive=False),
+    default="auto",
+    help="Target MADS export format version (auto, v1, v2; default: auto)",
+)
 def import_dsl_cmd(
     composition_dsl: Path,
     output_wav: Optional[Path],
@@ -1427,11 +1516,13 @@ def import_dsl_cmd(
     profile_bindings: Optional[Path],
     instrument: Tuple[str, ...],
     instrument_library: Optional[Path],
+    player_version: str,
 ) -> None:
     """Validate and import an AI composition Music DSL document."""
     from atari_music.ai.client import load_composition_dsl, generate_music_from_composition
     from atari_music.ai.schema import MusicCompositionError
-    from atari_music.mads_exporter import export_mads_asm
+    from atari_music.instruments import InstrumentPlanError, resolve_export_format_version
+    from atari_music.mads_exporter import FormatVersionError, StreamValidationError, export_mads_asm
 
     assignments = _parse_instrument_assignments(instrument)
 
@@ -1468,8 +1559,12 @@ def import_dsl_cmd(
             res.render_wav(output_wav)
             click.echo(f"Rendered WAV -> {output_wav}")
         if output_asm:
-            export_mads_asm(res.pokey_ir, output_asm)
-            click.echo(f"Exported MADS ASM -> {output_asm}")
+            try:
+                export_ver = resolve_export_format_version(res.pokey_ir, player_version)
+                export_mads_asm(res.pokey_ir, output_asm, format_version=export_ver)
+            except (FormatVersionError, StreamValidationError, InstrumentPlanError) as err:
+                raise click.ClickException(str(err)) from err
+            click.echo(f"Exported MADS ASM (v{export_ver}) -> {output_asm}")
 
 
 @cli.command("build-xex")
@@ -1508,6 +1603,12 @@ def import_dsl_cmd(
     default=None,
     help=f"Optional Lead Library directory (default: {DEFAULT_INSTRUMENT_LIBRARY})",
 )
+@click.option(
+    "--player-version",
+    type=click.Choice(["auto", "v1", "v2"], case_sensitive=False),
+    default="auto",
+    help="Target MADS export format version (auto, v1, v2; default: auto)",
+)
 def build_xex_cmd(
     composition_file: Path,
     output: Path,
@@ -1521,9 +1622,12 @@ def build_xex_cmd(
     profile_bindings: Optional[Path],
     instrument: Tuple[str, ...],
     instrument_library: Optional[Path],
+    player_version: str,
 ) -> None:
     """Compile AI composition (JSON or Music DSL) directly to relocatable Atari XEX binary using MADS."""
     from atari_music.ai.client import build_xex_from_composition
+    from atari_music.instruments import InstrumentPlanError
+    from atari_music.mads_exporter import FormatVersionError, StreamValidationError
 
     def parse_addr(val: str) -> int:
         s = val.strip()
@@ -1559,13 +1663,13 @@ def build_xex_cmd(
             mads_exe=mads,
             player_asm=player_asm,
             format=composition_format,
+            player_version=player_version,
             result_transform=result_transform
             if assignments or (bank is not None and binding is not None)
             else None,
         )
-    except XexLayoutError as exc:
-        # The build assembled but cannot be loaded safely. Surface the reason as a clean CLI
-        # error instead of a traceback; the message already names the range and the policy.
+    except (XexLayoutError, FormatVersionError, StreamValidationError, InstrumentPlanError) as exc:
+        # Surface build/format/assignment refusals as clean CLI errors instead of a traceback.
         raise click.ClickException(str(exc)) from exc
     size = xex_path.stat().st_size
     click.echo(f"Successfully compiled XEX -> {xex_path} ({size} bytes)")
@@ -1589,6 +1693,33 @@ def build_xex_cmd(
     help="Path to custom .env configuration file (overrides global --env-file)",
 )
 @click.option("--max-retries", type=int, default=3, help="Maximum validation repair retry attempts (default: 3)")
+@click.option(
+    "--channel-instrument",
+    "channel_instruments_raw",
+    multiple=True,
+    metavar="CH=INSTRUMENT_ID",
+    help="Assign SSOT catalog instrument to channel 1..4 or role (e.g. 1=bass_poly4_punch, 3=lead_attack_bite).",
+)
+@click.option(
+    "--use-instrument-catalog/--no-use-instrument-catalog",
+    default=False,
+    help="Opt-in: expose SSOT catalog instruments & behaviors to AI composition.",
+)
+@click.option(
+    "--instrument-catalog",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional SSOT instrument catalog JSON path (default: data/instruments/catalog.json).",
+)
+@click.option(
+    "--player-version",
+    type=click.Choice(["auto", "v1", "v2"], case_sensitive=False),
+    default="auto",
+    help="Target MADS export format version when --output-asm is given (auto, v1, v2; default: auto).",
+)
+@click.option("--output-ir", type=click.Path(path_type=Path), default=None, help="Optional output POKEY IR JSON path")
+@click.option("--output-asm", type=click.Path(path_type=Path), default=None, help="Optional output MADS assembly (.asm) path")
+@click.option("--output-wav", type=click.Path(path_type=Path), default=None, help="Optional output WAV path")
 @click.option(
     "--log-level",
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
@@ -1621,13 +1752,41 @@ def ai_compose_cmd(
     model: Optional[str],
     env_file: Optional[Path],
     max_retries: int,
+    channel_instruments_raw: Tuple[str, ...],
+    use_instrument_catalog: bool,
+    instrument_catalog: Optional[Path],
+    player_version: str,
+    output_ir: Optional[Path],
+    output_asm: Optional[Path],
+    output_wav: Optional[Path],
     output: Optional[Path],
 ) -> None:
     """Generate a valid AI composition (JSON or Music DSL) using an AI provider."""
     from atari_music.ai.providers.base import CompositionRequest
-    from atari_music.ai.client import request_ai_composition
+    from atari_music.ai.client import generate_music_from_composition, request_ai_composition
     from atari_music.ai.dsl import export_music_dsl
     from atari_music.config import Config
+    from atari_music.instruments import (
+        CatalogError,
+        InstrumentPlanError,
+        parse_channel_instrument_specs,
+        resolve_channel_instrument_plan,
+        resolve_export_format_version,
+    )
+    from atari_music.mads_exporter import FormatVersionError, StreamValidationError, export_mads_asm
+
+    ch_map = None
+    try:
+        if channel_instruments_raw:
+            ch_map = parse_channel_instrument_specs(channel_instruments_raw)
+            resolve_channel_instrument_plan(
+                ch_map,
+                catalog_path=instrument_catalog,
+                uses_16bit_bass=use_16bit_bass,
+                player_version=player_version,
+            )
+    except (InstrumentPlanError, CatalogError, ValueError) as err:
+        raise click.ClickException(str(err)) from err
 
     global_env_file = ctx.obj.get("env_file") if (ctx and isinstance(ctx.obj, dict)) else None
     effective_env_file = env_file or global_env_file
@@ -1646,6 +1805,9 @@ def ai_compose_cmd(
         use_16bit_bass=use_16bit_bass,
         structure=structure,
         format=composition_format.lower(),
+        channel_instruments=ch_map,
+        enable_catalog_instruments=bool(use_instrument_catalog or ch_map),
+        instrument_catalog_path=str(instrument_catalog) if instrument_catalog else None,
     )
     is_stdout = output is None or str(output) == "-"
 
@@ -1677,6 +1839,252 @@ def ai_compose_cmd(
             f.write(content_str)
         click.echo(f"Successfully generated and validated composition -> {output}", err=True)
         click.echo(f"  Title: {comp.metadata.title}", err=True)
+
+    if output_ir or output_asm or output_wav:
+        res = generate_music_from_composition(comp)
+        if output_ir:
+            res.save_json(output_ir)
+            click.echo(f"Saved POKEY IR -> {output_ir}", err=True)
+        if output_wav:
+            res.render_wav(output_wav)
+            click.echo(f"Rendered WAV -> {output_wav}", err=True)
+        if output_asm:
+            try:
+                export_ver = resolve_export_format_version(res.pokey_ir, player_version)
+                export_mads_asm(res.pokey_ir, output_asm, format_version=export_ver)
+            except (FormatVersionError, StreamValidationError, InstrumentPlanError) as err:
+                raise click.ClickException(str(err)) from err
+            click.echo(f"Exported MADS ASM (v{export_ver}) -> {output_asm}", err=True)
+
+
+@cli.command("list-instruments")
+@click.option(
+    "--instrument-catalog", "--catalog",
+    "catalog_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="SSOT instrument catalog JSON path (default: data/instruments/catalog.json)",
+)
+@click.option(
+    "--family",
+    type=click.Choice(["lead", "bass", "pad", "harmony", "percussion", "fx"], case_sensitive=False),
+    default=None,
+    help="Filter instruments by family",
+)
+@click.option(
+    "--role",
+    type=click.Choice(["melody", "bass", "harmony", "rhythm", "percussion"], case_sensitive=False),
+    default=None,
+    help="Filter instruments by intended role",
+)
+@click.option(
+    "--target",
+    type=click.Choice(["xex_v2", "xex_v1", "wav"], case_sensitive=False),
+    default="xex_v2",
+    help="Target backend to report compatibility for (default: xex_v2)",
+)
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit catalog listing as JSON")
+def list_instruments_cmd(
+    catalog_path: Optional[Path],
+    family: Optional[str],
+    role: Optional[str],
+    target: str,
+    as_json: bool,
+) -> None:
+    """List curated instruments in the SSOT catalog (data/instruments/catalog.json)."""
+    from atari_music.instruments import (
+        TARGET_V1_XEX,
+        TARGET_V2_ITER1_XEX,
+        TARGET_WAV_PREVIEW,
+        CatalogError,
+        ChannelAssignmentRequest,
+        POKEYRuntime,
+        load_instrument_catalog,
+    )
+
+    try:
+        catalog = load_instrument_catalog(catalog_path)
+    except CatalogError as err:
+        raise click.ClickException(str(err)) from err
+
+    target_map = {
+        "xex_v2": TARGET_V2_ITER1_XEX,
+        "xex_v1": TARGET_V1_XEX,
+        "wav": TARGET_WAV_PREVIEW,
+    }
+    target_cap = target_map[target.lower()]
+    runtime = POKEYRuntime()
+    profiles = catalog.list_profiles(
+        family=family.lower() if family else None,
+        role=role.lower() if role else None,
+    )
+
+    rows: List[Dict[str, Any]] = []
+    for prof in profiles:
+        beh = catalog.get_behavior(prof.behavior_id) if prof.behavior_id else None
+        ch_def = prof.hardware_constraints.channels_allowed[0]
+        rep = runtime.resolve(
+            [ChannelAssignmentRequest(channel=ch_def, instrument_ids=(prof.instrument_id,))],
+            catalog,
+            target=target_cap,
+        )
+        rows.append(
+            {
+                "instrument_id": prof.instrument_id,
+                "display_name": prof.display_name,
+                "family": prof.family,
+                "intended_roles": list(prof.intended_roles),
+                "distortion_hex": f"${prof.base_distortion:02X}",
+                "divider_mode": prof.hardware_constraints.divider_mode,
+                "channels_allowed": list(prof.hardware_constraints.channels_allowed),
+                "behavior_id": prof.behavior_id,
+                "tier": beh.required_runtime_tier if beh else "core_v1",
+                "target": target.lower(),
+                "compatible": rep.is_compatible,
+                "status": rep.status,
+            }
+        )
+
+    if as_json:
+        click.echo(json.dumps({"catalog_version": catalog.catalog_version, "instruments": rows}, indent=2))
+        return
+
+    click.echo(f"SSOT Instrument Catalog v{catalog.catalog_version} ({len(rows)} matching, target={target.lower()}):")
+    for r in rows:
+        flag = "OK" if r["compatible"] else r["status"]
+        chs = ",".join(str(c) for c in r["channels_allowed"])
+        click.echo(
+            f"  {r['instrument_id']:<24} {r['family']:<10} ch=[{chs:<7}] {r['tier']:<21} [{flag}] - {r['display_name']}"
+        )
+
+
+@cli.command("inspect-instrument")
+@click.argument("instrument_id", type=str)
+@click.option(
+    "--instrument-catalog", "--catalog",
+    "catalog_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="SSOT instrument catalog JSON path (default: data/instruments/catalog.json)",
+)
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit instrument specification as JSON")
+def inspect_instrument_cmd(
+    instrument_id: str,
+    catalog_path: Optional[Path],
+    as_json: bool,
+) -> None:
+    """Display full hardware, envelope, macro, and compatibility details for a catalog instrument."""
+    from atari_music.instruments import (
+        TARGET_V1_XEX,
+        TARGET_V2_ITER1_XEX,
+        TARGET_WAV_PREVIEW,
+        CatalogError,
+        ChannelAssignmentRequest,
+        POKEYRuntime,
+        load_instrument_catalog,
+    )
+
+    try:
+        catalog = load_instrument_catalog(catalog_path)
+        profile, behavior = catalog.resolve_profile_behavior(instrument_id)
+    except CatalogError as err:
+        raise click.ClickException(str(err)) from err
+
+    runtime = POKEYRuntime()
+    ch_def = profile.hardware_constraints.channels_allowed[0]
+    compat = {
+        name: {
+            "compatible": rep.is_compatible,
+            "status": rep.status,
+            "effective_audctl": f"${rep.effective_audctl:02X}",
+            "diagnostics": [d.message for d in rep.diagnostics],
+        }
+        for name, tgt in (
+            ("xex_v1", TARGET_V1_XEX),
+            ("xex_v2", TARGET_V2_ITER1_XEX),
+            ("wav", TARGET_WAV_PREVIEW),
+        )
+        for rep in (
+            runtime.resolve(
+                [ChannelAssignmentRequest(channel=ch_def, instrument_ids=(instrument_id,))],
+                catalog,
+                target=tgt,
+            ),
+        )
+    }
+
+    if as_json:
+        payload = {
+            "profile": profile.model_dump(mode="json"),
+            "behavior": behavior.model_dump(mode="json") if behavior else None,
+            "compatibility": compat,
+        }
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    hc = profile.hardware_constraints
+    env = profile.envelope
+    click.echo(f"Instrument: {profile.instrument_id} ({profile.display_name})")
+    click.echo(f"  Family / Roles:    {profile.family} / {', '.join(profile.intended_roles)}")
+    click.echo(f"  Waveform / AUDC:   {profile.waveform_family} (${profile.base_distortion:02X})")
+    click.echo(
+        f"  ADSR Envelope:     A={env.attack_frames} D={env.decay_frames} S={env.sustain_vol} R={env.release_frames} (peak={env.peak_vol})"
+    )
+    click.echo(
+        f"  Hardware:          mode={hc.divider_mode}, clock={hc.preferred_clock_hz or '64khz'}, "
+        f"AUDCTL_req=${hc.required_audctl_bits:02X}, AUDCTL_forb=${hc.forbidden_audctl_bits:02X}, "
+        f"channels={list(hc.channels_allowed)}, MIDI={list(hc.midi_range)}"
+    )
+    if behavior is not None:
+        click.echo(
+            f"  Behavior:          {behavior.behavior_id} (tier={behavior.required_runtime_tier}, "
+            f"mod={behavior.modulation_mode}, per_note_switch={behavior.allow_per_note_switch})"
+        )
+        if behavior.pitch_envelope is not None:
+            pe = behavior.pitch_envelope
+            click.echo(
+                f"    Pitch Envelope:  start_delta={pe.start_audf_delta}, frames={pe.duration_frames}, step_delta={pe.step_delta}"
+            )
+        if behavior.transient_macro is not None:
+            click.echo(f"    Transient Macro: {len(behavior.transient_macro.steps)} step(s):")
+            for s_idx, step in enumerate(behavior.transient_macro.steps):
+                audf_desc = (
+                    f"fixed=${step.fixed_audf:02X}" if step.fixed_audf is not None else f"offset={step.audf_offset:+d}"
+                )
+                dist_desc = f"${step.distortion_nibble:02X}" if step.distortion_nibble is not None else "base"
+                vol_desc = str(step.volume) if step.volume is not None else "env"
+                click.echo(
+                    f"      [{s_idx}] {step.duration_frames}f dist={dist_desc} {audf_desc} vol={vol_desc}"
+                )
+    click.echo("  Runtime Compatibility:")
+    for name, info in compat.items():
+        click.echo(f"    {name:<8}: compatible={info['compatible']} status={info['status']} AUDCTL={info['effective_audctl']}")
+        for msg in info["diagnostics"]:
+            click.echo(f"      - {msg}")
+
+
+@cli.command("validate-instruments")
+@click.option(
+    "--instrument-catalog", "--catalog",
+    "catalog_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="SSOT instrument catalog JSON path (default: data/instruments/catalog.json)",
+)
+def validate_instruments_cmd(catalog_path: Optional[Path]) -> None:
+    """Validate integrity, schema, and provenance of the SSOT instrument catalog."""
+    from atari_music.instruments import DEFAULT_CATALOG_PATH, CatalogError, load_instrument_catalog, validate_instrument_catalog
+
+    try:
+        target_path = DEFAULT_CATALOG_PATH if catalog_path is None else catalog_path
+        validate_instrument_catalog(target_path)
+        catalog = load_instrument_catalog(catalog_path)
+    except CatalogError as err:
+        raise click.ClickException(str(err)) from err
+    click.echo(
+        f"Instrument catalog VALID: schema={catalog.schema_id} version={catalog.catalog_version} "
+        f"({len(catalog.instruments)} instruments, {len(catalog.behaviors)} behaviors)"
+    )
 
 
 @cli.command("prepare-listening-test-9c")
