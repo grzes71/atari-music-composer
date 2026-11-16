@@ -601,6 +601,7 @@ def validate_composition_report(data: Union[Dict[str, Any], str, AICompositionDo
         )
 
     valid_distortions = {0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0}
+    catalog_inst_map: Dict[str, str] = {}
     for inst_idx, inst in enumerate(doc.instruments):
         if inst.distortion is not None and inst.distortion not in valid_distortions:
             report.add_issue(
@@ -610,6 +611,60 @@ def validate_composition_report(data: Union[Dict[str, Any], str, AICompositionDo
                 path=f"instruments[{inst_idx}].distortion",
                 details={"instrument": inst.id, "distortion": inst.distortion, "allowed": sorted(valid_distortions)},
             )
+        if inst.catalog_id is not None:
+            catalog_inst_map[inst.id] = inst.catalog_id
+
+    if catalog_inst_map:
+        from atari_music.instruments import (
+            TARGET_V2_ITER1_XEX,
+            ChannelAssignmentRequest,
+            POKEYRuntime,
+            load_instrument_catalog,
+        )
+
+        catalog = load_instrument_catalog()
+        for inst_idx, inst in enumerate(doc.instruments):
+            if inst.catalog_id is not None and not catalog.has_profile(inst.catalog_id):
+                report.add_issue(
+                    category="hardware",
+                    code="UNKNOWN_CATALOG_INSTRUMENT",
+                    message=(
+                        f"[Instrument '{inst.id}']: catalog_id '{inst.catalog_id}' not found in SSOT catalog "
+                        f"(available: {', '.join(p.instrument_id for p in catalog.instruments)})"
+                    ),
+                    path=f"instruments[{inst_idx}].catalog_id",
+                    details={"instrument": inst.id, "catalog_id": inst.catalog_id},
+                )
+
+        # Validate per-channel catalog assignments & deferred/hardware constraints via POKEYRuntime
+        ch_used_profiles: Dict[int, List[str]] = {c: [] for c in range(1, 5)}
+        for pat in doc.patterns:
+            has_zero = any(str(k).strip() == "0" for k in pat.channels.keys())
+            for ch_key, events in pat.channels.items():
+                try:
+                    ch_idx = normalize_channel_idx(ch_key, has_zero=has_zero)
+                except Exception:
+                    continue
+                for ev in events:
+                    cid = catalog_inst_map.get(ev.instrument)
+                    if cid and catalog.has_profile(cid) and cid not in ch_used_profiles[ch_idx]:
+                        ch_used_profiles[ch_idx].append(cid)
+        requests = [
+            ChannelAssignmentRequest(channel=ch, instrument_ids=tuple(cids))
+            for ch, cids in ch_used_profiles.items()
+            if cids
+        ]
+        if requests:
+            rt_report = POKEYRuntime().resolve(requests, catalog, target=TARGET_V2_ITER1_XEX)
+            for diag in rt_report.diagnostics:
+                if diag.severity == "ERROR":
+                    report.add_issue(
+                        category="hardware",
+                        code=diag.code,
+                        message=diag.message,
+                        path="instruments",
+                        details={"channel": diag.channel, "instrument_id": diag.instrument_id},
+                    )
 
     for pat in doc.patterns:
         has_zero = any(str(k).strip() == "0" for k in pat.channels.keys())

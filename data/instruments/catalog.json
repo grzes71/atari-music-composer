@@ -1,0 +1,637 @@
+{
+  "schema_id": "atari-music/instrument-catalog/1",
+  "catalog_version": "0.1.0",
+  "behaviors": [
+    {
+      "behavior_id": "beh_static_v1",
+      "version": 1,
+      "required_runtime_tier": "core_v1",
+      "modulation_mode": "none",
+      "allow_per_note_switch": false
+    },
+    {
+      "behavior_id": "beh_octave_pulse_v1",
+      "version": 1,
+      "required_runtime_tier": "core_v1",
+      "modulation_mode": "octave_pulse",
+      "allow_per_note_switch": false
+    },
+    {
+      "behavior_id": "beh_transient_attack_bite",
+      "version": 1,
+      "required_runtime_tier": "core_v2_iter1",
+      "transient_macro": {
+        "loop": false,
+        "steps": [
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 32,
+            "audf_offset": -1,
+            "volume": 15
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 192,
+            "audf_offset": 0,
+            "volume": 14
+          }
+        ]
+      },
+      "modulation_mode": "none",
+      "allow_per_note_switch": false
+    },
+    {
+      "behavior_id": "beh_bass_sub_punch",
+      "version": 1,
+      "required_runtime_tier": "core_v2_iter1",
+      "pitch_envelope": {
+        "start_audf_delta": -18,
+        "duration_frames": 3,
+        "step_delta": 6
+      },
+      "modulation_mode": "none",
+      "allow_per_note_switch": false
+    },
+    {
+      "behavior_id": "beh_perc_kick",
+      "version": 1,
+      "required_runtime_tier": "core_v2_iter1",
+      "transient_macro": {
+        "loop": false,
+        "steps": [
+          { "duration_frames": 1, "distortion_nibble": 192, "fixed_audf": 28, "volume": 15 },
+          { "duration_frames": 1, "distortion_nibble": 160, "fixed_audf": 52, "volume": 14 },
+          { "duration_frames": 1, "distortion_nibble": 160, "fixed_audf": 88, "volume": 11 },
+          { "duration_frames": 2, "distortion_nibble": 160, "fixed_audf": 124, "volume": 7 },
+          { "duration_frames": 2, "distortion_nibble": 160, "fixed_audf": 160, "volume": 3 }
+        ]
+      },
+      "pitch_envelope": {
+        "start_audf_delta": -24,
+        "duration_frames": 4,
+        "step_delta": 6
+      },
+      "modulation_mode": "none",
+      "allow_per_note_switch": true
+    },
+    {
+      "behavior_id": "beh_perc_snare",
+      "version": 1,
+      "required_runtime_tier": "core_v2_iter1",
+      "transient_macro": {
+        "loop": false,
+        "steps": [
+          { "duration_frames": 1, "distortion_nibble": 192, "fixed_audf": 34, "volume": 15 },
+          { "duration_frames": 2, "distortion_nibble": 128, "fixed_audf": 18, "volume": 13 },
+          { "duration_frames": 2, "distortion_nibble": 128, "fixed_audf": 24, "volume": 8 },
+          { "duration_frames": 2, "distortion_nibble": 128, "fixed_audf": 32, "volume": 4 }
+        ]
+      },
+      "modulation_mode": "none",
+      "allow_per_note_switch": true
+    },
+    {
+      "behavior_id": "beh_perc_hihat",
+      "version": 1,
+      "required_runtime_tier": "core_v2_iter1",
+      "transient_macro": {
+        "loop": false,
+        "steps": [
+          { "duration_frames": 1, "distortion_nibble": 128, "fixed_audf": 2, "volume": 12 },
+          { "duration_frames": 1, "distortion_nibble": 0, "fixed_audf": 4, "volume": 6 },
+          { "duration_frames": 1, "distortion_nibble": 128, "fixed_audf": 3, "volume": 2 }
+        ]
+      },
+      "modulation_mode": "none",
+      "allow_per_note_switch": true
+    },
+    {
+      "behavior_id": "beh_perc_tom",
+      "version": 1,
+      "required_runtime_tier": "core_v2_iter1",
+      "transient_macro": {
+        "loop": false,
+        "steps": [
+          { "duration_frames": 1, "distortion_nibble": 192, "fixed_audf": 46, "volume": 14 },
+          { "duration_frames": 2, "distortion_nibble": 160, "fixed_audf": 64, "volume": 11 },
+          { "duration_frames": 2, "distortion_nibble": 160, "fixed_audf": 82, "volume": 7 },
+          { "duration_frames": 2, "distortion_nibble": 160, "fixed_audf": 96, "volume": 3 }
+        ]
+      },
+      "pitch_envelope": {
+        "start_audf_delta": -16,
+        "duration_frames": 5,
+        "step_delta": 3
+      },
+      "modulation_mode": "none",
+      "allow_per_note_switch": true
+    },
+    {
+      "behavior_id": "beh_arp_deferred",
+      "version": 1,
+      "required_runtime_tier": "experimental_deferred",
+      "modulation_mode": "none",
+      "arpeggio_offsets": [0, 4, 7],
+      "allow_per_note_switch": false
+    },
+    {
+      "behavior_id": "beh_hpf_pwm_deferred",
+      "version": 1,
+      "required_runtime_tier": "experimental_deferred",
+      "modulation_mode": "none",
+      "uses_hpf_xor": true,
+      "allow_per_note_switch": false
+    }
+  ],
+  "instruments": [
+    {
+      "instrument_id": "lead_pure_sustain",
+      "display_name": "Pure Sustain Lead",
+      "version": "1.0",
+      "family": "lead",
+      "intended_roles": ["melody"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 6,
+        "decay_frames": 0,
+        "sustain_vol": 10,
+        "release_frames": 2,
+        "peak_vol": 15
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [48, 96],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_static_v1",
+      "provenance": {
+        "source_kind": "sound_profile_bank",
+        "profile_id": "pokey_ref_25f94201",
+        "profile_fingerprint": "e38233097b37decf494ded78e759657ab97ff121a0a514c498f51e90267a919b",
+        "validation_status": "PLAYABLE",
+        "notes": "Curated square sustain lead backed by verified bank profile."
+      }
+    },
+    {
+      "instrument_id": "lead_pure_pluck",
+      "display_name": "Pure Pluck Lead",
+      "version": "1.0",
+      "family": "lead",
+      "intended_roles": ["melody"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 6,
+        "sustain_vol": 3,
+        "release_frames": 2,
+        "peak_vol": 15
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [48, 96],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_static_v1",
+      "provenance": {
+        "source_kind": "sound_profile_bank",
+        "profile_id": "pokey_ref_9daa0429",
+        "profile_fingerprint": "c3b125f70bc44bc8f29df0d038221101cc66255f46e4b54c7ddfc68607b3971f",
+        "validation_status": "PLAYABLE",
+        "notes": "Short pluck lead backed by verified bank profile."
+      }
+    },
+    {
+      "instrument_id": "lead_c1_octave_pulse",
+      "display_name": "C1 Octave Pulse Lead",
+      "version": "1.0",
+      "family": "lead",
+      "intended_roles": ["melody"],
+      "base_distortion": 64,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 4,
+        "sustain_vol": 8,
+        "release_frames": 2,
+        "peak_vol": 15
+      },
+      "waveform_family": "poly5_4",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [48, 91],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_octave_pulse_v1",
+      "provenance": {
+        "source_kind": "curated_preset",
+        "notes": "Derived from Lead Library v0.1 c1_octave_pulse experiment ($40 + MOD_OCTAVE_PULSE)."
+      }
+    },
+    {
+      "instrument_id": "lead_buzz_steady",
+      "display_name": "Poly4 Buzz Steady Lead",
+      "version": "1.0",
+      "family": "lead",
+      "intended_roles": ["melody"],
+      "base_distortion": 192,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 0,
+        "sustain_vol": 9,
+        "release_frames": 5,
+        "peak_vol": 15
+      },
+      "waveform_family": "poly4",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": true,
+        "midi_range": [52, 88],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_static_v1",
+      "provenance": {
+        "source_kind": "sound_profile_bank",
+        "profile_id": "pokey_ref_2b83db43",
+        "profile_fingerprint": "5c3afef4fa0658e1331dcc5ae0592c36b197b4db308eda9e51515f0f217f183d",
+        "validation_status": "PLAYABLE_WITH_LIMITATION",
+        "notes": "Poly4 buzz tone requiring coprime-15 safe divider selection."
+      }
+    },
+    {
+      "instrument_id": "lead_attack_bite",
+      "display_name": "Attack Bite Square Lead",
+      "version": "1.0",
+      "family": "lead",
+      "intended_roles": ["melody"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 5,
+        "sustain_vol": 10,
+        "release_frames": 3,
+        "peak_vol": 15
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [48, 96],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_transient_attack_bite",
+      "provenance": {
+        "source_kind": "sound_design_demo",
+        "notes": "2-frame Poly5/Poly4 attack transient into clean square sustain."
+      }
+    },
+    {
+      "instrument_id": "lead_hpf_pwm",
+      "display_name": "HPF XOR PWM Lead (CH1+CH3)",
+      "version": "1.0",
+      "family": "lead",
+      "intended_roles": ["melody"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 1,
+        "decay_frames": 4,
+        "sustain_vol": 11,
+        "release_frames": 4,
+        "peak_vol": 15
+      },
+      "waveform_family": "hpf_pair",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 4,
+        "forbidden_audctl_bits": 16,
+        "poly4_safe_tuning": false,
+        "midi_range": [48, 84],
+        "channels_allowed": [1]
+      },
+      "behavior_id": "beh_hpf_pwm_deferred",
+      "provenance": {
+        "source_kind": "sound_design_demo",
+        "notes": "AUDCTL $04 CH1 filtered by CH3 with f/2 compensation; deferred past Stage C Iter 1."
+      }
+    },
+    {
+      "instrument_id": "bass_16bit_pure",
+      "display_name": "16-bit Pure Sub Bass",
+      "version": "1.0",
+      "family": "bass",
+      "intended_roles": ["bass"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 6,
+        "sustain_vol": 9,
+        "release_frames": 2,
+        "peak_vol": 15
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "16bit_ch12",
+        "preferred_clock_hz": "1.79mhz",
+        "required_audctl_bits": 80,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [24, 60],
+        "channels_allowed": [1]
+      },
+      "behavior_id": "beh_static_v1",
+      "provenance": {
+        "source_kind": "curated_preset",
+        "notes": "16-bit CH1+CH2 pure square bass clocked at 1.79 MHz ($50)."
+      }
+    },
+    {
+      "instrument_id": "bass_15khz_pure",
+      "display_name": "15 kHz Deep Square Bass",
+      "version": "1.0",
+      "family": "bass",
+      "intended_roles": ["bass"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 5,
+        "sustain_vol": 9,
+        "release_frames": 2,
+        "peak_vol": 15
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "15khz",
+        "required_audctl_bits": 1,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [28, 60],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_static_v1",
+      "provenance": {
+        "source_kind": "sound_design_demo",
+        "notes": "Single-channel 15 kHz ($01) pure bass preserving polyphony on CH2."
+      }
+    },
+    {
+      "instrument_id": "bass_16bit_poly5_growl",
+      "display_name": "16-bit Poly5 Growl Bass",
+      "version": "1.0",
+      "family": "bass",
+      "intended_roles": ["bass"],
+      "base_distortion": 32,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 4,
+        "sustain_vol": 10,
+        "release_frames": 2,
+        "peak_vol": 15
+      },
+      "waveform_family": "poly5",
+      "hardware_constraints": {
+        "divider_mode": "16bit_ch12",
+        "preferred_clock_hz": "1.79mhz",
+        "required_audctl_bits": 80,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [24, 55],
+        "channels_allowed": [1]
+      },
+      "behavior_id": "beh_static_v1",
+      "provenance": {
+        "source_kind": "sound_design_demo",
+        "notes": "16-bit CH1+CH2 $20 Poly5 bass avoiding mod-31 lock dividers."
+      }
+    },
+    {
+      "instrument_id": "bass_poly4_punch",
+      "display_name": "Poly4 Punch Bass",
+      "version": "1.0",
+      "family": "bass",
+      "intended_roles": ["bass"],
+      "base_distortion": 192,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 5,
+        "sustain_vol": 8,
+        "release_frames": 2,
+        "peak_vol": 15
+      },
+      "waveform_family": "poly4",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": true,
+        "midi_range": [36, 67],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_bass_sub_punch",
+      "provenance": {
+        "source_kind": "sound_design_demo",
+        "notes": "Coprime-15 Poly4 bass with short pitch punch onset."
+      }
+    },
+    {
+      "instrument_id": "harmony_soft_square",
+      "display_name": "Soft Square Harmony Pad",
+      "version": "1.0",
+      "family": "pad",
+      "intended_roles": ["harmony"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 4,
+        "decay_frames": 6,
+        "sustain_vol": 5,
+        "release_frames": 4,
+        "peak_vol": 12
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [48, 84],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_static_v1",
+      "provenance": {
+        "source_kind": "curated_preset",
+        "notes": "Warm background harmony pad with soft linear attack."
+      }
+    },
+    {
+      "instrument_id": "ornament_bell_arp",
+      "display_name": "Bell Chime (Arpeggio Variant)",
+      "version": "1.0",
+      "family": "harmony",
+      "intended_roles": ["harmony", "melody"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 8,
+        "sustain_vol": 2,
+        "release_frames": 4,
+        "peak_vol": 14
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [60, 96],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_arp_deferred",
+      "provenance": {
+        "source_kind": "curated_preset",
+        "notes": "Static bell profile paired with deferred arpeggio behavior (static variant usable on v1)."
+      }
+    },
+    {
+      "instrument_id": "perc_kick_tight",
+      "display_name": "Tight POKEY Kick",
+      "version": "1.0",
+      "family": "percussion",
+      "intended_roles": ["percussion", "rhythm"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 5,
+        "sustain_vol": 0,
+        "release_frames": 1,
+        "peak_vol": 15
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [24, 60],
+        "channels_allowed": [4]
+      },
+      "behavior_id": "beh_perc_kick",
+      "provenance": {
+        "source_kind": "sound_design_demo",
+        "notes": "50 Hz kick drum macro switching $C0 punch into descending $A0 body on CH4."
+      }
+    },
+    {
+      "instrument_id": "perc_snare_crisp",
+      "display_name": "Crisp Noise Snare",
+      "version": "1.0",
+      "family": "percussion",
+      "intended_roles": ["percussion", "rhythm"],
+      "base_distortion": 128,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 6,
+        "sustain_vol": 0,
+        "release_frames": 2,
+        "peak_vol": 15
+      },
+      "waveform_family": "poly17_noise",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [24, 84],
+        "channels_allowed": [4]
+      },
+      "behavior_id": "beh_perc_snare",
+      "provenance": {
+        "source_kind": "sound_design_demo",
+        "notes": "50 Hz snare macro combining $C0 body snap with $80 noise tail on CH4."
+      }
+    },
+    {
+      "instrument_id": "perc_hihat_closed",
+      "display_name": "Closed Poly Hi-Hat",
+      "version": "1.0",
+      "family": "percussion",
+      "intended_roles": ["percussion", "rhythm"],
+      "base_distortion": 128,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 2,
+        "sustain_vol": 0,
+        "release_frames": 1,
+        "peak_vol": 12
+      },
+      "waveform_family": "poly17_noise",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [48, 96],
+        "channels_allowed": [4]
+      },
+      "behavior_id": "beh_perc_hihat",
+      "provenance": {
+        "source_kind": "sound_design_demo",
+        "notes": "2-3 frame crisp hi-hat burst on CH4."
+      }
+    },
+    {
+      "instrument_id": "perc_tom_pitched",
+      "display_name": "Pitched POKEY Tom",
+      "version": "1.0",
+      "family": "percussion",
+      "intended_roles": ["percussion", "rhythm"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 7,
+        "sustain_vol": 0,
+        "release_frames": 2,
+        "peak_vol": 14
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 0,
+        "poly4_safe_tuning": false,
+        "midi_range": [36, 72],
+        "channels_allowed": [4]
+      },
+      "behavior_id": "beh_perc_tom",
+      "provenance": {
+        "source_kind": "sound_design_demo",
+        "notes": "Pitched tom with downward pitch sweep on CH4."
+      }
+    }
+  ]
+}

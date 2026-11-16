@@ -367,7 +367,7 @@ class TestRealBuilds:
 
     def test_a_descending_but_disjoint_layout_is_accepted(self, tmp_path: Path) -> None:
         parsed = xex_layout.validate_xex_file(_build(tmp_path, 0x8000, 0x6000))
-        assert ranges(parsed)[:2] == [(0x8000, 0x87F5), (0x6000, 0x608E)]
+        assert ranges(parsed)[:2] == [(0x8000, 0x8A76), (0x6000, 0x608E)]
 
     def test_a_single_segment_layout_is_accepted(self, tmp_path: Path) -> None:
         """No music address: the song data follows the player in one segment."""

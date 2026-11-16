@@ -2,103 +2,83 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![Platform: Atari 8-bit](https://img.shields.io/badge/platform-Atari%20800%20XL%20%2F%2065%20XE-red.svg)](https://en.wikipedia.org/wiki/Atari_8-bit_family)
-[![Assembler: MADS](https://img.shields.io/badge/assembler-MADS%201.9.6-green.svg)](http://mads.atari8.info/)
+[![Assembler: MADS](https://img.shields.io/badge/assembler-MADS-green.svg)](http://mads.atari8.info/)
 [![CPU: MOS 6502](https://img.shields.io/badge/cpu-MOS%206502-orange.svg)](https://en.wikipedia.org/wiki/MOS_Technology_6502)
-[![Tests: 646 Passed](https://img.shields.io/badge/tests-646%20passed-brightgreen.svg)](tests/)
 
-Kompletny, profesjonalny system generowania, aranżacji, syntezy i odtwarzania muzyki dla komputerów **Atari 8-bit (Atari 800 XL / 65 XE)** wyposażonych w układ dźwiękowy **POKEY**.
+A Python toolchain and relocatable MOS 6502 audio driver for composing, validating, arranging, synthesizing, and compiling multi-channel music for **Atari 8-bit computers (Atari 800 XL / 65 XE, PAL 50 Hz)** equipped with the **POKEY** sound chip.
 
-Projekt łączy proceduralną kompozycję w Pythonie z natywnym eksportem do asemblera **MADS** oraz ultra-kompaktowym, w pełni relokowalnym odtwarzaczem napisanym w czystym asemblerze **MOS 6502**.
+The system separates **musical composition** (notes, rhythm, form, harmony) from **hardware instrument realization** (waveforms, envelopes, transient macros, pitch envelopes, and `AUDCTL` clock/filter routing), allowing a single composition to be synthesized to WAV and compiled into standalone Atari `.xex` executables across multiple instrumentation arrangements without re-invoking AI.
 
 ---
 
-## 🚀 Kompletny Pipeline Projektu
+## Table of Contents
+
+1. [Project Overview](#project-overview)
+2. [Installation and Configuration](#installation-and-configuration)
+3. [CLI Reference](#cli-reference)
+4. [Composition Formats](#composition-formats)
+5. [Instrument System](#instrument-system)
+6. [Arrangement Workflow](#arrangement-workflow)
+7. [Export and Atari Playback](#export-and-atari-playback)
+8. [Architecture and Development](#architecture-and-development)
+9. [Related Documentation](#related-documentation)
+
+---
+
+## Project Overview
+
+Atari Music Composer targets the 4-channel monophonic **POKEY** chip (`AUDF1..AUDF4`, `AUDC1..AUDC4`, `AUDCTL`) running at PAL VBLANK timing (50 Hz frames):
 
 ```text
-┌───────────────────────────────┐        ┌───────────────────────────────────────────┐
-│     Composer v4 (Python)      │        │          AI LLM Composer                  │
-│  Proceduralna kompozycja      │        │       DeepSeek / OpenAI                   │
-└──────────────┬────────────────┘        └─────────────┬───────────────────┬─────────┘
-               │                                       │ JSON              │ Music DSL
-               │                                       ▼                   ▼
-               │                         ┌───────────────────────────┐ ┌─────────────┐
-               │                         │  AICompositionDoc v1      │ │ DSL Parser  │
-               │                         │  (Canonical SSOT)         │◄┤ (lossless)  │
-               │                         └─────────────┬─────────────┘ └─────────────┘
-               │                                       │
-               │                                       ▼
-               │                         ┌───────────────────────────┐
-               │                         │  3-Tier Validator & Repair│
-               │                         │  Schema + Music + Hardware│
-               │                         └─────────────┬─────────────┘
-               │                                       │  Composition Interpreter
-               │  MusicGenerationResult                │  & Analysis Engine
-               └───────────────────┬───────────────────┘
-                                   │  Music IR + POKEY IR
-                                   ▼
-                    ┌───────────────────────────────┐
-                    │       MADS Exporter           │  Konwersja do Structure-of-Arrays (SoA)
-                    └──────────────┬────────────────┘
-                                   │  music_data.asm (kompaktowe strumienie nut, RLE)
-                                   ▼
-                    ┌───────────────────────────────┐
-                    │        MADS Assembler         │  Kompilacja: player.asm + music_data.asm + harness
-                    └──────────────┬────────────────┘
-                                   │  Standalone Atari XEX Executable (< 1.6 KB RAM)
-                                   ▼
-                    ┌───────────────────────────────┐
-                    │       Atari 8-bit / POKEY     │  PAL 50 Hz VBLANK / 4 kanały / 16-bit Bass
-                    └───────────────────────────────┘
+  Procedural Composer v4                 AI LLM Composer (OpenAI / DeepSeek / Mock)
+  (atari-music compose)                  (atari-music ai-compose --format json|dsl)
+            │                                      │ JSON            │ Music DSL
+            │                                      ▼                 ▼
+            │                            AICompositionDoc v1 ◄── parse_music_dsl()
+            │                            (3-tier validation & LLM repair loop)
+            │                                      │
+            └──────────────────┬───────────────────┘
+                               ▼
+                     Symbolic Music IR / POKEY IR (IRSong)
+                               │
+                               ├──► atari-music arrange (optional, zero AI calls;
+                               │    assigns SSOT catalog instruments & policies)
+                               ▼
+              ┌────────────────┴────────────────┐
+              ▼                                 ▼
+   Software POKEY Synth (Python)     MADS Exporter (SoA: Format v1 or v2)
+   Hardware LFSR, 16-bit & HPF XOR             │
+              │                                 ▼
+              ▼                        player.asm (MOS 6502) + MADS
+         44.1 kHz WAV                    Relocatable Atari XEX Binary
 ```
 
----
+### Core Capabilities
 
-## ✨ Główne Możliwości
+* **Procedural Composition (`Composer v4`)**: Generates deterministic 4-channel pieces across 6 canonical profiles (`title`, `exploration`, `action`, `funny`, `dungeon`, `ending`) with bass lines, counterpoint, percussion/ornamentation, and optional `CH1+CH2` 16-bit bass coupling.
+* **AI-Assisted Composition (`ai-compose`)**: Uses `OpenAICompositionProvider` (supporting OpenAI, DeepSeek, or compatible endpoints) or a local deterministic `mock` provider to output canonical `AICompositionDoc` JSON or compact **Music DSL**, backed by a 3-tier validator (schema, musical grammar, POKEY hardware rules) and an automatic repair loop.
+* **SSOT Instrument Catalog & `POKEYRuntime`**: Curated instrument definitions and time-varying behaviors stored in [data/instruments/catalog.json](data/instruments/catalog.json) with stateless hardware/channel conflict checking.
+* **Decoupled Arrangement (`arrange`)**: Re-assigns POKEY channel instruments on existing JSON compositions (`AICompositionDoc` or `IRSong`) and exports WAV, MADS ASM, and Atari XEX outputs without modifying musical content or calling AI again.
+* **Hardware-Accurate Audio Preview & 6502 Playback**: Frame-accurate Python WAV renderer and a relocatable pure MOS 6502 player (`src/atari_music/asm/player.asm` / `player.asm`) supporting both legacy v1 and macro-enabled v2 song formats.
 
-* **Composer v4 — Pełna 4-kanałowa aranżacja:**
-  * **6 kanonicznych profili stylistycznych:** `TITLE`, `EXPLORATION`, `ACTION`, `FUNNY`, `DUNGEON`, `ENDING`.
-  * **Zaawansowany kontrapunkt dla 2. głosu:** Call & Response, wsparcie harmoniczne (tercje/seksty), ruch równoległy, hocketing, echo motywiczne.
-  * **Dedykowany silnik basu:** Walking bass, fanfare, pulse, staccato, modal drone.
-  * **Rytmika i ornamentacja (4. głos):** 16-tkowe groovy perkusyjne, werble marszowe, modalne ostinato, wysokie dzwonki.
-  * **Wieloczęściowa forma muzyczna:** Dynamiczne stopniowanie obsady (Intro $\to$ A $\to$ B $\to$ Outro $\to$ Loop).
-  * **Obsługa 16-bit POKEY Bass:** Sprzęganie kanałów 1 i 2 (`AUDCTL = $10`) w 16-bitowy dzielnik częstotliwości z czystą syntezą sinusoidalną (pure tone).
-* **Profile brzmieniowe POKEY (Stage 9) — opcjonalne, zewnętrzne:** Renderowanie istniejącej kompozycji z użyciem prawdziwego profilu brzmienia zmierzonego przez projekt [POKEY Sound Archaeology](../pokey-sound-architecture/). Profil dostarcza wyłącznie realizację sprzętową głosu (generator/distortion, konfiguracja AUDCTL, tryb dzielnika 8/16-bit, obwiednia), a kompozycja pozostaje właścicielem nut, czasu trwania, velocity i aranżacji. Szczegóły: [docs/profile_integration.md](docs/profile_integration.md).
-* **Cyfrowy Syntezator POKEY (Python):**
-  * Dokładna emulacja rejestrów POKEY (`AUDF1..4`, `AUDC1..4`, `AUDCTL`).
-  * Bezpośredni rendering do 16-bitowego pliku WAV 44.1 kHz PCM mono.
-* **Relokowalny Odtwarzacz 6502 (`player.asm`):**
-  * **MOS 6502:** Czyste, oficjalne instrukcje 6502 (bez CMOS/65C02).
-  * **Pełna relokowalność:** Zero twardych założeń adresowych — działa pod dowolnym adresem (`$4000`, `$6000`, `$7000`, `$8000`, `$A000` lub w rozłącznych bankach).
-  * **Konfigurowalne Zero Page:** Wymaga tylko 10 bajtów w Zero Page (`PLAYER_ZP_BASE = $80`), w pełni redefiniowalne przed dołączeniem playera.
-  * **Minimalny narzut pamięci:** Kod playera to **754 bajty**, zmienne RAM to **55 bajtów**, dane utworu to **340–750 bajtów**. Cały moduł mieści się w **< 1.6 KB RAM**.
-  * **Znikomy narzut CPU:** Średnio **~110–140 cykli na ramkę** (< 1.5% ramki PAL 50 Hz).
-  * **Standardowe API:** `music_init`, `music_play`, `music_stop`, `music_update`, `music_is_playing`.
-* **Kompaktowy Music DSL (Domain-Specific Language):**
-  * Alternatywne, oszczędne wejście tekstowe dla LLM, redukujące zużycie tokenów o **~49.4%** względem JSON w kontrolowanych testach empirycznych (oraz do 83% przy kompresji tokenizera).
-  * Bezstratny parser i serializer dwukierunkowy (`AICompositionDoc` $\leftrightarrow$ Music DSL) ze ścisłą diagnostyką składniową (linia i kolumna).
-  * Pełna integracja z 3-stopniową walidacją, syntezą WAV oraz bezpośrednią kompilacją do plików Atari XEX.
-* **Gotowe Executable XEX:**
-  * Samodzielne pliki `.xex` gotowe do uruchomienia na fizycznym Atari lub w emulatorze.
-  * Synchronizacja z ramką obrazu VBLANK (50 Hz PAL) przez `RTCLOK` (`$14`).
-  * Wyciszanie i wznawianie odtwarzania jednym klawiszem (`CH` `$02FC`).
-  * **Interaktywny ekran odtwarzacza (ANTIC Mode 2 / Graphics 0):** Wbudowany zegar czasu rzeczywistego (`TIME: MM:SS / TOTAL_MM:SS`), licznik kroków sekwencji (`STEP: XX / TOTAL`), wskaźnik stanu (`[PLAYING]` / `[PAUSED ]`) oraz 4-kanałowy, animowany w czasie rzeczywistym horyzontalny visualizer głośności VU.
+> **Stability note:** The CORE production pipeline (`compose`, `ai-compose`, `arrange`, `list-instruments`, `inspect-instrument`, `validate-instruments`, `import-json`, `import-dsl`, `export-mads`, `build-xex`, `analyze`) is covered by offline regression tests (`-m "core and not live"`). Research stage commands (`prepare-listening-test-9c`, `analyze-stage15`..`analyze-stage25`, etc.) and external archaeology sound-profile benchmarks are experimental research tools and are kept separate from the production workflow.
 
 ---
 
-## 📦 Instalacja i Wymagania
+## Installation and Configuration
 
-### Wymagania systemowe
-* **Python $\ge$ 3.10**
-* System operacyjny: Windows / Linux / macOS
-* Asembler **MADS $\ge$ 1.9.6** (dołączony w katalogu `tools/mads/mads.exe`)
+### System Requirements
 
-### Instalacja środowiska Python
+* **Python `>= 3.10`**
+* **OS:** Windows, Linux, or macOS
+* **MADS Assembler:** Required only when compiling `.xex` binaries or running 6502 size/parity checks. Windows includes `tools/mads/mads.exe` in the repository; on Linux/macOS provide `mads` on `PATH` or pass `--mads PATH`.
+
+### Python Environment Setup
 
 ```bash
-# Sklonuj repozytorium lub przejdź do katalogu projektu
 cd atari-music
 
-# Utwórz i aktywuj wirtualne środowisko
+# Create and activate a virtual environment
 python -m venv .venv
 
 # Windows (PowerShell):
@@ -106,412 +86,46 @@ python -m venv .venv
 # Linux / macOS:
 source .venv/bin/activate
 
-# Zainstaluj projekt w trybie deweloperskim
+# Install the package in editable mode
 pip install -e .
 ```
 
----
-
-## 🎵 Przykłady Użycia
-
-### 1. Python API (`atari_music.api`)
-
-Publiczny interfejs API oferuje funkcję `generate_music(...)`, która jest pojedynczym punktem wejścia do całego silnika.
-
-#### A. Wygenerowanie utworu i eksport do WAV oraz MADS ASM
-
-```python
-from atari_music.api import generate_music
-from atari_music.mads_exporter import export_mads_asm
-
-# 1. Wygeneruj kompozycję o profilu 'ACTION'
-result = generate_music(
-    profile="action",
-    seed=301,
-    length="medium",       # "short" (~15s), "medium" (~24s), "long" (~34s)
-    intensity=0.85,        # 0.0 (subdued) .. 1.0 (driving)
-    variation=0.60,        # 0.0 (conservative) .. 1.0 (adventurous)
-)
-
-print(f"Utwór: {result.music_ir.title}")
-print(f"Tempo: {result.metadata.tempo} BPM")
-print(f"Tonacja: {result.metadata.key} {result.metadata.mode}")
-print(f"Liczba kanałów: {result.metadata.channels_used}")
-print(f"Rozmiar danych POKEY IR: {result.metadata.memory_size_bytes} B")
-
-# 2. Wyrenderuj plik audio WAV (44.1 kHz PCM)
-wav_path = result.render_wav("output/action_sample.wav")
-print(f"Zapisano audio WAV -> {wav_path}")
-
-# 3. Zapisz strukturę POKEY IR w formacie JSON
-json_path = result.save_json("output/action_song.json")
-print(f"Zapisano POKEY IR JSON -> {json_path}")
-
-# 4. Wyeksportuj kod danych asemblera MADS (.asm)
-export_mads_asm(result, output_path="output/action_data.asm", song_label="song_data")
-print("Wyeksportowano kod MADS ASM -> output/action_data.asm")
-```
-
-#### B. Generowanie 16-bitowego basu (`DUNGEON`)
-
-Dla profilu `DUNGEON` silnik domyślnie sprzęga kanały 1 i 2, tworząc 16-bitowy generator pure tone:
-
-```python
-from atari_music.api import generate_music
-from atari_music.mads_exporter import export_mads_asm
-
-result = generate_music(
-    profile="dungeon",
-    seed=501,
-    key="A",               # Wymuszenie tonacji A minor/dorian
-    tempo=85,              # Wymuszenie tempa 85 BPM
-    uses_16bit_bass=True,  # Sprzężenie kanałów 1 i 2 (AUDCTL = $10)
-)
-
-print(f"Tryb 16-bit bass: {result.metadata.uses_16bit_bass}")
-export_mads_asm(result, "output/dungeon_16bit.asm")
-```
-
----
-
-### 2. Command Line Interface (`atari-music`)
-
-Po instalacji pakietu dostępne jest polecenie CLI `atari-music`:
-
-#### A. Polecenie `compose`
-
-Generuje utwór z poziomu wiersza poleceń z opcją jednoczesnego zapisu WAV, JSON i ASM:
+If you plan to use live AI generation (`openai` or `deepseek` providers) or run 6502 CPU emulation tests, ensure those optional runtime tools are also installed in your environment:
 
 ```bash
-# Wygenerowanie utworu ACTION ze zdefiniowanym seedem, WAV i MADS ASM:
-atari-music compose --profile action --seed 301 --output-wav action.wav --output-asm action.asm
-
-# Wygenerowanie powolnego, melancholijnego motywu eksploracyjnego w tonacji E:
-atari-music compose --profile exploration --seed 201 --key E --tempo 80 --output-wav explore.wav
-
-# Generowanie utworu typu TITLE z zapisem do wszystkich formatów:
-atari-music compose --profile title --seed 101 --output-wav title.wav --output-json title.json --output-asm title.asm
+pip install openai py65
 ```
 
-#### B. Polecenie `export-mads`
+### Dependencies
 
-Konwertuje wcześniej zapisany plik POKEY IR JSON na kod źródłowy asemblera MADS:
+Core package dependencies declared in [pyproject.toml](pyproject.toml) and [requirements.txt](requirements.txt):
 
-```bash
-atari-music export-mads title.json -o title_data.asm
-```
+* `pydantic >= 2.0.0` — schema models and validation (`AICompositionDoc`, `InstrumentCatalogDocument`, `IRSong`)
+* `numpy >= 1.24.0` — hardware POKEY audio synthesis buffers
+* `click >= 8.0.0` — CLI commands
+* `matplotlib >= 3.7.0` — visualization and analysis plots
+* `pytest >= 7.0.0` — automated test runner
+* `python-dotenv >= 1.0.0` — `.env` configuration loading
 
-#### C. Polecenie `analyze`
+Optional/developer packages in `pyproject.toml` (`[project.optional-dependencies].dev`) and runtime integrations:
 
-Analizuje właściwości muzyczne (rytm, melodia, harmonia), wykorzystanie sprzętu POKEY, czas trwania PAL 50 Hz, deterministyczny fingerprint SHA-256 oraz opcjonalnie makrostrukturę utworu:
+* `openai` — required at runtime only when calling live LLM endpoints (`AIProviderDependencyError` is raised if missing)
+* `py65` — required for 6502 CPU emulation parity tests
+* `build`, `python-semantic-release` — packaging/release extras
 
-```bash
-# Czytelny raport diagnostyczny w terminalu:
-atari-music analyze dungeon.json
+### AI Provider & `.env` Configuration
 
-# Rozszerzona analiza makrostruktury i dedukcji formy:
-atari-music analyze dungeon.json --structure
+Configuration uses a 4-level priority chain in [src/atari_music/config.py](src/atari_music/config.py) (highest to lowest):
 
-# Wyjście w formacie JSON (na stdout lub zapisane do pliku) dla narzędzi i agentów:
-atari-music analyze dungeon.json --json
-atari-music analyze dungeon.json --structure -o report.json
-```
+1. Explicit CLI flags (e.g., `--provider`, `--model`, `--env-file`)
+2. System environment variables
+3. `.env` file values (default `.env`, or custom path via `--env-file PATH`)
+4. Code defaults (`AI_PROVIDER=deepseek`, `AI_BASE_URL=https://api.deepseek.com`, `AI_MODEL=deepseek-flash`)
 
-#### D. Polecenie `ai-compose`
+Copy [.env.example](.env.example) to `.env` and fill in your credentials locally (`.env` is gitignored — never commit real keys):
 
-Generuje deklaratywną kompozycję JSON w formacie `atari-music-composition` przy użyciu modeli LLM (OpenAI / DeepSeek) lub deterministycznego mocka.
-
-Zrewidowany system prompt zapewnia pełną swobodę artystyczną oraz autentyczność platformy Atari 8-bit / POKEY:
-* **Separacja odpowiedzialności:** LLM koncentruje się wyłącznie na muzyce (melodia, harmonia, rytm, instrumentacja, forma), podczas gdy silnik aplikacji odpowiada za wyliczanie dokładnego czasu PAL 50 Hz, 3-etapową walidację i kompilację.
-* **Ekonomia kanałów i rola ciszy:** Wprowadzona zasada *„Do not use all four channels merely because they are available”* oraz *„Silence is a valid compositional choice”* zapobiega przeładowaniu faktury dźwiękowej.
-* **Elastyczność formalna:** Brak sztywnych szablonów sekcji — model sam dobiera formę (loop, A/B, rondo, wariacje) do stylu i nastroju.
-
-```bash
-# Wygenerowanie utworu dungeon ambient z zapisem do kanonicznego JSON:
-atari-music ai-compose --style "dungeon exploration" -m dark -m mysterious --duration 20 -o dungeon.json
-
-# Wygenerowanie utworu w kompaktowym formacie Music DSL (--format dsl):
-atari-music ai-compose --style "dungeon exploration" --format dsl -o dungeon.dsl
-
-# Streaming czystego JSON na stdout dla agentów (logi diagnostyczne kierowane na stderr):
-atari-music ai-compose --style "fast arcade action" -m energetic --duration 16 > action.json
-```
-
-#### E. Polecenie `import-json`
-
-Importuje zewnętrzny plik kompozycji `atari-music-composition` JSON, waliduje go i konwertuje na formaty produkcyjne:
-
-```bash
-atari-music import-json song.json --output-wav song.wav --output-asm song.asm
-```
-
-#### F. Polecenie `import-dsl`
-
-Importuje kompaktowy plik Music DSL (`.dsl`), waliduje go i konwertuje na formaty produkcyjne lub kanoniczny JSON:
-
-```bash
-atari-music import-dsl song.dsl --output-wav song.wav --output-asm song.asm --output-json song.json
-```
-
-#### G. Polecenie `build-xex`
-
-Kompiluje plik kompozycji (JSON lub Music DSL) bezpośrednio do samodzielnego pliku wykonywalnego Atari XEX:
-
-```bash
-# Dla pliku JSON:
-atari-music build-xex song.json -o song.xex --format json --mads tools/mads/mads.exe
-
-# Dla pliku Music DSL:
-atari-music build-xex song.dsl -o song.xex --format dsl --mads tools/mads/mads.exe
-```
-
-
----
-
-### 3. Integracja z Projektem 6502 (Asembler MADS)
-
-Wyeksportowany plik `music_data.asm` oraz odtwarzacz [player.asm](player.asm) można dołączyć bezpośrednio do dowolnej gry lub dema na Atari 8-bit.
-
-#### A. Przykładowy plik główny gry / odtwarzacza (`play_music.asm`)
-
-```asm
-; =============================================================================
-; Minimalny szablon odtwarzacza w grze na Atari 8-bit
-; =============================================================================
-
-    org $4000                   ; Adres instalacji programu w RAM
-
-start:
-    ; 1. Inicjalizacja sprzętowa
-    cli                         ; Odblokuj przerwania CPU
-    lda #$40
-    sta $D40E                   ; NMIEN: Zezwól na przerwanie VBLANK
-
-    ; 2. Inicjalizacja utworu (wskaźnik w rejestrach X i Y)
-    ldx #<song_data             ; Młodszy bajt adresu danych utworu
-    ldy #>song_data             ; Starszy bajt adresu danych utworu
-    jsr music_init
-
-    ; 3. Rozpoczęcie odtwarzania
-    jsr music_play
-
-    ; 4. Pętla główna (synchronizacja VBLANK 50 Hz PAL)
-main_loop:
-    lda $14                     ; RTCLOK+2: inkrementowany co ramkę przez OS
-@wait_vbl:
-    cmp $14
-    beq @wait_vbl
-
-    ; Opcjonalnie: sprawdzenie klawisza (Spacja = Mute/Play Toggle)
-    lda $02FC                   ; Rejestr wciśniętego klawisza (CH)
-    cmp #$FF
-    beq @no_key
-    lda #$FF
-    sta $02FC                   ; Skasuj bufor klawisza
-
-    jsr music_is_playing
-    bne @mute
-    jsr music_play              ; Wznów
-    jmp @no_key
-@mute:
-    jsr music_stop              ; Wycisz POKEY
-
-@no_key:
-    ; 5. Krok odtwarzacza (musi być wywoływany dokładnie raz na ramkę)
-    jsr music_update
-
-    jmp main_loop
-
-; =============================================================================
-; Dołączenie modułów (relokowalne)
-; =============================================================================
-    icl 'player.asm'            ; Kod odtwarzacza 6502 (~809 bajtów)
-    icl 'music_data.asm'        ; Wygenerowane dane utworu (~340-750 bajtów)
-
-; Ustawienie adresu startowego pliku XEX
-    run start
-```
-
-#### B. Kompilacja do pliku Atari XEX przy użyciu MADS
-
-```bash
-# Kompilacja pod Windows:
-tools\mads\mads.exe play_music.asm -o:play_music.xex
-
-# Kompilacja pod Linux/macOS (jeśli mads jest zainstalowany w PATH):
-mads play_music.asm -o:play_music.xex
-```
-
-Powstały plik `play_music.xex` można bezpośrednio otworzyć w emulatorze (np. Altirra) lub wgrać na rzeczywiste Atari (przez SIO2SD, SIDE3, FujiNet itp.).
-
----
-
-### 4. Relokowalność i Konfiguracja Zero Page
-
-Player jest w 100% relokowalny i nie posiada żadnych ukrytych stałych adresowych.
-
-#### A. Zmiana adresu bazowego w pamięci
-Player i dane muzyczne mogą pracować pod dowolnym adresem w pamięci użytkownika:
-```asm
-    org $6000                   ; Instalacja pod $6000
-    ; ...
-    icl 'player.asm'
-    icl 'music_data.asm'
-```
-
-Możliwe jest również rozdzielenie modułów (np. kod playera w jednym banku RAM, dane utworu w innym):
-```asm
-    org $5000
-    icl 'player.asm'
-
-    org $8500
-    icl 'music_data.asm'
-```
-
-#### B. Zmiana adresu w Zero Page (`PLAYER_ZP_BASE`)
-Domyślnie player używa 10 bajtów w wolnym obszarze pamięci zerowej Atari OS: `$80–$89`. Jeśli Twoja gra potrzebuje tego obszaru, możesz przenieść player na inne bajty Zero Page przed jego dołączeniem:
-
-```asm
-PLAYER_ZP_BASE = $90           ; Użyj bajtów $90-$99 w Zero Page
-
-    org $4000
-    icl 'player.asm'
-    icl 'music_data.asm'
-```
-
-Asembler MADS automatycznie wygeneruje instrukcje z nowymi adresami Zero Page (`($98),Y` zamiast `($88),Y`).
-
----
-
-## 🎮 Gotowe Pliki XEX do Testów Odsłuchowych
-
-W katalogu [stage11_xex/](stage11_xex/) znajduje się 6 gotowych, skompilowanych plików binarnych `.xex` reprezentujących wszystkie profile muzyczne:
-
-| Plik XEX | Profil | Seed | BPM | Tonacja | Długość cyklu | Kanały | 16-bit Bass | Rozmiar XEX |
-|---|---|---:|---:|---|---:|---:|:---:|---:|
-| [`title.xex`](stage11_xex/title.xex) | **TITLE** | 101 | 93 | G minor | 25.6 s | 4 | Nie | 1 242 B |
-| [`exploration.xex`](stage11_xex/exploration.xex) | **EXPLORATION** | 201 | 82 | E mixolydian | 25.6 s | 4 | Nie | 1 218 B |
-| [`action.xex`](stage11_xex/action.xex) | **ACTION** | 301 | 167 | G dorian | 17.3 s | 4 | Nie | 1 628 B |
-| [`funny.xex`](stage11_xex/funny.xex) | **FUNNY** | 401 | 136 | F major | 23.0 s | 4 | Nie | 1 499 B |
-| [`dungeon.xex`](stage11_xex/dungeon.xex) | **DUNGEON** | 501 | 85 | A dorian | 25.6 s | 3 (1+2 coupled) | **TAK** | 1 317 B |
-| [`ending.xex`](stage11_xex/ending.xex) | **ENDING** | 601 | 112 | C major | 20.5 s | 4 | Nie | 1 563 B |
-
-### Jak przetestować w emulatorze Altirra:
-1. Uruchom emulator **Altirra** (skonfiguruj maszynę jako *Atari XL/XE*, system *PAL*).
-2. Przeciągnij i upuść plik `.xex` (np. `dungeon.xex`) w okno emulatora.
-3. Muzyka wystartuje automatycznie.
-4. Wciśnięcie dowolnego klawisza (np. Spacji) wycisza dźwięk. Ponowne wciśnięcie wznawia odtwarzanie.
-
-Szczegółowa checklista odsłuchowa znajduje się w [stage11_xex/README.md](stage11_xex/README.md).
-
----
-
-## 📊 Budżet Pamięci i Zużycie CPU
-
-### Rozkład pamięci (Memory Map dla adresu `$4000`)
-
-```text
-$0080 - $0089   Zero Page Pointers (10 bajtów: zp_ch1..4_ptr, zp_tmp_ptr)
-$4000 - $4037   Test Harness (56 bajtów: setup, VBLANK sync, keyboard toggle)
-$4038 - $4329   Kod odtwarzacza 6502 (754 bajty czystych instrukcji)
-$432A - $4360   Zmienne stanu odtwarzacza (55 bajtów w RAM)
-$4361 - $4xxx   Struktury danych utworu (341 - 751 bajtów)
-```
-
-Dokładny opis segmentów dla każdego utworu znajduje się w [stage11_xex/memory_map.md](stage11_xex/memory_map.md).
-
-### Twardy limit 2048 bajtów dotyczy odtwarzacza, a nie pliku XEX
-
-Jedynym sztywnym limitem rozmiaru w projekcie jest **2048 bajtów na złożony kod odtwarzacza**
-(kod + stan w RAM) — i jest to limit **wyłączny**: odtwarzacz o rozmiarze dokładnie 2048 bajtów
-**nie przechodzi** walidacji. Odtwarzacz mierzy się konwencją `atari_music.stage15.measure_player_size`
-(MADS na wrapperze `org $6000`, `-b:$6000 -o:...bin`, rozmiar pliku = kod + stan); obecnie jest to
-**1016 bajtów**. Sprawdzenie: `atari_music.stage15.player_size_limit_ok()` /
-`check_player_size()`; autorytatywny zapis to
-[reports/stage15/player_size_analysis.json](reports/stage15/player_size_analysis.json).
-
-Pozostałe trzy wielkości **nie** podlegają temu limitowi i nie należy ich z nim mylić:
-
-| wielkość | limit 2048 B? |
-|---|---|
-| złożony odtwarzacz (kod + stan) | **tak — ściśle poniżej** |
-| dane utworu (patterny, sekwencja, tabela instrumentów) | nie — osobny, znacznie mniejszy budżet POKEY IR |
-| **kompletny plik `.xex`** (harness + odtwarzacz + dane) | **nie — brak jakiegokolwiek limitu** |
-| segmenty w pamięci (adresy i długości `org`) | nie — ogranicza je mapa pamięci Atari (m.in. granica `$BFFF`) |
-
-Limit 2048 B na kompletny plik XEX obowiązywał do 2026-10-09 i został zniesiony, ponieważ był
-wyłącznie przybliżeniem limitu odtwarzacza (szczegóły w [HISTORY.md](HISTORY.md)). Plik `.xex`
-może więc legalnie przekraczać 2048 bajtów — i kilka przykładów AI robi to.
-
-### Walidacja układu pamięci (a nie rozmiaru pliku)
-
-Skoro rozmiar pliku nie jest już kryterium, budowanie weryfikuje **zakresy adresów**, które
-program ładujący faktycznie zapisze. Po złożeniu MADS kontener jest parsowany
-(`atari_music.xex_layout.parse_xex`) i sprawdzany (`validate_xex_layout`):
-
-* segmenty muszą leżeć w całości w **`$0400-$BFFF`** — poniżej jest strona zerowa, stos
-  sprzętowy i wektory OS/DOS, których ten binarny plik sam używa (`$02E0/$02E1` RUN,
-  IOCB `$0340-$03BF`, cienie `$02C6`/`$02C8`/`$02FC`, strona zerowa odtwarzacza
-  `PLAYER_ZP_BASE+0..9`), a powyżej ROM jądra OS (`$C000-$CFFF`), rejestry sprzętowe
-  (`$D000-$DFFF`, w tym POKEY) i ROM OS (`$E000-$FFFF`) — zgodnie z regułą „cały kod i dane
-  użytkownika muszą kończyć się na `$BFFF` lub niżej";
-* `$A000-$BFFF` (okno ROM BASIC-a) jest **dozwolone celowo** — projekt tam się relokuje;
-* dwa segmenty nie mogą zajmować tej samej pamięci (program ładujący pisze je w kolejności
-  pliku, więc późniejszy niszczy wcześniejszy);
-* segmenty RUN/INIT (`$02E0-$02E3`) to protokół programu ładującego, nie dane użytkownika.
-
-Nieudana walidacja usuwa właśnie zapisany plik `.xex` i zgłasza błąd z nazwą segmentu, jego
-zakresem i powodem. Szczegóły i dowody: [docs/xex_memory_layout.md](docs/xex_memory_layout.md).
-
-### Pomiar wydajności CPU (cykle procesora na ramkę)
-
-| Faza wykonania | Średni koszt (cykle 6502) | Udział w ramce PAL (35 568 cykli) |
-|---|---|---|
-| **Ramka typowa (obwiednie głośności)** | ~110 – 140 cykli | **0.35%** |
-| **Krok nutowy (ładowanie nowych zdarzeń)** | ~180 – 260 cykli | **0.65%** |
-| **Przejście sekwencji (najgorszy przypadek)** | ~340 – 420 cykli | **1.15%** |
-
-Odtwarzacz zużywa ułamek budżetu pojedynczej ramki, dzięki czemu doskonale nadaje się do gier ze skomplikowaną logiką i grafiką ANTIC/GTIA.
-
----
-
-## 📁 Struktura Projektu
-
----
-
-## 🤖 AI Music Composition, Structure & Arrangement Layer
-
-Projekt zawiera w pełni zintegrowaną, autonomiczną warstwę **AI Music Composition & Arrangement**.
-Model AI pełni wyłącznie rolę **kompozytora i aranżera** (tworząc deklaratywny dokument JSON `atari-music-composition` v1), a nie generatora kodu 6502 ani bezpośrednich rejestrów POKEY. Całość walidacji, interpretacji, analizy, kompilacji i eksportu wykonuje deterministyczny pipeline `atari-music`:
-
-```text
-Prompt / Intent -> AI Provider (DeepSeek / OpenAI) -> AICompositionDoc (JSON)
-                                                            │
-    ┌───────────────────────────────────────────────────────┘
-    ▼
-3-Tier Validation (Schema -> Musical -> Hardware) ──[ Błąd ]──> Repair Feedback Loop (max 2-3 retries)
-    │ [ Sukces ]
-    ├───────────────────────────────────────────────────────┬───────────────────────────────────┐
-    ▼                                                       ▼                                   ▼
-Composition Interpreter                               Musical & POKEY Analysis            Structure & Arrangement Analysis
-    │                                                       │                                   │ (repetition ratio, variations,
-    ▼                                                       ▼                                   │  material reuse, form deduction,
-Music IR & POKEY IR                                   Composition Fingerprint (SHA-256)         │  texture changes, novelty)
-    │                                                 & Metrics (Rhythm/Melody/Harmony)         ▼
-    ▼                                                                                     Structure Report & JSON
-MADS ASM Exporter -> 6502 Player -> Atari XEX Executable (z graficznym timerem i VU)
-```
-
-### 1. Konfiguracja Środowiska AI i `.env`
-Projekt wspiera ujednoliconą, 4-stopniową hierarchię konfiguracji z rygorystycznymi priorytetami:
-1. **Argumenty CLI** (najwyższy priorytet, np. `--provider`, `--model`, `--api-key`, `--base-url`, `--env-file`),
-2. **Zmienne środowiskowe systemu** (nigdy nie są nadpisywane wartościami z `.env`),
-3. **Plik `.env`** (domyślnie `.env` lub wskazany przez globalną opcję `--env-file PATH`),
-4. **Wartości domyślne w kodzie** (najniższy priorytet).
-
-W katalogu głównym projektu znajduje się plik wzorcowy [.env.example](.env.example):
 ```env
-# Konfiguracja produkcyjna dostawcy AI
+# Supported CLI providers: deepseek, openai, mock
 AI_PROVIDER=deepseek
 AI_API_KEY=your_api_key_here
 AI_BASE_URL=https://api.deepseek.com
@@ -519,440 +133,518 @@ AI_MODEL=deepseek-flash
 LOG_LEVEL=INFO
 ```
 
-> **Kompatybilność wsteczna:** System zachowuje pełną kompatybilność z istniejącymi konfiguracjami `.env` — w przypadku braku zmiennych `AI_*` automatycznie odpytywane są zmienne legacy: `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`, `DEEPSEEK_BASE_URL` / `OPENAI_BASE_URL` oraz `DEEPSEEK_MODEL` / `OPENAI_MODEL`. Opcja CLI `--provider` pozwala w każdej chwili jawnie nadpisać wartość `AI_PROVIDER`.
+#### Supported AI Providers & Legacy Env Fallbacks
 
-> **Bezpieczeństwo:** Klucze API podlegają automatycznemu maskowaniu (`Config.masked_api_key()`) i **nigdy** nie są zapisywane w plikach JSON, kodzie asemblera, nagłówkach XEX ani raportach ewaluacyjnych.
+| Provider | How it is selected | Endpoint / Client | Notes |
+|---|---|---|---|
+| `deepseek` | Default, or `--provider deepseek` / `AI_PROVIDER=deepseek` | `OpenAICompositionProvider` (default `https://api.deepseek.com`, model `deepseek-flash`) | Uses OpenAI-compatible Chat Completions API |
+| `openai` | `--provider openai` / `AI_PROVIDER=openai` | `OpenAICompositionProvider` (uses `AI_BASE_URL` / `OPENAI_BASE_URL` and `AI_MODEL` / `OPENAI_MODEL`) | Works with OpenAI or any OpenAI-compatible URL |
+| `mock` | `--provider mock` / `AI_PROVIDER=mock` | `MockAICompositionProvider` | Offline deterministic mock; no API key or network needed |
 
-### 2. Structured Outputs i Monofonia Kanałów POKEY
-- **Natywne Structured Outputs**: Provider wykorzystuje schema-constrained JSON oparty bezpośrednio na modelach Pydantic (`AICompositionDoc`), gwarantując poprawność typów bez konieczności czyszczenia tekstu markdown.
-- **Ścisła monofonia POKEY**: POKEY posiada 4 fizycznie monofoniczne kanały. Walidator odrzuca jakiekolwiek nakładanie się nut (`NOTE_OVERLAP`) na tym samym kanale, podając dokładny krok, kanał i konfliktujące wysokości.
-- **Sprzężenie 16-bitowego basu**: Przy fladze `use_16bit_bass: true` silnik sprzęga Kanały 1 i 2 (`AUDCTL = $10`, czyli join 1+2 przy zegarze 64 kHz), rezerwując Kanał 2 jako slave dzielnika częstotliwości. Nie należy mylić tej konfiguracji z profilem archeologicznym PAIR (`AUDCTL = $50` — ten sam join przy zegarze 1.79 MHz); to dwa różne strojenia tej samej nuty (patrz [docs/profile_integration.md](docs/profile_integration.md)).
+* **Backward-compatible env variables:** When `AI_*` variables are unset, `Config` and `OpenAICompositionProvider` automatically fall back to `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`, `DEEPSEEK_BASE_URL` / `OPENAI_BASE_URL`, `DEEPSEEK_MODEL` / `OPENAI_MODEL`, and `DEEPSEEK_PROVIDER`.
+* **Secret safety:** API keys are masked in diagnostics (`Config.masked_api_key()` / logging secret filter) and are never written into exported JSON, `.asm`, `.xex`, or test-suite manifests. Placeholder values such as `your_api_key_here` are rejected when invoking live API requests.
 
-### 3. Automatyczna Pętla Naprawcza (Composition Repair Loop)
-Gdy model wygeneruje kompozycję naruszającą reguły (np. nakładające się nuty lub konflikt kanałów), system nie przerywa pracy:
-- Walidator generuje zbiorczy raport [ValidationReport](src/atari_music/ai/schema.py) z kodami błędów (`NOTE_OVERLAP`, `INVALID_NOTE`, `BASS16_CHANNEL_CONFLICT`).
-- Pętla `generate_composition_with_retry(..., max_retries=3)` przesyła do modelu ustrukturyzowany feedback wskazujący dokładne miejsce błędu z instrukcją zachowania poprawnych fragmentów.
-- Testy na produkcyjnym modelu `deepseek-flash` wykazały **100% skuteczności naprawy** w 2. podejściu.
+---
 
-### 4. Moduł Analizy Muzycznej i Sprzętowej (`analysis.py`)
-Wprowadzono moduł [src/atari_music/ai/analysis.py](src/atari_music/ai/analysis.py) oceniający wygenerowane utwory:
-* **Rytm:** liczba nut, gęstość nutowa ($\text{nut/s}$), rozkład długości nut, rest ratio, aktywność każdego kanału.
-* **Melodia:** rozpiętość w półtonach, liczba unikalnych klas wysokości, średni interwał, stosunek ruchu krokowego do skoków, kierunek melodyczny.
-* **Harmonia:** współbrzmienia pionowe, rozkład klas interwałów 0..6, czyste oktawy, kwinty, współczynnik konsonansów/dysonansów.
-* **POKEY Hardware:** weryfikacja sprzężenia 16-bit basu, utylizacja 4 kanałów, rozkład głośności i rejestrów distortion ($A0, $C0, $E0), ostrzeżenia dla playera 6502 (np. `ch_dur <= 254`).
+## CLI Reference
 
-### 5. Deterministyczny Composition Fingerprint
-Funkcja `composition_fingerprint(doc) -> str` generuje 64-znakowy skrót SHA-256 z kanonicznej postaci utworu:
-* **Niezależna** od formatowania JSON, spacji, wcięć czy kolejności kluczy.
-* **Deterministyczna:** identyczne utwory dają identyczny hash.
-* **Czuła:** zmiana choćby jednej nuty, dynamiki, instrumentu czy czasu trwania natychmiast zmienia fingerprint.
+Run commands either via the installed entry point `atari-music` or via module invocation `python -m atari_music`.
 
-### 6. Pełnometrażowe Utwory 60–120 s & Weryfikacja Czasu Trwania
-* **Ścisły pomiar czasu:** Funkcja `calculate_composition_duration()` wylicza rzeczywisty czas odtwarzania utworu w oparciu o sumę długości patternów w sekwencji oraz dzielniki ramek VBLANK PAL (50 Hz).
-* **Weryfikacja Invariantu:** Funkcja `verify_duration_invariant()` gwarantuje, że wygenerowany utwór spełnia warunek $60.0 \le t \le 120.0\text{ s}$. Jeśli czas odbiega od założeń, pętla naprawcza automatycznie odsyła feedback korygujący sekwencję.
-* **Wbudowany timer i wskaźniki VU:** Wszystkie pliki XEX generowane z kompozycji AI posiadają interaktywny interfejs w trybie ANTIC Mode 2 (Graphics 0) wyświetlający czas odtwarzania w czasie rzeczywistym (`MM:SS / TOTAL`), stan odtwarzacza oraz 4-kanałowy poziomy visualizer głośności.
-
-### 7. Analiza Jakości Struktury i Powtarzalności
-Moduł [src/atari_music/ai/structure_analysis.py](src/atari_music/ai/structure_analysis.py) dostarcza obiektywnych, matematycznych metryk makrostruktury kompozycji:
-* **Wskaźnik powtórzeń (`repetition_ratio`):** $1.0 - (\text{unikalne patterny} / \text{długość sekwencji})$.
-* **Wskaźnik ponownego użycia materiału (`material_reuse_ratio`):** Proporcja kroków sekwencji wykorzystująca już wcześniej zaprezentowany materiał nutowy.
-* **Detekcja bloków podciągów n-gramowych:** Wykrywanie najdłuższego powtórzonego podciągu (`longest_repeated_subsequence_len`) oraz odsetka sekwencji pokrytego powtórzeniami (`repeated_subsequences_coverage_pct`).
-* **Automatyczna dedukcja formy:** Klasyfikacja formy kompozycji (np. *Rondo-like Episodic*, *Framed Episodic*, *Multi-Thematic Chain*) i czytelny zapis formalny (np. `INTRO - 2x A - B - A' - OUTRO`).
-* **Różnorodność dziedzinowa:** Obliczanie entropii Shannona dla wysokości nut (rozpiętość melodyczna), długości nut (rytmika) oraz klas interwałów współbrzmień pionowych (harmonia).
-
-### 8. Zaawansowana Aranżacja, Wariacje Tematyczne i Przejścia
-Mechanizmy aranżacyjne przekształcające kompozycje z mechanicznych pętli w rozwijające się utwory:
-* **Świadome planowanie formy (`AIFormPlanDef`, `AISectionPlanItem`):** Modele pozwalające zaplanować motyw A, kontrast B, wariacje i przejścia przed wygenerowaniem nut.
-* **Wariacje tematyczne ($A'$, $B'$):** Definiowanie wariacji zachowujących rdzeń melodyczno-harmoniczny, lecz modyfikujących rytmikę, kadencję końcową, oktawę lub ornamentację.
-* **Krótkie fille i przejścia (8–16 kroków):** Dynamiczne łączniki perkusyjne i melodyczne między sekcjami.
-* **Dynamika faktury i breakdowny:** Sekcje o zredukowanej fakturze (np. solo bas i perkusja) budujące napięcie przed repryzą tematu głównego.
-* **Nowość w drugiej połowie utworu (`structural_novelty`):** Rozwój motywów w drugiej połowie kompozycji.
-
-### 9. Przykłady Użycia CLI dla AI Composition
+### Global Options
 
 ```bash
-# 1. Wygenerowanie kompozycji (JSON lub Music DSL) z automatyczną pętlą naprawczą:
-atari-music ai-compose \
-    --style "dark dungeon exploration" \
-    --duration 90 \
-    --channels 4 \
-    --use-16bit-bass \
-    --max-retries 3 \
-    --provider openai \
-    --format json \
-    --output dungeon.json
-
-# Wersja w kompaktowym formacie Music DSL (--format dsl):
-atari-music ai-compose --style "dark dungeon exploration" --format dsl -o dungeon.dsl
-
-# 2. Walidacja i import kompozycji JSON (eksport do WAV, ASM i POKEY IR):
-atari-music import-json dungeon.json \
-    --output-wav dungeon.wav \
-    --output-asm dungeon.asm
-
-# 3. Walidacja i import kompozycji Music DSL (eksport do WAV, ASM, IR lub kanonicznego JSON):
-atari-music import-dsl dungeon.dsl \
-    --output-wav dungeon.wav \
-    --output-asm dungeon.asm \
-    --output-json canonical_dungeon.json
-
-# 4. Bezpośrednia kompilacja kompozycji (JSON lub DSL) do Atari XEX (z relokacją i timerem):
-atari-music build-xex dungeon.json --format json --output dungeon.xex
-atari-music build-xex dungeon.dsl --format dsl --output dungeon.xex
-
-# 5. Szczegółowa analiza właściwości muzycznych i sprzętowych kompozycji:
-atari-music analyze dungeon.json --structure
+python -m atari_music [OPTIONS] COMMAND [ARGS]...
 ```
 
-### 10. Python API
+* `-v, --version`: Show package version and exit (`0.8.0`).
+* `--env-file FILE`: Path to custom `.env` file (default `.env`).
+* `--log-level [debug|info|warning|error|critical]`: Override log level.
+* `--help`: Show all available commands (legacy and research subcommands are kept for backward compatibility).
+
+---
+
+### `compose`
+
+Generate procedural 4-channel POKEY music via the public Music Generation API (`Composer v4`).
+
+* **Options:**
+  * `-p, --profile TEXT`: Stylistic profile (`title`, `exploration`, `action`, `funny`, `dungeon`, `ending`).
+  * `-s, --seed INTEGER`: Deterministic RNG seed.
+  * `-k, --key TEXT`: Root pitch class (`C`, `D`, `E`, `F`, `G`, `A`, `B`, including sharps/flats supported by `VALID_ROOT_KEYS`).
+  * `-t, --tempo INTEGER`: Tempo in BPM (`50..240`).
+  * `-l, --length [short|medium|long]`: Target song duration bucket.
+  * `--intensity FLOAT`, `-v, --variation FLOAT`: Musical expression controls (`0.0..1.0`).
+  * `--channel-instrument CH=INSTRUMENT_ID`: Repeatable opt-in SSOT catalog override per channel (`1..4` or role alias).
+  * `--program-change CH@TARGET[:NOTE]=INSTRUMENT_ID`: Schedule mid-song instrument switch (e.g., `3@B=lead_attack_bite` or `4@1:2=perc_snare_crisp`).
+  * `--instrument-catalog FILE`: Custom catalog JSON path (default `data/instruments/catalog.json`).
+  * `--player-version [auto|v1|v2]`: Target MADS export version (`auto` preserves v1 unless v2 features are used).
+  * `--output-json PATH`, `--output-wav PATH`, `--output-asm PATH`: Output artifacts.
+* **Inputs / Outputs:** Procedural parameters -> POKEY IR JSON, 44.1 kHz WAV, and/or MADS `.asm`.
+
+```bash
+# Legacy procedural v1 composition (unchanged default behavior)
+python -m atari_music compose --profile action --seed 301 --output-wav action.wav --output-asm action.asm
+
+# Opt-in SSOT instrument assignment + mid-song PROGRAM_CHANGE (exports Format v2)
+python -m atari_music compose --profile exploration --seed 201 \
+  --channel-instrument 1=bass_poly4_punch \
+  --channel-instrument 3=lead_pure_sustain \
+  --program-change 3@1:0=lead_attack_bite \
+  --output-json explore_v2.json --output-wav explore_v2.wav --output-asm explore_v2.asm
+```
+
+---
+
+### `ai-compose`
+
+Generate a declarative composition (`AICompositionDoc` JSON or Music DSL) using an AI provider (`openai`, `deepseek`, or offline `mock`), validated and optionally repaired up to `--max-retries` times.
+
+* **Options:**
+  * `--style TEXT`: Musical style prompt (default `"dark dungeon exploration"`).
+  * `-m, --mood TEXT`: Repeatable mood keyword.
+  * `--duration FLOAT`, `--bpm INTEGER`, `--channels INTEGER` (`1..4`), `--structure TEXT` (default `"A-B-A"`).
+  * `--use-16bit-bass / --no-16bit-bass`: Enable `CH1+CH2` 16-bit bass coupling.
+  * `--format [json|dsl]`: LLM output format (`json` default, or `dsl`).
+  * `--provider [mock|openai|deepseek]`: Override `AI_PROVIDER`.
+  * `--model TEXT`: Override AI model name.
+  * `--env-file FILE`: Override `.env` file path.
+  * `--max-retries INTEGER`: Validation repair retries (default `3`).
+  * `--channel-instrument CH=INSTRUMENT_ID`: Explicit SSOT catalog instrument assignment per channel (`1..4` or role).
+  * `--use-instrument-catalog / --no-use-instrument-catalog`: Opt-in exposure of SSOT catalog instruments & behaviors to the AI composer.
+  * `--instrument-catalog FILE`, `--player-version [auto|v1|v2]`.
+  * `--output-ir PATH`, `--output-asm PATH`, `--output-wav PATH`, `-o, --output PATH` (omitted or `-` writes to stdout).
+* **Inputs / Outputs:** Prompt parameters -> canonical JSON (`atari-music-composition`) or `.dsl` text, plus optional POKEY IR JSON / WAV / ASM.
+
+```bash
+# Offline deterministic mock producing canonical AI composition JSON
+python -m atari_music ai-compose --provider mock --style "dark dungeon exploration" -m dark --duration 24 -o composition.json
+
+# Generate compact Music DSL with catalog awareness enabled
+python -m atari_music ai-compose --provider mock --format dsl --use-instrument-catalog -o composition.dsl
+```
+
+---
+
+### `arrange`
+
+Re-arrange an existing **JSON** composition (`AICompositionDoc` or POKEY IR `IRSong`) with new POKEY channel instruments without calling AI.
+
+* **Required Argument:**
+  * `INPUT_COMPOSITION`: Path to an existing composition JSON or POKEY IR JSON file (see [Arrangement Workflow](#arrangement-workflow) for `.dsl` conversion).
+* **Options:**
+  * `--channel-instrument CH=INSTRUMENT_ID`: Repeatable channel or role assignment (`1..4` or alias; unassigned channels keep their existing realization).
+  * `--program-change-policy [preserve|replace|remove]`: Controls existing `PROGRAM_CHANGE` events on overridden channels (default `preserve`).
+  * `--instrument-catalog FILE`: Custom SSOT catalog JSON path (default `data/instruments/catalog.json`).
+  * `--player-version [auto|v1|v2]`: Format target for MADS/XEX output (default `auto`).
+  * `--output-json`, `--output-ir PATH`: Save arranged POKEY IR JSON (`IRSong`).
+  * `--output-wav PATH`: Render 44.1 kHz WAV audio.
+  * `--output-asm PATH`: Export MADS assembly file.
+  * `-o, --output-xex PATH`: Compile standalone Atari XEX binary.
+  * `--player-address TEXT` (default `0x6000`), `--music-address TEXT` (default `0x8000`), `--zp-base TEXT` (default `0x80`), `--mads PATH` (default `tools/mads/mads.exe`), `--player-asm PATH`.
+* **Inputs / Outputs:** Existing JSON composition -> arranged POKEY IR JSON, WAV, MADS ASM, and/or XEX (input file is never altered).
+
+```bash
+python -m atari_music arrange examples/ai/dungeon_dark.json \
+  --channel-instrument 1=bass_16bit_pure \
+  --channel-instrument 3=lead_attack_bite \
+  --program-change-policy replace \
+  --output-json output/arranged_ir.json \
+  --output-wav output/arranged.wav \
+  -o output/arranged.xex
+```
+
+---
+
+### `list-instruments`
+
+List curated instruments defined in the SSOT catalog (`data/instruments/catalog.json`) along with compatibility for a chosen target backend.
+
+* **Options:**
+  * `--instrument-catalog, --catalog FILE`: Catalog path (default `data/instruments/catalog.json`).
+  * `--family [lead|bass|pad|harmony|percussion|fx]`: Filter by family.
+  * `--role [melody|bass|harmony|rhythm|percussion]`: Filter by intended role.
+  * `--target [xex_v2|xex_v1|wav]`: Report compatibility against backend (`xex_v2` default).
+  * `--json`: Emit machine-readable JSON.
+
+```bash
+python -m atari_music list-instruments --target xex_v2 --family bass
+```
+
+---
+
+### `inspect-instrument`
+
+Display complete hardware constraints, ADSR envelope, `runtime_tier`, behavior (transient macro / pitch envelope / modulation), provenance, and target compatibility (`xex_v1`, `xex_v2`, `wav`) for one instrument.
+
+* **Required Argument:** `INSTRUMENT_ID`
+* **Options:** `--instrument-catalog, --catalog FILE`, `--json`.
+
+```bash
+python -m atari_music inspect-instrument lead_attack_bite
+```
+
+---
+
+### `validate-instruments`
+
+Validate catalog JSON schema (`atari-music/instrument-catalog/1`), cross-field hardware rules (`divider_mode` vs `required_audctl_bits`, macro limits), behavior links, and provenance.
+
+* **Options:** `--instrument-catalog, --catalog FILE`.
+
+```bash
+python -m atari_music validate-instruments
+```
+
+---
+
+### `export-mads`
+
+Convert an existing **POKEY IR JSON** (`IRSong`) directly into relocatable MADS assembly data.
+
+* **Required Argument:** `INPUT_JSON` (POKEY IR JSON; note: for `AICompositionDoc` JSON use `import-json` or `arrange`).
+* **Options:**
+  * `-o, --output-asm PATH` *(required)*: Destination `.asm` path.
+  * `--player-version, --format-version [auto|v1|v2]`: Target MADS export format (`auto` preserves v1 when sufficient; selects v2 when v2 features are present).
+
+```bash
+python -m atari_music compose --profile title --seed 101 --output-json title_ir.json
+python -m atari_music export-mads title_ir.json -o title_data.asm --format-version auto
+```
+
+---
+
+### `build-xex`
+
+Compile an AI composition (**JSON or Music DSL**) directly into a relocatable standalone Atari `.xex` executable with interactive playback screen (`ANTIC Mode 2` time display + 4-channel VU meters + key mute toggle).
+
+* **Required Argument:** `COMPOSITION_FILE`
+* **Options:**
+  * `-o, --output PATH`: Output `.xex` path.
+  * `--format [json|dsl]`: Input format (default `json` or inferred from `.dsl` extension).
+  * `--player-address TEXT` (default `0x6000`), `--music-address TEXT` (default `0x8000`), `--zp-base TEXT` (default `0x80`).
+  * `--mads PATH`, `--player-asm PATH`.
+  * `--player-version [auto|v1|v2]`: MADS export format version.
+  * **Legacy compatibility options (preserved):** `--instrument PART=INSTRUMENT_ID` (`Lead Library v0.1`), `--instrument-library DIRECTORY`, `--sound-bank DIRECTORY`, `--profile-bindings FILE`.
+
+```bash
+python -m atari_music build-xex examples/songs/Vaults-of-Nhyrmeth.dsl --format dsl -o vaults.xex
+```
+
+---
+
+### Additional Supporting Commands (`import-json`, `import-dsl`, `analyze`)
+
+* **`import-json COMPOSITION_JSON`**: Validate an `AICompositionDoc` JSON document and export `--output-wav`, `--output-asm`, and/or `--output-ir` (supports `--player-version`, `--instrument`, `--sound-bank`, `--profile-bindings`).
+* **`import-dsl COMPOSITION_DSL`**: Validate a Music DSL file and convert it to canonical `--output-json`, POKEY IR (`--output-ir`), `--output-wav`, and/or `--output-asm` (supports `--player-version`, `--instrument`, `--sound-bank`, `--profile-bindings`).
+* **`analyze COMPOSITION_JSON`**: Compute musical metrics (rhythm, melody, harmony), POKEY hardware utilization, duration, SHA-256 fingerprint, and macro-structure (`-s, --structure`, `--json`, `-o, --output-json`).
+
+```bash
+# Convert Music DSL into canonical JSON, WAV, and MADS ASM
+python -m atari_music import-dsl examples/songs/Vaults-of-Nhyrmeth.dsl \
+  --output-json vaults.json --output-wav vaults.wav --output-asm vaults.asm
+
+# Structural and hardware report
+python -m atari_music analyze examples/ai/dungeon_dark.json --structure
+```
+
+---
+
+## Composition Formats
+
+Atari Music Composer uses three distinct representations across its pipeline:
+
+1. **Canonical AI Composition JSON (`AICompositionDoc` v1, `"format": "atari-music-composition"`)**:
+   - The Single Source of Truth schema (`src/atari_music/ai/schema.py`) containing `metadata`, `hardware` (`channels`, `use_16bit_bass`), `instruments` (semantic `character` plus optional `catalog_id` / envelope fields), `patterns` (monophonic step events per channel `"0".."3"` or `"1".."4"`), `sequence`, and `loop_point`.
+2. **POKEY IR JSON (`IRSong`)**:
+   - Hardware-compiled intermediate representation (`src/atari_music/ir.py`) emitted by `compose --output-json`, `import-json --output-ir`, `import-dsl --output-ir`, `ai-compose --output-ir`, and `arrange --output-json`. Stores hardware divider parameters, resolved `IRInstrument` tables (v1 envelopes/modulation or v2 transient macros & pitch envelopes), `initial_channel_instruments`, and per-note `pending_program_changes`.
+3. **Music DSL (`.dsl`)**:
+   - Compact, line-oriented plain-text representation designed to minimize LLM token usage while mapping losslessly into `AICompositionDoc`. Measured at **49.4% fewer LLM tokens** than JSON in empirical 100-trial runs (`benchmark_results/run_1790692314/report.md`, and ~83% fewer raw tokenizer tokens on static examples in [docs/music_dsl.md](docs/music_dsl.md)).
+
+### How Music DSL Differs from JSON
+
+* **Syntax & size:** Plain directives and whitespace-separated note tokens (`PITCH/DURATION[:VOL]`) instead of nested JSON objects per note.
+* **Lossless compiler:** `parse_music_dsl()` ([src/atari_music/ai/dsl.py](src/atari_music/ai/dsl.py)) compiles `.dsl` directly into `AICompositionDoc` (reporting exact line/column `DSLSyntaxError` messages) and runs the same 3-tier validator. `export_music_dsl()` serializes `AICompositionDoc` back to `.dsl`.
+* **Current DSL v1 scope limits:** DSL syntax supports header directives (`TITLE`, `AUTHOR`, `KEY`, `MODE`, `BPM`, `CHANNELS`, `BASS 16BIT`, `LOOP`, `SEQUENCE`), `INSTRUMENT <id> character=<role> [dist=$XX] [att=N] [dec=N] [sus=N] [rel=N] [name="..."]`, `[PATTERN <id> length=N role=...]`, `CH1..CH4 <inst> V<vol>`, `<pitch>/<dur>[:<vol>]`, and rests (`R/<dur>` or `-/<dur>`). Comments start with `#` (keeping `#` inside pitches such as `C#4/4`). DSL does not natively encode Stage C/D `catalog_id` fields or `PROGRAM_CHANGE` events.
+
+### Generating, Loading, and Using DSL with `arrange`
+
+* **Generate a `.dsl` composition:** `python -m atari_music ai-compose --format dsl -o song.dsl` (or Python `export_music_dsl(doc)`).
+* **Load and process an existing `.dsl`:** `import-dsl song.dsl ...` or `build-xex song.dsl --format dsl ...` (or Python `load_composition_dsl()` / `generate_music_from_dsl()`).
+* **Can `.dsl` be passed directly to `arrange`?** **No.** Verified in `src/atari_music/api.py` (`_load_song_input_for_arrange()`), `arrange` parses **JSON only** (`AICompositionDoc` JSON or `IRSong` JSON). Convert `.dsl` to JSON first:
+  ```bash
+  python -m atari_music import-dsl song.dsl --output-json song.json
+  python -m atari_music arrange song.json --channel-instrument 3=lead_attack_bite --output-wav out.wav -o out.xex
+  ```
+
+### Realistic Music DSL Example
+
+Excerpt adapted from [examples/songs/Vaults-of-Nhyrmeth.dsl](examples/songs/Vaults-of-Nhyrmeth.dsl):
+
+```dsl
+TITLE "Vaults of Nhyrmeth"
+AUTHOR "POKEY Composer"
+KEY D
+MODE MINOR
+BPM 90
+BASS 16BIT
+
+SEQUENCE A1 B1 A1
+
+INSTRUMENT bass character=bass
+INSTRUMENT lead character=bright_lead
+INSTRUMENT perc character=percussion
+
+[PATTERN A1 length=16]
+CH1 bass V13
+D2/4 D2/2 D2/2 D2/4 F2/4
+CH3 lead V14
+D4/6 E4/2 F4/4 G4/4
+CH4 perc V11
+C3/2 R/2 C4/2 R/2 C3/2 C3/2 C4/2 R/2
+```
+
+When `BASS 16BIT` is active, POKEY joins `CH1` (master) and `CH2` (slave divider) via `AUDCTL=$10`; `CH2` must remain empty or validation rejects with `BASS16_CHANNEL_CONFLICT`.
+
+---
+
+## Instrument System
+
+Stages A–E introduced an opt-in, hardware-validated instrument architecture layered cleanly alongside legacy rendering.
+
+### SSOT Catalog (`data/instruments/catalog.json`)
+
+Validated by [src/atari_music/instruments/catalog.py](src/atari_music/instruments/catalog.py) (`atari-music/instrument-catalog/1`, catalog `0.1.0`), the SSOT catalog currently holds **16 curated instrument profiles** and **10 behaviors**:
+
+* **8 `core_v1` profiles (`[OK]` on `xex_v1`, `xex_v2`, and `wav`):** Static ADSR or `octave_pulse` modulation — `lead_pure_sustain`, `lead_pure_pluck`, `lead_c1_octave_pulse`, `lead_buzz_steady`, `bass_16bit_pure`, `bass_15khz_pure`, `bass_16bit_poly5_growl`, `harmony_soft_square`.
+* **6 `core_v2_iter1` profiles (`[OK]` on `xex_v2`, rendered in WAV via v2 frame simulation):** Multi-step 50 Hz transient macros and pitch envelopes — `lead_attack_bite`, `bass_poly4_punch`, `perc_kick_tight`, `perc_snare_crisp`, `perc_hihat_closed`, `perc_tom_pitched`.
+* **2 `experimental_deferred` profiles (`[DEFERRED_FEATURE]` across targets):** `lead_hpf_pwm` (HPF XOR PWM) and `ornament_bell_arp` (arpeggio ornament), kept explicitly out of stable export until a later v2 iteration.
+
+### Listing, Inspecting, and Validating Instruments
+
+```bash
+python -m atari_music list-instruments --target xex_v2
+python -m atari_music inspect-instrument perc_kick_tight
+python -m atari_music validate-instruments
+```
+
+### Channel Assignment, Program Changes, and Player Versions
+
+* **Channel & role assignment (`--channel-instrument CH=INSTRUMENT_ID`):** Maps channel numbers `1..4` or case-insensitive role aliases (`bass`->1; `harmony`/`counter`/`pad`->2; `lead`/`melody`->3; `perc`/`percussion`/`drums`/`rhythm`->4). `POKEYRuntime` (`src/atari_music/instruments/runtime.py`) enforces `channels_allowed`, clock compatibility (`64khz`, `15khz`, `1.79mhz`), 16-bit pair locks (`16bit_ch12`, `16bit_ch34`), and target tiers without silent fallbacks.
+* **Mid-song switches (`PROGRAM_CHANGE`):** `compose --program-change CH@TARGET[:NOTE]=INSTRUMENT_ID` (and catalog-enabled `ai-compose --use-instrument-catalog`) emits 0-tick `PROGRAM_CHANGE` opcodes (`$01`) supported by `SONG_FORMAT_VERSION = 2`.
+* **Player version selection (`--player-version [auto|v1|v2]`):**
+  * `auto` (default): keeps `SONG_FORMAT_VERSION = 1` whenever v1 covers the song (`<= 4` channel instruments, no active v2 macros, pitch envelopes, or `PROGRAM_CHANGE` events), switching to `2` only when required.
+  * `v1`: strictly exports Format v1 and raises `FormatVersionError` if v2 features are present.
+  * `v2`: explicitly exports Format v2.
+
+### Creating vs Re-arranging a Composition
+
+| Aspect | Composition (`compose` / `ai-compose`) | Arrangement (`arrange`) |
+|---|---|---|
+| Who chooses notes, durations, tempo, patterns, sequence? | Procedural engine or AI LLM | **Preserved verbatim** (read-only; never modified) |
+| Calls AI provider? | Yes (`ai-compose` unless `--provider mock`) | **Never** (offline, deterministic) |
+| Modifies channel instrumentation / `PROGRAM_CHANGE` policy? | Initial defaults + optional flags | **Primary purpose** (`--channel-instrument`, `--program-change-policy`) |
+| Input format | Prompts / CLI parameters | Saved `AICompositionDoc` JSON or `IRSong` JSON |
+
+### Backward Compatibility
+
+Existing songs without `--channel-instrument` or `--use-instrument-catalog` behave identically to pre-Stage-A releases and continue exporting `SONG_FORMAT_VERSION = 1`. Legacy sound profile banks (`--sound-bank` / `--profile-bindings` documented in [docs/profile_integration.md](docs/profile_integration.md)) and Lead Library v0.1 (`--instrument PART=ID` on `import-json`, `import-dsl`, `build-xex`) remain functional.
+
+---
+
+## Arrangement Workflow
+
+The Stage E arrangement workflow lets you compose once with AI (or procedurally), save the composition as JSON, and iterate quickly on POKEY instrumentation while comparing WAV and XEX outputs with zero additional AI calls:
+
+1. **Generate or obtain one composition** (`ai-compose`, `compose`, or `import-dsl`).
+2. **Save it as JSON** (`composition.json` or POKEY IR JSON).
+3. **Create multiple arrangements** using `atari-music arrange` with different `--channel-instrument` assignments.
+4. **Export each arrangement** directly to `--output-json`, `--output-wav`, `--output-asm`, and/or `-o / --output-xex`.
+5. **Compare results cleanly**: `composition.json` is never modified, and every arranged output shares the identical `composition_musical_fingerprint()` over all notes, rests, durations, volumes, tempo, patterns, and sequence.
+
+### Handling Existing Switch Events (`--program-change-policy`)
+
+On channels **not** overridden by `--channel-instrument`, existing instruments and `PROGRAM_CHANGE` events remain untouched. On overridden channels:
+
+* `preserve` *(default)*: Replaces notes using the channel's initial instrument while keeping secondary instruments and `PROGRAM_CHANGE` transitions intact.
+* `replace`: Reassigns all notes on the overridden channel to the new instrument and rewrites existing `PROGRAM_CHANGE` switch targets on that channel to the new instrument.
+* `remove`: Reassigns all notes on the overridden channel to the new instrument and strips all `PROGRAM_CHANGE` events on that channel.
+
+### Verified Multi-Variant Examples
+
+#### Example 1: Compose once (AI/Mock JSON) -> Arrange twice to WAV + XEX
+
+```bash
+# Step 1: Generate the source composition JSON ONCE
+python -m atari_music ai-compose --provider mock --use-instrument-catalog \
+  --style "dark dungeon exploration" --duration 20 -o output/source_composition.json
+
+# Step 2a: Variant A — 15 kHz square bass + tight kick + bite lead (leaves original untouched)
+python -m atari_music arrange output/source_composition.json \
+  --channel-instrument 1=bass_15khz_pure \
+  --channel-instrument 2=harmony_soft_square \
+  --channel-instrument 3=lead_attack_bite \
+  --channel-instrument 4=perc_kick_tight \
+  --program-change-policy replace \
+  --output-json output/variant_a_ir.json \
+  --output-wav output/variant_a.wav \
+  -o output/variant_a.xex
+
+# Step 2b: Variant B — Poly4 gritty bass + crisp snare + pure sustain lead (zero AI calls)
+python -m atari_music arrange output/source_composition.json \
+  --channel-instrument 1=bass_poly4_punch \
+  --channel-instrument 2=harmony_soft_square \
+  --channel-instrument 3=lead_pure_sustain \
+  --channel-instrument 4=perc_snare_crisp \
+  --program-change-policy replace \
+  --output-json output/variant_b_ir.json \
+  --output-wav output/variant_b.wav \
+  -o output/variant_b.xex
+```
+
+#### Example 2: Arrange an existing Music DSL song by converting to JSON first
+
+```bash
+# Step 1: Convert Music DSL to canonical JSON without altering notes
+python -m atari_music import-dsl examples/songs/Vaults-of-Nhyrmeth.dsl --output-json output/vaults.json
+
+# Step 2: Re-arrange CH1 (16-bit pure bass) and CH4 (pitched tom) -> WAV + ASM + XEX
+# (Note: CH2 stays unassigned because BASS 16BIT pairs CH1+CH2)
+python -m atari_music arrange output/vaults.json \
+  --channel-instrument 1=bass_16bit_pure \
+  --channel-instrument 3=lead_pure_pluck \
+  --channel-instrument 4=perc_tom_pitched \
+  --program-change-policy remove \
+  --output-wav output/vaults_pluck.wav \
+  --output-asm output/vaults_pluck.asm \
+  -o output/vaults_pluck.xex
+```
+
+### Automated Suite Runner (`scripts/generate_instrument_test_suite.py`)
+
+For batch validation against a real `.env` AI provider (`openai` or `deepseek`), [scripts/generate_instrument_test_suite.py](scripts/generate_instrument_test_suite.py) generates 4 styles (`dark`, `action`, `mystery`, `experimental`) once each and renders 3 curated arrangements per style (12 WAV + 12 XEX + `manifest.json`) with musical fingerprint checks:
+
+```bash
+# Preview planned commands without invoking subprocesses or touching disk
+python scripts/generate_instrument_test_suite.py --dry-run
+
+# Run full suite (requires real provider in .env; refuses overwriting without --force)
+python scripts/generate_instrument_test_suite.py --output-dir output/instrument_tests
+```
+
+---
+
+## Export and Atari Playback
+
+### WAV Synthesis (`pokey_synth.py` / `pokey_hw.py`)
+
+* Renders 50 Hz PAL POKEY register frames directly to 16-bit PCM mono 44.1 kHz `.wav` using the non-linear POKEY resistor-ladder DAC (`POKEY_DAC`), hardware-accurate `POLY4` (15-step, including modulo-3/5 stalls), `POLY5` (31-step XNOR gate), `POLY9` (511-step), and `POLY17` (131071-step) LFSRs, digital HPF XOR latches (`AUDCTL $02` CH2-by-CH4 and `$04` CH1-by-CH3), and 16-bit channel joining (`$10` CH1+CH2, `$08` CH3+CH4).
+* Songs using v2 features (`song_requires_v2()`) automatically render through `simulate_ir_song_frames(..., format_version=2)` so WAV previews reflect transient macros, pitch envelopes, and `PROGRAM_CHANGE` transitions accurately.
+
+### MADS Export & Player Versions (`mads_exporter.py` & `player.asm`)
+
+* Exports Structure-of-Arrays (SoA) data tables for MOS 6502 indexing (`LDA table,X`).
+* **Format v1 (`SONG_FORMAT_VERSION = 1`)**: Default format; 6-byte static channel instrument records supporting ADSR envelopes and `MOD_OCTAVE_PULSE`.
+* **Format v2 (`SONG_FORMAT_VERSION_V2 = 2`)**: Supports up to `32` instruments (`MAX_V2_INSTRUMENTS = 32`), deduplicated shared macro directory (`1..8` steps of 4 bytes per step), signed 8-bit pitch envelopes, `CH1..CH4` initial assignment, and 4-byte `OPCODE_PROGRAM_CHANGE` (`$00, $00, $01, inst_idx`) events. See full binary specification in [docs/SONG_FORMAT_V2.md](docs/SONG_FORMAT_V2.md).
+
+### Atari XEX Binaries & Enforced Hardware Constraints
+
+* Compiled via MADS into standalone executables featuring PAL 50 Hz `RTCLOK` (`$14`) sync, ANTIC Mode 2 real-time clock + 4-channel horizontal VU display, and keyboard mute/resume toggle (`CH` `$02FC`).
+* **Relocatability:** User addresses default to `--player-address 0x6000`, `--music-address 0x8000`, and `--zp-base 0x80`. The player reserves 10 Zero Page bytes (`PLAYER_ZP_BASE + 0..9`, `$80..$89` by default, keeping screen display pointers at `$8A..$8D` separate).
+* **CPU instruction set:** Official MOS 6502 opcodes only (no 65C02/65816 instructions).
+* **Hard size and layout enforcement ([src/atari_music/xex_layout.py](src/atari_music/xex_layout.py), [docs/xex_memory_layout.md](docs/xex_memory_layout.md)):**
+  * **Player budget limit (`< 2048 bytes`):** Measured via `atari_music.stage15.measure_player_size` (`src/atari_music/asm/player.asm`, code + BSS state) at **1785 bytes** (`263 bytes` headroom under `2048 B`). The complete `.xex` file itself has no 2 KB cap.
+  * **Memory segment bounds:** All user load segments must lie strictly within **`$0400–$BFFF`** (`$A000–$BFFF` allowed intentionally; OS kernel `$C000–$CFFF`, hardware I/O `$D000–$DFFF`, OS ROM `$E000–$FFFF`, Zero Page, stack, and OS vectors are forbidden).
+  * **Disjoint segments:** Overlapping XEX segments are rejected immediately (`xex_layout.validate_xex_file`).
+
+Pre-built v1 listening demos remain available in [stage11_xex/](stage11_xex/) (see [stage11_xex/README.md](stage11_xex/README.md) and [stage11_xex/memory_map.md](stage11_xex/memory_map.md)).
+
+---
+
+## Architecture and Development
+
+### Core Module Overview
+
+```text
+src/atari_music/
+├── api.py                   # Public facade: generate_music(), arrange_song(), MusicGenerationResult
+├── cli.py                   # Click CLI entrypoint (atari-music / python -m atari_music)
+├── config.py                # 4-tier .env / env / CLI config resolution & secret masking
+├── composer_v4.py           # Procedural 4-channel Composer v4 (profiles, counterpoint, bass, rhythm)
+├── music_ir.py              # Symbolic Music IR (MusicSong)
+├── ir.py                    # Hardware POKEY IR (IRSong), v1/v2 frame sizing & stream planning
+├── frame_simulator.py       # Python frame oracle implementing v1 & v2 50 Hz state machines
+├── pokey_hw.py              # Hardware-exact POKEY LFSRs, clocks & envelope state machine
+├── pokey_synth.py           # 44.1 kHz WAV renderer (LFSRs, HPF XOR, 16-bit joining, DAC)
+├── mads_exporter.py         # Relocatable SoA MADS exporter (Format v1 & Format v2 + validator)
+├── xex_layout.py            # XEX parser and $0400-$BFFF disjoint segment layout verifier
+├── asm/player.asm           # Relocatable MOS 6502 player (v1 + v2 macro & pitch engines)
+├── instruments/             # Stage A-E SSOT instrument architecture
+│   ├── models.py            # Pydantic v2 InstrumentProfile, InstrumentBehavior, HardwareConstraints
+│   ├── catalog.py           # InstrumentCatalog loader & integrity validator (data/instruments/catalog.json)
+│   ├── runtime.py           # Stateless POKEYRuntime capability & AUDCTL conflict checker
+│   └── planner.py           # Channel assignment, PROGRAM_CHANGE policy, v1/v2 resolution, arrange_ir_song
+├── ai/                      # AI composition & analysis layer
+│   ├── schema.py            # AICompositionDoc v1 schema & ValidationReport
+│   ├── dsl.py               # Lossless Music DSL parser & serializer
+│   ├── validation.py        # 3-tier validator (schema, musical rules, hardware constraints)
+│   ├── composition.py       # AICompositionDoc -> MusicSong / IRSong compiler
+│   ├── client.py            # AI retry/repair loop, composition loaders & build_xex_from_result()
+│   ├── analysis.py          # Musical/hardware metrics & SHA-256 composition_fingerprint()
+│   ├── structure_analysis.py# Repetition ratio, motif reuse & formal structure deduction
+│   └── providers/           # MockAICompositionProvider & OpenAICompositionProvider
+└── sound_profiles/          # Legacy/research Stage 9 SoundProfileBank & binding loader
+```
+
+### Python API Example (Compose, Arrange, and Build XEX)
 
 ```python
-from atari_music.ai import (
-    load_composition_json,
-    load_composition_dsl,
-    parse_music_dsl,
-    export_music_dsl,
-    generate_music_from_composition,
-    build_xex_from_composition,
-    request_ai_composition,
-    analyze_composition,
-    analyze_composition_structure,
-    composition_fingerprint,
-    CompositionRequest,
+from atari_music.api import arrange_song, generate_music
+
+# 1. Procedural v1 generation
+song = generate_music(profile="dungeon", seed=501, length="short")
+song.render_wav("output/dungeon_v1.wav")
+
+# 2. Re-arrange with SSOT catalog instruments (returns new result; leaves original intact)
+arranged = arrange_song(
+    song,
+    channel_instruments={
+        1: "bass_16bit_pure",
+        3: "lead_attack_bite",
+        4: "perc_kick_tight",
+    },
+    program_change_policy="replace",
 )
-
-# 1. Żądanie kompozycji od providera (obsługa JSON lub format="dsl")
-req = CompositionRequest(
-    style="dark dungeon exploration",
-    bpm=88,
-    channels=4,
-    use_16bit_bass=True,
-    duration_seconds=90,
-    format="dsl",
-)
-comp = request_ai_composition(req, provider="openai", max_retries=2)
-
-# 2. Bezstratna konwersja do / z Music DSL
-dsl_text = export_music_dsl(comp)
-comp_from_dsl = load_composition_dsl(dsl_text)
-
-# 3. Analiza struktury i wariacji
-struct_metrics = analyze_composition_structure(comp)
-print(f"Liczba patternów: {struct_metrics.pattern_count}")
-print(f"Repetition Ratio: {struct_metrics.repetition_ratio:.1%}")
-print(f"Forma: {struct_metrics.form.compact_form}")
-
-# 4. Kompilacja do samodzielnego pliku Atari XEX z graficznym timerem
-xex_path = build_xex_from_composition(
-    comp,
-    output_path="dungeon_full.xex",
-    player_address=0x4000,
-    zp_base=0x80,
-)
-print(f"Gotowy plik Atari XEX -> {xex_path}")
+arranged.render_wav("output/dungeon_v2.wav")
+arranged.build_xex("output/dungeon_v2.xex")
 ```
 
-### 11. Kompaktowy Music DSL i Wyniki Benchmarku LLM
+### Development & Test Suites
 
-Projekt oferuje kompaktowy, tekstowy format **Music DSL** jako alternatywny frontend dla modeli LLM. Kanonicznym źródłem prawdy (SSOT) pozostaje `AICompositionDoc` / schemat JSON.
+Tests in `tests/` follow strict marker classification verified by `scripts/verify_test_classification.py` (`core`, `audio`, `experimental`, `legacy`, `live`). By default (`pyproject.toml`), `pytest` excludes `live` tests (`addopts = "--strict-markers -m 'not live'"`).
 
-Szczegółowa specyfikacja składni znajduje się w [docs/music_dsl.md](docs/music_dsl.md).
+```bash
+# Verify test marker classification integrity
+python scripts/verify_test_classification.py
 
-Kontrolowany eksperyment empiryczny (100 prób: 5 kategorii $\times$ 2 formaty $\times$ 10 powtórzeń na modelu `deepseek-flash`, raport w [benchmark_results/run_1790692314/report.md](benchmark_results/run_1790692314/report.md)) wykazał:
-* **49.4% redukcji tokenów API:** Średnio 13 913 tokenów na udany utwór w DSL vs 27 512 tokenów w JSON.
-* **100% finalnej skuteczności walidacji:** Oba formaty osiągnęły 100% poprawności sprzętowej i muzycznej.
-* **Pełną równoważność muzyczną:** Identyczna złożoność polifoniczna, różnorodność interwałowa i gęstość rytmiczna.
+# Run all offline CORE production tests (architecture boundaries, IR, exporters, py65, CLI)
+pytest -m "core and not live" -q
 
----
+# Run fast POKEY / IR / MADS / player.asm / XEX regression subset
+pytest -m "audio and not live" -q
 
-## 📁 Struktura Projektu
-
-```text
-atari-music/
-├── src/atari_music/            # Rdzenny pakiet Pythona
-│   ├── api.py                  # Publiczne API: generate_music(...)
-│   ├── ai/                     # Warstwa AI Composition, Structure & Arrangement
-│   │   ├── client.py           # Fasada: load_composition_json, load_composition_dsl, build_xex...
-│   │   ├── dsl.py              # Music DSL: parser (parse_music_dsl) i serializer (export_music_dsl)
-│   │   ├── analysis.py         # Analiza muzyczna (rytm, melodia, harmonia) + SHA-256 fingerprint
-│   │   ├── structure_analysis.py# Analiza makrostruktury, wariacji, sekwencji, formy i powtarzalności
-│   │   ├── schema.py           # Pydantic schema (AICompositionDoc) + ValidationReport
-│   │   ├── validation.py       # 3-poziomowa walidacja (Schema, Music, Hardware)
-│   │   ├── composition.py      # Interpreter JSON/DSL -> Music IR -> POKEY IR
-│   │   ├── prompts.py          # Szablony promptów systemowych i użytkownika (JSON & DSL)
-│   │   └── providers/          # Adaptery: MockAI, OpenAI / DeepSeek
-│   ├── serialization.py        # Bezstratna serializacja Music IR <-> JSON
-│   ├── composer_v4.py          # Silnik proceduralny Composer v4
-│   ├── arrangement.py          # Warstwa aranżacji 4 kanałów
-│   ├── counterpoint.py         # Silnik kontrapunktu (2. głos)
-│   ├── bass_engine.py          # Silnik linii basowych
-│   ├── rhythm_ornament.py      # Silnik perkusji i ornamentacji (4. głos)
-│   ├── profiles.py             # Definicje 6 profili stylistycznych
-│   ├── sound_profiles/         # Integracja profili brzmieniowych POKEY (Stage 9 / 9B)
-│   │   ├── bank.py             # Wczytywanie, weryfikacja fingerprintów i statusów banku
-│   │   └── binding.py          # Zewnętrzne powiązanie instrument -> profil (realizacja sprzętowa)
-│   ├── mads_exporter.py        # Eksporter danych do asemblera MADS
-│   ├── pokey_synth.py          # Programowy syntezator POKEY (WAV 44.1 kHz)
-│   ├── stage9c.py              # Eksperyment odsłuchowy Stage 9C (pakiet blind, analiza wyników)
-│   ├── stage9d.py              # Analiza wyników odsłuchu Stage 9D (korelacje, kategorie, shortlista, werdykt)
-│   ├── stage9e.py              # Diagnoza luki percepcyjnej Stage 9E (mapa ścieżek, grupy duplikatów, brakujące zdolności)
-│   ├── stage10a.py             # Eksperyment ponownego przypisania profili Stage 10A (wybór z dowodów słuchowych, pakiet zaślepiony)
-│   ├── stage10b.py             # Eksperyment przeniesienia konturu głośności Stage 10B (mapowanie, dowód perturbacji, regresja, pakiet zaślepiony)
-│   ├── ir.py                   # POKEY Intermediate Representation (IR)
-│   ├── music_ir.py             # Symbolic Music IR
-│   └── cli.py                  # Interfejs wiersza poleceń (CLI)
-├── docs/
-│   ├── music_dsl.md            # Specyfikacja i gramatyka Music DSL
-│   └── profile_integration.md  # Integracja profili POKEY: mechanizm, ścieżki WAV/XEX, błędy
-├── benchmark_results/          # Wyniki kontrolowanych eksperymentów LLM (JSON vs DSL)
-│   └── run_1790692314/         # Raport 100 prób (report.md, summary.json, raw_trials.json)
-├── scripts/
-│   ├── benchmark_dsl_vs_json.py# Statyczny benchmark tokenizacji i kompresji DSL
-│   └── benchmark_llm_formats.py# Runner 100-próbowego eksperymentu LLM
-├── config.py                   # Zarządzanie konfiguracją (.env, env vars, CLI overrides)
-├── player.asm                  # Odtwarzacz muzyczny 6502 (MADS, obsługa pełnych sekwencji)
-├── hardware.asm                # Ekwipacje sprzętowe POKEY, ANTIC, GTIA, PIA
-├── examples/ai/                # Gotowe przykłady AI
-├── examples/sound_profile_listening/  # Stage 9C: pakiet odsłuchowy (index.html, audio/, manifest.json, szablony CSV)
-├── examples/sound_profile_rebinding_10a/      # Stage 10A: pakiety trzech wersji sześciu utworów i pary zaślepione
-├── examples/sound_profile_volume_contour_10b/ # Stage 10B: trzy warianty (A/B/C) profili i utworów, pary zaślepione
-├── stage11_xex/                # Gotowy pakiet 6 samodzielnych plików XEX (Composer v4)
-├── tools/
-│   └── mads/mads.exe           # Asembler MADS v1.9.6
-├── tests/
-│   ├── test_cli.py                    # Testy interfejsu CLI (import-json, import-dsl, build-xex)
-│   ├── test_dsl.py                    # Testy parsera i serializera Music DSL
-│   ├── test_pokey_music.py            # Testy silnika kompozycyjnego, playera i API
-│   ├── test_ai_composition.py         # Testy warstwy AI, walidacji i serializacji
-│   ├── test_analysis.py               # Testy modułu analizy muzycznej i fingerprintingu
-│   ├── test_duration.py               # Testy weryfikacji czasu trwania ground-truth (60-120s)
-│   ├── test_structure_analysis.py     # Testy analizy struktury, powtórzeń, wariacji i formy
-│   ├── test_stage14_repair_loop.py    # Testy pętli naprawczej i lokalizacji błędów
-│   ├── test_sound_profiles.py         # Testy integracji profili POKEY (bank, binding, WAV/XEX)
-│   ├── test_sound_profile_library.py  # Pełna biblioteka 67 profili: inwentarz, statusy, regresja Stage 9
-│   ├── test_stage9c.py                # Eksperyment odsłuchowy: bodziec, poziomy, program A/B, determinizm, analiza
-│   ├── test_stage9d.py                # Analiza wyników odsłuchu: statystyki, mapowanie, korelacje, werdykt, determinizm
-│   ├── test_stage9e.py                # Diagnoza luki: rejestrowanie odczytów, grupy duplikatów, bierne pola, werdykt, immutability
-│   ├── test_stage10a.py               # Ponowne przypisanie: odzyskanie sześciu utworów, reguła decyzji, kompatybilność, zaślepienie, immutability
-│   ├── test_stage10b.py               # Kontur głośności: kontrakt mapowania, kwalifikacja profili, dowód perturbacji, regresja bajtowa, pakiet
-│   ├── data/sound_profiles/           # Przykład integracji: kompozycja DSL, powiązanie, pełny bank 67 profili
-│   ├── test_live_production.py        # Testy integracji z produkcyjnym LLM (@pytest.mark.live)
-│   ├── test_config.py                 # Testy hierarchii konfiguracji i .env
-│   └── test_stage13_llm_integration.py# Testy integracji LLM, Structured Outputs i monofonii
-├── HISTORY.md                         # Rejestr zmian projektu
-└── pyproject.toml                     # Konfiguracja pakietu Pythona
+# Stage C/D/E + test suite generator tests specifically
+pytest tests/test_stage_c_player_v2_parity.py tests/test_stage_d_integration.py tests/test_stage_e_arrangement.py tests/test_generate_instrument_test_suite.py -v
 ```
 
 ---
 
-## 🎛️ Profile Brzmieniowe POKEY (integracja z POKEY Sound Archaeology)
-
-> Kompozycja opisuje intencję muzyczną. Profil opisuje realizację na POKEY.
-
-Projekt potrafi wyrenderować **istniejącą** kompozycję przy użyciu profilu brzmienia zmierzonego z klasycznego utworu Atari przez projekt [POKEY Sound Archaeology](../pokey-sound-architecture/). Profile są **zewnętrzne i opcjonalne** — warstwa kompozycji (DSL, `AICompositionDoc`, prompty, struktury muzyczne) nie wie o ich istnieniu i nie zmieniła się.
-
-```text
-kompozycja (DSL / JSON)            ← nuty, rytm, tempo, forma, velocity, rola instrumentu
-      ↓  parse / walidacja / Music IR
-   POKEY IR (IRSong)
-      ↓  profile binding           ← profil wchodzi TUTAJ i tylko tutaj
-   POKEY IR świadomy profilu
-      ├──────────────┐
-      ▼              ▼
-   WAV           MADS → XEX
-```
-
-**Co dostarcza profil:** generator (distortion), konfigurację AUDCTL (zegar/sprzężenie), tryb dzielnika (8-bit / sprzężona para 16-bit) oraz kształt obwiedni.
-**Co pozostaje kompozycji:** wysokość nuty (profil dostarcza zegar, nie nutę), czas trwania, przerwy, velocity (profil nigdy nie nadpisuje dynamiki), aranżacja i tożsamość instrumentu.
-
-### Bank profili i powiązania
-
-Bank to katalog zapisany przez projekt archeologii (`registry.json` + `profiles/`). Powiązanie instrumentu z profilem to **osobny plik**, poza kompozycją:
-
-```json
-{
-  "schema": "atari-music/sound-profile-binding/1",
-  "bank": "bank",
-  "instruments": { "bass": "pokey_ref_3627798b", "lead": "pokey_ref_a8c81a84" }
-}
-```
-
-W repozytorium dostępne są dwa banki o różnych rolach:
-
-| | bank demonstracyjny | pełny bank badawczy |
-| :--- | :--- | :--- |
-| gdzie | `examples/sound_profiles/` | `tests/data/sound_profiles/bank/` |
-| rozmiar | 4 profile (proof-of-integration z Stage 9) | **67 profili** — cała opublikowana biblioteka |
-| statusy | 4 × `PLAYABLE` | 22 `PLAYABLE`, 39 `PLAYABLE_WITH_LIMITATION`, 6 `MEASUREMENT_ONLY` |
-
-**67 profili to nie 67 rekomendowanych instrumentów.** To kompletna biblioteka techniczna. Profile, których status mówi „opisuje ciszę" (`MEASUREMENT_ONLY`), są publikowane i możliwe do wglądu, ale **odrzucane przy próbie renderowania** (`PROFILE_STATUS_NOT_RENDERABLE`) — nigdy nie są cicho zastępowane domyślnym dźwiękiem. Status jest zapisany w `registry.json` razem z kodami przyczyn. Ostateczna selekcja palety brzmień to osobny, późniejszy etap.
-
-### Wynik rzeczywistego odsłuchu (Stage 9D)
-
-Stage 9C zbudował zaślepiony eksperyment, Stage 9D przeanalizował oddane odpowiedzi (`analyze-listening-test-9d`). Pełny raport: [docs/stage9d_human_listening_results.md](docs/stage9d_human_listening_results.md); wyniki maszynowe: `reports/stage9d/`.
-
-Cztery ustalenia, z których jedno jest negatywne:
-
-1. **Biblioteka jest słyszalnie mniejsza niż liczba profili.** 61 renderowalnych profili daje **37 różnych sygnałów audio** — 24 profile renderują **bajtowo identyczny** dźwięk jak inny profil (grupy po 10, 6, 4, 4, 3, 3). Różnią się gestem, którego player nie odtwarza.
-2. **Powiązanie profili z prawdziwymi utworami pogorszyło wynik w tym teście.** Na sześć utworów domyślne instrumenty kompozytora wygrały 5, wersja z profilami 0 (jeden remis), jednogłośnie na wszystkich trzech pytaniach. Sześć utworów to nie populacja — ale kierunek jest jednoznaczny i dlatego końcowa odpowiedź Stage 9D brzmi **NO**.
-3. **Metryka podobieństwa jest ślepa na poziom.** Cosine distance na znormalizowanym spektrum daje ≈ 0.00 zarówno dla pary bajtowo identycznej, jak i dla pary różniącej się o 12 dB RMS — a słuchacz się z tym nie zgadzał.
-4. **Słuchacz rozpoznaje rodzinę generatora, metryka widzi spektrum.** Wszystko, co zostało nazwane „noisy", to `$0`/`$8`; wszystko „clean" to `$A`/`$C` — zbiory rodzin są rozłączne, a flatness ich nie rozdziela.
-
-### Użycie
-
-```bash
-# WAV + ASM z profilem (VOICE i PAIR w jednym przebiegu)
-python -m atari_music import-dsl tests/data/sound_profiles/vaults_of_nhyrmeth.dsl \
-    --sound-bank tests/data/sound_profiles/bank \
-    --profile-bindings tests/data/sound_profiles/vaults_binding.json \
-    --output-wav examples/sound_profiles/vaults_profile.wav \
-    --output-asm examples/sound_profiles/vaults_profile.asm
-
-# XEX z tej samej, świadomej profilu reprezentacji
-python -m atari_music build-xex tests/data/sound_profiles/vaults_of_nhyrmeth.dsl --format dsl \
-    -o examples/sound_profiles/vaults_profile.xex \
-    --sound-bank tests/data/sound_profiles/bank \
-    --profile-bindings tests/data/sound_profiles/vaults_binding.json
-```
-
-### Zasady, które są egzekwowane
-
-* **Bez powiązania nic się nie zmienia** — WAV, ASM i XEX są identyczne jak przed tą funkcją (potwierdzone przez porównanie artefaktów przed/po).
-* **Dokładne `profile_id`** — brak dopasowań rozmytych, brak „najbliższego" profilu, brak cichego podstawienia; nieznany identyfikator kończy się błędem.
-* **Weryfikacja fingerprintu** — profil, którego zawartość nie zgadza się z `playable_fingerprint` w rejestrze, nie zostanie wczytany.
-* **Status profilu jest egzekwowany** — profil ze statusem `MEASUREMENT_ONLY` (opisujący ciszę) jest odrzucany z `PROFILE_STATUS_NOT_RENDERABLE`; nieznany status z `PROFILE_STATUS_UNKNOWN`. Nigdy nie ma cichego powrotu do dźwięku domyślnego.
-* **`$50` ≠ `$10`** — profil PAIR z zegarem 1.79 MHz (`$50`, offset dzielnika `+7`) nie jest konwertowany na wewnętrzną konwencję 16-bitowego basu (`$10`, offset `+1`); to różne wysokości tej samej nuty.
-* **Distortion jako nibble → bajt AUDC** — `"$A"` zamieniane jest na `0xA0` (generator w bitach 7..5), nigdy kopiowane dosłownie jako `0x0A`.
-* **Kanał to decyzja kompozycji** — kanał źródłowy profilu jest wyłącznie proweniencją; sprawdzane jest, czy wybrany przez kompozycję kanał może udźwignąć konfigurację profilu.
-* **Brak cichej degradacji** — konflikt (AUDCTL, para kanałów, distortion, obwiednia) jest błędem z kodem, nie przybliżeniem.
-* **Determinizm** — te same wejścia dają bajtowo identyczne wyjście.
-
-Pełny opis (mechanizm, rejestr, VOICE, PAIR, pitch, volume, alokacja kanałów, ścieżki WAV/XEX, kody błędów, kompatybilność wsteczna, przykład i ograniczenia): [docs/profile_integration.md](docs/profile_integration.md).
-
-### 🔊 Eksperyment odsłuchowy Stage 9C (czy te brzmienia są coś warte?)
-
-Biblioteka mówi, **co da się wyrenderować**. Nie mówi, **co warto zachować** — to pytanie percepcyjne i biblioteka nie może na nie odpowiedzieć. Stage 9C buduje eksperyment, który zadaje je człowiekowi, i niczego nie rozstrzyga za niego.
-
-```bash
-# 1. Zbuduj kompletny, samodzielny pakiet odsłuchowy (bank tylko do odczytu)
-python -m atari_music.cli prepare-listening-test-9c \
-    --package-dir examples/sound_profile_listening \
-    --sound-bank tests/data/sound_profiles/bank \
-    --songs-dir examples/songs
-
-# 2. Otwórz examples/sound_profile_listening/index.html, posłuchaj i wypełnij trzy CSV
-
-# 3. Analiza wyników -> reports/stage9c/
-python -m atari_music.cli analyze-listening-test-9c \
-    --package-dir examples/sound_profile_listening
-```
-
-Pakiet (`examples/sound_profile_listening/`) działa w przeglądarce — **bez Pythona, bez serwera, bez internetu**:
-
-| część | co porównuje | pytania |
-| :--- | :--- | :--- |
-| 1 | pojedyncze profile, 61 bodźców | wyrazistość, użyteczność, „atariowość", własny opis słowami, opcjonalna pewność |
-| 2 | dwa profile, 30 prób A/B w warstwach (podobne / odległe / ta sama rodzina generatora / różne rodziny / ta sama piosenka źródłowa / różne piosenki) | podobieństwo, preferencja, różnica charakteru, komentarz |
-| 3 | prawdziwy utwór: domyślny vs związany z profilem, 6 par | lepsze brzmienie, więcej charakteru, bardziej przekonujący Atari, wielkość różnicy |
-
-**Co jest trzymane stałe:** każdy profil realizuje **ten sam** 32-krokowy frazowany bodziec (ten sam czas, velocity, wysokość, kanał 1 — dla `PAIR` ta sama fraza ze złączem 1+2); każdy bodziec jest sprowadzany do tego samego szczytu (−0,92 dBFS) jednym wzmocnieniem, bez kompresji, EQ i clippingu, a oryginalny i końcowy peak **oraz** RMS każdej próbki są zapisane, więc głośność pozostaje zmierzoną właściwością, a nie założeniem. Próby A/B używają **tych samych** plików bodźców, a pary utworów — jednego wspólnego wzmocnienia i identycznego wycinka, więc kompozycja po obu stronach jest nietknięta.
-
-**Czego to nie rozstrzyga:** żaden gest nie jest wymyślany (player nie ma makra na kanał — profil z konturem słychać jako dźwięk statyczny); nic nie jest przemianowywane, rankingowane ani wybierane. Raport podaje mediany, rozkłady, korelacje, głosy i **słowa słuchacza**, oraz grupy kandydatów z jawnie podanymi progami — i odmawia ogłoszenia finalnej palety. Zaślepienie jest wymuszone konstrukcyjnie: interfejs, nazwy plików i README nigdy nie zawierają `profile_id`, piosenki źródłowej, rodziny generatora, AUDCTL, zakresu ani statusu; mapowanie istnieje wyłącznie w `manifest.json`.
-
-**Analiza wyników:**
-
-```bash
-python -m atari_music.cli analyze-listening-test-9d \
-    --package-dir examples/sound_profile_listening \
-    --docs-dir docs --reports-dir reports/stage9d
-```
-
-Wynik: `docs/stage9d_human_listening_results.md` oraz maszynowo `reports/stage9d/{profile_scores.json, profile_scores.csv, correlations.json, hypotheses.json, categories.json, coverage.json, shortlist.json, verdict.json}`. Analiza jest deterministyczna, nie modyfikuje ani odpowiedzi, ani eksperymentu, i **nie wybiera biblioteki** — odpowiada, czy dane uzasadniają przejście do selekcji.
-
-### Diagnoza różnicy percepcyjnej (Stage 9E)
-
-Stage 9D powiedział, że 61 profili brzmi jak 37 dźwięków, a powiązanie z utworami przegrało 5–0. Stage 9E diagnozuje **dlaczego** — nie zmieniając niczego. Zamiast czytać kod, mierzy pipeline:
-
-```bash
-python -m atari_music.cli analyze-listening-test-9e
-```
-
-Wynik: `docs/stage9e_perceptual_renderer_gap.md` oraz maszynowo `reports/stage9e/{pipeline_fields.json, duplicate_groups.json, profile_diffs.json, information_loss.json, part_c_diagnostics.json, missing_capabilities.json, verdict.json}`.
-
-Jak to jest mierzone, a nie zakładane: dokument profilu jest opakowany w mapowanie, które rejestruje **każdą ścieżkę**, jaką naprawdę czyta `apply_profile_binding`; każde pole IR jest zaburzane, żeby sprawdzić, które klatki zmienia; każda kolumna klatki jest zerowana, żeby sprawdzić, czy zmienia się dźwięk; a własny re-render jest porównywany **bajt po bajcie** ze bodźcem, który słyszał człowiek (**61 z 61 identycznych**). Diagnoza **odmawia uruchomienia**, jeśli się nie zgadza — jej twierdzenia dotyczą więc dokładnie tego pipeline'u, który wygenerował eksperyment.
-
-Trzy zmierzone fakty:
-
-1. **Powiązanie czyta 13 z 232 udokumentowanych ścieżek.** `_rebuild_song` zapisuje na instrumencie sześć wartości: nibble generatora, trzy liczby klatek obwiedni, poziom sustain i AUDCTL. Kroki 5–6 nigdy nie widzą dokumentu profilu. Zmierzony kontur wysokości, kontur głośności, modulacja, zmiany generatora w środku dźwięku i cała proweniencja są obecne w dokumencie i nieczytane przez nic.
-2. **Wszystkie 6 grup duplikatów ginie dokładnie na tej granicy.** W każdej grupie dokumenty się różnią (125–691 ścieżek), a powiązany IR jest już identyczny — więc klatki i WAV muszą być identyczne. Klasyfikacja: `representation_duplicate` w 6 z 6 grup (30 profili); **żadna grupa nie wymagała wyjaśnienia przez renderer**. Bajtowo identyczny WAV **nie** oznacza więc profilu zbędnego — jest zbędny *na dziś*.
-3. **Przegrana w Part C nie jest artefaktem głośności.** Obie strony każdej pary były renderowane przy **jednym wspólnym wzmocnieniu** (tak jak w Stage 9C); strona z profilami nie była głośniejsza (mediana różnicy RMS −2,39 dB). Powiązanie zastąpiło każdemu instrumentowi generator i/lub obwiednię, więc strony różnią się barwą i artykulacją — a instrumenty kompozytora, projektowane pod ten konkretny utwór, wygrały. To luka **interpretacji muzycznej**, i dlatego pierwszym rekomendowanym krokiem jest ponowne powiązanie sześciu utworów na podstawie dowodów ze słuchania, a nie zmiana silnika.
-
-Kolejność wniosku: luka **reprezentacji** (największa), **interpretacji muzycznej** (druga), a **renderera** tylko marginalna — kompilator klatek używa każdego pola, które powiązanie zapisuje, poza kilkoma zmierzonymi jako bierne (`envelope.decay_frames` nie zmienia żadnej klatki dla 8 z 61 profili). Zdolności, które zamknęłyby pierwszą lukę, są uszeregowane dowodowo w §12 raportu (najpierw zmierzony kontur głośności i kontur wysokości) i **żadna nie jest zaimplementowana**: zmieniłyby to, co słyszy człowiek, unieważniając obecny ranking percepcyjny.
-
-Werdykt: **DIAGNOSTICALLY_COMPLETE** — 6 grup duplikatów, 6 wyjaśnionych, 0 niewyjaśnionych.
-
-### Eksperyment ponownego przypisania profili (Stage 10A)
-
-Stage 9E pokazał, że powiązania w `examples/songs/` wybrano **według rodziny generatora**, a nie według tego, co powiedział słuchacz. Stage 10A zadaje więc pytanie w czystej postaci: **czy samo lepsze przypisanie profili poprawia całe utwory**, przy niezmienionym rendererze, kompozycji i kompozytorze?
-
-```bash
-python -m atari_music.cli prepare-rebinding-10a
-```
-
-Wynik: zaślepiony pakiet `examples/sound_profile_rebinding_10a/`, raport [docs/stage10a_rebinding_experiment.md](docs/stage10a_rebinding_experiment.md) oraz `reports/stage10a/{songs.json, rebinding.json, machine_comparison.json, verification.json}`.
-
-Jak to jest trzymane w ryzach:
-
-1. **Sześć utworów to dokładnie te same sześć utworów Part C**, wzięte z manifestu Stage 9C — a nie z nazw plików. Jeśli plik powiązania nie zgadza się już z manifestem, budowa **odmawia** uruchomienia: edytowane powiązanie po cichu zmieniłoby znaczenie słowa „stary”.
-2. **Zmienia się wyłącznie przypisanie.** Te same bajty kompozycji, to samo tempo, nuty, czasy, velocity, kanały, renderer, sample rate, okno wycinka i wzmocnienie. Trzy wersje na utwór: instrumenty kompozytora, stare powiązanie, nowe powiązanie.
-3. **Kompatybilność jest mierzona, nie zakładana.** Każdy kandydat przechodzi przez `apply_profile_binding`; odmowa usuwa go z puli. Ograniczenia z §2–§8 są spełnione z definicji, bo pyta o nie ta sama warstwa, która ich pilnuje.
-4. **Strona domyślna i stara są porównane bajt po bajcie z bodźcami Stage 9C** (i wzmocnienie zgadza się z zapisanym w manifeście). Bez tego „re-test” nie byłby porównywalny z 5–0; z tym — jest. Jeśli kiedykolwiek się rozjadą, budowa się zatrzymuje.
-5. **Zmiana wymaga dowodu ze słuchania.** Nowy dźwięk musi być oceniony **nie niżej na każdej skali** i wyżej na co najmniej jednej: o dwa punkty na jednej skali albo o jeden punkt na dwóch naraz. Pojedynczy punkt różnicy uznano za szum — bo Stage 9D zmierzył, jak bardzo słuchacz różni się od siebie samego. Ścieżki bez takiego kandydata zostają przy starym profilu i raport mówi które i dlaczego.
-
-**Czego ten etap świadomie nie robi:** nie liczy zwycięzcy z metryk maszynowych i nie ogłasza, że ponowne przypisanie jest lepsze — to rozstrzygnie dopiero odsłuch. Wynik: 10 z 21 kanałów zmienionych w 5 utworach, 1 utwór bez zmian, 18 zaślepionych porównań (6 utworów × 3 pary: domyślne-vs-nowe, stare-vs-nowe i kontrolne domyślne-vs-stare).
-
-### Przeniesienie konturu głośności (Stage 10B)
-
-Stage 9E nazwał pierwszą brakującą zdolność: archeologia **mierzy**, jak głośność zmieniała się wewnątrz dźwięku (`gesture.volume.runs` — bezwzględne poziomy AUDC, jedna próbka na klatkę VBL), a odtwarzacz to **wyrzuca** (58 z 67 profili ma zmierzony kontur, wszystkie z `playable.gesture.volume.enabled: false`). Stage 10A pokazał, że samo przypisanie profili nic nie poprawia. Stage 10B pyta więc wąsko: **czy zmierzony kontur da się przenieść do istniejącego IR i kompilatora klatek — i czy transfer zmienia dźwięk w kierunku, który pomiar opisuje?**
-
-```bash
-python -m atari_music.cli prepare-volume-contour-10b
-```
-
-Wynik: zaślepiony pakiet `examples/sound_profile_volume_contour_10b/`, raport [docs/stage10b_volume_contour_experiment.md](docs/stage10b_volume_contour_experiment.md) oraz `reports/stage10b/{profiles.json, subjects.json, transfer.json, perturbation.json, regression.json, verification.json}`.
-
-Jak to jest trzymane w ryzach:
-
-1. **Jedna ścieżka renderowania, żadnego równoległego silnika.** Kontur jest polem `IRInstrument.volume_contour` i jednym mnożeniem w `_render_note_to_frames`; kompilator klatek używa go dokładnie tam, gdzie już liczy głośność na klatkę (dolny nibble AUDC). WAV i XEX nadal pochodzą z tej samej reprezentacji.
-2. **Velocity pozostaje suwerenne.** Wzór `floor(volumes[i] * contour[i % span] / max(contour) + 0.5)` może tylko **tłumić** (współczynnik ≤ 1): kontur nie podgłośni, nie przesteruje i nie wycieknie z niego bezwzględna głośność źródła. Kontur statyczny jest dokładnym no-op-em.
-3. **Dowód perturbacji, nie statystyka.** Dla każdego testowanego profilu porównywane są trzy rendery tej samej kompozycji i tego samego powiązania: bez konturu, z konturem i z konturem **odwróconym**. Sprawdzane jest, że różni się **dokładnie jedna kolumna** (AUDC kanału, który brzmi; dla pary 16-bit AUDC2), że nibble generatora się nie zmienił, że strumień klatek równa się **dokładnie arytmetyce mapowania**, oraz że głośność w audio (RMS na klatkę) idzie za strumieniem objętości (mediana korelacji 0,97).
-4. **Regresja bajtowa.** Przy wyłączonej zdolności wszystkie **18 opublikowanych renderów Stage 10A** (6 utworów × 3 wersje) odtwarzają się **bajt po bajcie**. Żaden plik golden nie został zaktualizowany.
-5. **Uczciwa granica: XEX.** Eksporter MADS publikuje tabelę nut, a `player.asm` sam buduje obwiednię na klatkę — więc utwór z konturem jest **odrzucany** (`VOLUME_CONTOUR_NOT_EXPRESSIBLE_IN_XEX`), a nie wyeksportowany jako coś, co zagrałoby inaczej niż to, czego słuchano.
-6. **Kontur, który bramkuje, nie jest przenoszony.** Poziom 0 w pomiarze znaczy „nic nie brzmiało” — to timing, nie głośność. Przeniesienie go wstawiłoby bramkowanie cudzej aranżacji do kompozycji, która ma własne nuty. Dlatego każdy kanał, na którym kontur **odmówiono**, jest nazwany w raporcie (3 kanały w 2 utworach), a nie przybliżony.
-
-**Czego ten etap świadomie nie robi:** nie ogłasza zwycięzcy i nie twierdzi, że kontur „rozwiązuje problem profili”. Werdykt to **INCONCLUSIVE**: udowodnione jest, że transfer działa (8 z 8 profili, jedna kolumna, dokładna arytmetyka, regresja bajtowa), natomiast to, czy słuchacz go słyszy i czy brzmi lepiej, rozstrzygnie dopiero pakiet odsłuchowy — 18 zaślepionych par (14 B-vs-C + 4 kontrolne A-vs-C), w tym te same sześć utworów co w Stage 10A. Osobno zmierzono, że **najbardziej ruchliwe kontury w banku (do 119 zmian poziomu na 147 klatek) to dokładnie te, które zawierają ciszę** — klasa tremolo zostaje więc nietknięta i jest to ograniczenie zakresu tego etapu, nie biblioteki.
-
----
-
-## 🧪 Uruchamianie Testów
-
-Projekt posiada pełne pokrycie testami jednostkowymi, integracyjnymi oraz weryfikacją kompilacji asemblera:
-
-```bash
-# 1. Uruchomienie pełnego zestawu testów offline (646 testy, 2-7 min, 0 regresji)
-pytest -q
-
-# 2. Uruchomienie opcjonalnych testów live z produkcyjnym LLM (DeepSeek / OpenAI)
-pytest -m live -v
-
-# 3. Uruchomienie automatycznej weryfikacji binarnej i relokacyjnej
-python scripts/verify_stage11_runtime.py
-```
-
-Wszystkie testy weryfikują determinizm generatora, limity pamięci ($\le 2048$ B), 4-kanałową polifonię, kompilację MADS, relokowalność kodu pod różnymi adresami, poprawność połączenia kanałów dla 16-bitowego basu, 3-stopniową walidację importu AI, monofonię kanałów POKEY, pętlę naprawczą z feedbackiem, analizę harmoniczną/melodyczną oraz deterministyczny fingerprint SHA-256.
-
----
-
-## 📄 Licencja
-
-Projekt objęty licencją MIT. Kod odtwarzacza 6502 (`player.asm`) może być swobodnie wykorzystywany w projektach homebrew, grach i demach na komputery Atari 8-bit.
+## Related Documentation
+
+* [docs/SONG_FORMAT_V2.md](docs/SONG_FORMAT_V2.md) — Stage C binary & MADS `SONG_FORMAT_VERSION = 2` specification and measured 6502 player resource/cycle profile
+* [docs/music_dsl.md](docs/music_dsl.md) — Formal EBNF grammar, semantics, and benchmarks for Music DSL
+* [docs/xex_memory_layout.md](docs/xex_memory_layout.md) — XEX container parsing, `$0400–$BFFF` memory bounds, and `< 2048 B` player rule
+* [docs/profile_integration.md](docs/profile_integration.md) — External POKEY Sound Archaeology profile binding (`--sound-bank` / `--profile-bindings`)
+* [docs/instrument_selection_cli.md](docs/instrument_selection_cli.md) — Legacy Lead Library v0.1 (`--instrument PART=ID`) specification
+* [docs/stage14_final_synthesis.md](docs/stage14_final_synthesis.md) — Research synthesis motivating curated instrument catalogs and macros
+* [STAGE3_INSTRUMENT_DESIGN.md](STAGE3_INSTRUMENT_DESIGN.md) — Architecture design specification for the Stage A–E Instrument System
+* [HISTORY.md](HISTORY.md) — Detailed technical changelog across stages

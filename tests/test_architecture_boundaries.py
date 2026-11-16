@@ -54,6 +54,7 @@ CORE_MODULES: Set[str] = {
     "music_ir",
     "serialization",
     "ir",
+    "frame_simulator",
     "pokey_hw",
     "pokey_synth",
     "mads_exporter",
@@ -61,6 +62,11 @@ CORE_MODULES: Set[str] = {
     "sound_profiles/__init__",
     "sound_profiles/bank",
     "sound_profiles/binding",
+    "instruments/__init__",
+    "instruments/models",
+    "instruments/catalog",
+    "instruments/runtime",
+    "instruments/planner",
 }
 
 #: Hidden LEGACY CLI commands (`@cli.command(..., hidden=True)`) permitted to lazy-import
@@ -325,6 +331,35 @@ def test_cli_unlisted_new_function_is_not_exempted() -> None:
     assert any("stage15" in v for v in violations)
     assert any("composer_v2" in v for v in violations)
     assert any("generator" in v for v in violations)
+
+
+def test_cli_hidden_legacy_without_hidden_true_is_not_exempted() -> None:
+    """Regression: HIDDEN_LEGACY_CLI_COMMANDS without hidden=True must be audited as CORE."""
+    sources = _load_src_sources()
+    sources["cli"] = (
+        "import click\n"
+        "cli = click.Group()\n"
+        "\n"
+        "@cli.command('stage3')\n"
+        "def stage3_cmd() -> None:\n"
+        "    from atari_music import stage3_reporter\n"
+    )
+    violations = find_core_import_violations(sources, CORE_MODULES)
+    assert any("cli.py:6 -> stage3_reporter" in v for v in violations), violations
+
+
+def test_instruments_subpackage_relative_imports_guarded() -> None:
+    """Regression: relative imports inside instruments CORE subpackage resolve accurately."""
+    sources = _load_src_sources()
+    sources["instruments/runtime"] = (
+        "from . import models\n"
+        "from .. import stage15\n"
+        "from ..composer_v2 import deduplicate_pokey_patterns\n"
+    )
+    violations = find_core_import_violations(sources, CORE_MODULES)
+    assert any("instruments/runtime.py:2 -> stage15" in v for v in violations), violations
+    assert any("instruments/runtime.py:3 -> composer_v2" in v for v in violations), violations
+    assert not any("instruments/models" in v for v in violations), violations
 
 
 def test_cli_has_no_duplicate_commands_or_definitions() -> None:
