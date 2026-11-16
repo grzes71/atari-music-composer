@@ -148,7 +148,188 @@ class MockAICompositionProvider(AICompositionProvider):
         doc = AICompositionDoc.model_validate(doc_dict)
         return export_music_dsl(doc)
 
+    def _generate_catalog_valid(self, request: CompositionRequest) -> Dict[str, Any]:
+        """Generate a valid SSOT-catalog composition with musically coherent channel timbres."""
+        from pathlib import Path
+        from atari_music.instruments import (
+            load_instrument_catalog,
+            resolve_channel_instrument_plan,
+            select_ai_catalog_instrument_id,
+        )
+
+        style = (request.style or "action").strip().lower()
+        cat_path = Path(request.instrument_catalog_path) if getattr(request, "instrument_catalog_path", None) else None
+        catalog = load_instrument_catalog(cat_path)
+        ch_req = dict(getattr(request, "channel_instruments", None) or {})
+        if ch_req:
+            resolve_channel_instrument_plan(
+                ch_req,
+                catalog=catalog,
+                uses_16bit_bass=request.use_16bit_bass,
+            )
+
+        ch1_id = ch_req.get(1) or select_ai_catalog_instrument_id(
+            catalog, "bass", uses_16bit_bass=request.use_16bit_bass, channel=1
+        )
+        prof1 = catalog.get_profile(ch1_id)
+        use_16 = bool(request.use_16bit_bass or prof1.hardware_constraints.divider_mode == "16bit_ch12")
+
+        ch2_id = None if use_16 else (
+            ch_req.get(2) or select_ai_catalog_instrument_id(catalog, "harmony", channel=2)
+        )
+        ch3_id = ch_req.get(3) or select_ai_catalog_instrument_id(catalog, "lead", channel=3)
+        ch4_id = ch_req.get(4) or select_ai_catalog_instrument_id(catalog, "kick", channel=4)
+
+        # Contrasting lead or multi-drum kit only when user left those channels unpinned
+        contrast_ch3_id = None
+        if 3 not in ch_req and catalog.has_profile("lead_attack_bite") and catalog.has_profile("lead_pure_sustain"):
+            ch3_id = "lead_pure_sustain"
+            contrast_ch3_id = "lead_attack_bite"
+
+        use_drum_kit = (
+            4 not in ch_req
+            and catalog.has_profile("perc_kick_tight")
+            and catalog.has_profile("perc_snare_crisp")
+            and catalog.has_profile("perc_hihat_closed")
+        )
+
+        inst_specs: List[Dict[str, Any]] = []
+        id_by_cid: Dict[str, str] = {}
+
+        def _add_inst(alias: str, cid: str, role_hint: str) -> str:
+            if cid in id_by_cid:
+                return id_by_cid[cid]
+            prof = catalog.get_profile(cid)
+            inst_specs.append(
+                {
+                    "id": alias,
+                    "name": prof.display_name,
+                    "character": role_hint,
+                    "catalog_id": cid,
+                }
+            )
+            id_by_cid[cid] = alias
+            return alias
+
+        b_key = _add_inst("bass_ch1", ch1_id, "bass")
+        h_key = _add_inst("harm_ch2", ch2_id, "harmony") if ch2_id else None
+        l_key = _add_inst("lead_ch3", ch3_id, "bright_lead")
+        l_contrast_key = _add_inst("lead_bite_ch3", contrast_ch3_id, "bright_lead") if contrast_ch3_id else l_key
+
+        if use_drum_kit:
+            k_key = _add_inst("kick_ch4", "perc_kick_tight", "kick")
+            s_key = _add_inst("snare_ch4", "perc_snare_crisp", "snare")
+            hh_key = _add_inst("hihat_ch4", "perc_hihat_closed", "hihat")
+        else:
+            p_char = "percussion" if catalog.get_profile(ch4_id).family == "percussion" else "harmony"
+            k_key = s_key = hh_key = _add_inst("voice_ch4", ch4_id, p_char)
+
+        bpm = request.bpm or (90 if use_16 else (140 if "action" in style else 120))
+        key = request.key or ("A" if use_16 else "G")
+        mode = request.mode or ("dorian" if ("action" in style or use_16) else "minor")
+
+        pat_a = {
+            "id": "A",
+            "length_steps": 16,
+            "channels": {
+                "0": [
+                    {"step": 0, "note": f"{key}2" if not use_16 else f"{key}1", "instrument": b_key, "duration": 4, "volume": 14},
+                    {"step": 4, "note": f"{key}2" if not use_16 else f"{key}1", "instrument": b_key, "duration": 4, "volume": 13},
+                    {"step": 8, "note": "C2" if not use_16 else "C1", "instrument": b_key, "duration": 4, "volume": 14},
+                    {"step": 12, "note": "D2" if not use_16 else "D1", "instrument": b_key, "duration": 4, "volume": 14},
+                ],
+                "1": ([] if h_key is None else [
+                    {"step": 0, "note": f"{key}3", "instrument": h_key, "duration": 8, "volume": 10},
+                    {"step": 8, "note": "C4", "instrument": h_key, "duration": 8, "volume": 10},
+                ]),
+                "2": [
+                    {"step": 0, "note": f"{key}4", "instrument": l_key, "duration": 4, "volume": 14},
+                    {"step": 4, "note": "C5", "instrument": l_key, "duration": 4, "volume": 14},
+                    {"step": 8, "note": "D5", "instrument": l_key, "duration": 4, "volume": 15},
+                    {"step": 12, "note": "C5", "instrument": l_key, "duration": 4, "volume": 13},
+                ],
+                "3": [
+                    {"step": 0, "note": "C4", "instrument": k_key, "duration": 2, "volume": 15},
+                    {"step": 2, "note": "C4", "instrument": hh_key, "duration": 2, "volume": 11},
+                    {"step": 4, "note": "C4", "instrument": s_key, "duration": 2, "volume": 14},
+                    {"step": 6, "note": "C4", "instrument": hh_key, "duration": 2, "volume": 11},
+                    {"step": 8, "note": "C4", "instrument": k_key, "duration": 2, "volume": 15},
+                    {"step": 10, "note": "C4", "instrument": hh_key, "duration": 2, "volume": 11},
+                    {"step": 12, "note": "C4", "instrument": s_key, "duration": 2, "volume": 14},
+                    {"step": 14, "note": "C4", "instrument": hh_key, "duration": 2, "volume": 12},
+                ],
+            },
+        }
+        pat_b = {
+            "id": "B",
+            "length_steps": 16,
+            "channels": {
+                "0": [
+                    {"step": 0, "note": "F2" if not use_16 else "F1", "instrument": b_key, "duration": 8, "volume": 14},
+                    {"step": 8, "note": "E2" if not use_16 else "E1", "instrument": b_key, "duration": 8, "volume": 14},
+                ],
+                "1": ([] if h_key is None else [
+                    {"step": 0, "note": "F3", "instrument": h_key, "duration": 8, "volume": 11},
+                    {"step": 8, "note": "E3", "instrument": h_key, "duration": 8, "volume": 11},
+                ]),
+                "2": [
+                    {"step": 0, "note": "F4", "instrument": l_contrast_key, "duration": 4, "volume": 14},
+                    {"step": 4, "note": "A4", "instrument": l_contrast_key, "duration": 4, "volume": 14},
+                    {"step": 8, "note": "G4", "instrument": l_contrast_key, "duration": 4, "volume": 15},
+                    {"step": 12, "note": "E4", "instrument": l_contrast_key, "duration": 4, "volume": 13},
+                ],
+                "3": [
+                    {"step": 0, "note": "C4", "instrument": k_key, "duration": 4, "volume": 15},
+                    {"step": 4, "note": "C4", "instrument": s_key, "duration": 4, "volume": 14},
+                    {"step": 8, "note": "C4", "instrument": k_key, "duration": 4, "volume": 15},
+                    {"step": 12, "note": "C4", "instrument": s_key, "duration": 4, "volume": 14},
+                ],
+            },
+        }
+
+        req_ch = request.channels or 4
+        if req_ch < 4:
+            for pat in (pat_a, pat_b):
+                pat["channels"] = {k: v for k, v in pat["channels"].items() if int(k) < req_ch}
+
+        return {
+            "format": "atari-music-composition",
+            "version": 1,
+            "metadata": {
+                "title": f"AI {style.capitalize()} Catalog Piece",
+                "author": "Mock AI Composer",
+                "description": f"SSOT catalog-backed {style} composition",
+                "key": key,
+                "mode": mode,
+                "bpm": bpm,
+                "duration_seconds": float(request.duration_seconds or 24),
+            },
+            "hardware": {
+                "channels": req_ch,
+                "use_16bit_bass": use_16,
+            },
+            "instruments": inst_specs,
+            "patterns": [pat_a, pat_b],
+            "sequence": ["A", "A", "B", "A"],
+            "loop_point": 0,
+            "intent": {
+                "style": style,
+                "mood": request.mood or [style],
+                "structure": "A-B-A",
+                "composition_notes": request.notes or "Generated using SSOT catalog instruments.",
+            },
+            "provenance": {
+                "source": "ai",
+                "provider": "mock",
+                "model": "mock-composer-v2-catalog",
+                "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "request_id": f"mock-cat-{abs(hash(style)) % 10000:04d}",
+            },
+        }
+
     def _generate_base_valid(self, request: CompositionRequest) -> Dict[str, Any]:
+        if getattr(request, "enable_catalog_instruments", False) or getattr(request, "channel_instruments", None):
+            return self._generate_catalog_valid(request)
 
         style = (request.style or "action").strip().lower()
         use_16 = request.use_16bit_bass or ("dungeon" in style)

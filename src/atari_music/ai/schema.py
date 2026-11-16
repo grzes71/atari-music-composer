@@ -223,6 +223,10 @@ class AIInstrumentDef(BaseModel):
         description="Optional POKEY AUDC distortion override: $00, $20, $40, $60, $80, $A0, $C0 or $E0 "
         "(note: $E0 is audibly identical to $A0; the real noise mode is $80)",
     )
+    catalog_id: Optional[str] = Field(
+        default=None,
+        description="Optional SSOT catalog instrument_id from data/instruments/catalog.json",
+    )
     attack_frames: Optional[int] = Field(default=None, ge=0, le=15, description="Optional ADSR attack frames (0..15)")
     decay_frames: Optional[int] = Field(default=None, ge=0, le=15, description="Optional ADSR decay frames (0..15)")
     sustain_vol: Optional[int] = Field(default=None, ge=0, le=15, description="Optional ADSR sustain volume (0..15)")

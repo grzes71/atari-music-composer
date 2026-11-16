@@ -136,6 +136,38 @@ DOCUMENT SCHEMA & STRUCTURE:
 """
 
 
+def build_catalog_prompt_section(request: CompositionRequest) -> str:
+    """Build prompt guidance exposing CORE-compatible SSOT catalog instruments."""
+    from pathlib import Path
+    from atari_music.instruments import build_catalog_summary_for_ai, load_instrument_catalog
+
+    cat_path = Path(request.instrument_catalog_path) if getattr(request, "instrument_catalog_path", None) else None
+    catalog = load_instrument_catalog(cat_path)
+    entries = build_catalog_summary_for_ai(catalog)
+
+    lines = [
+        "- Production Instrument Catalog (SSOT data/instruments/catalog.json):",
+        "  When choosing sounds, prefer referencing `catalog_id` on instruments from this verified list:",
+    ]
+    for row in entries:
+        roles = "/".join(row["intended_roles"])
+        chs = ",".join(str(c) for c in row["channels_allowed"])
+        lines.append(
+            f"  * {row['instrument_id']} ({row['family']}, roles={roles}, POKEY ch={chs}, mode={row['divider_mode']}, tier={row['tier']})"
+        )
+    ch_map = getattr(request, "channel_instruments", None)
+    if ch_map:
+        lines.append("  Requested channel assignments (POKEY channels 1..4 -> JSON keys '0'..'3'):")
+        for ch in sorted(ch_map):
+            lines.append(f"  * POKEY CH{ch} (JSON key '{ch - 1}'): {ch_map[ch]}")
+    lines.extend([
+        "  Musical PROGRAM_CHANGE guidelines (v2):",
+        "  * Switch instrument within a channel ONLY when musically justified (e.g., contrasting section transition or Kick/Snare/HiHat hits on POKEY CH4 percussion).",
+        "  * Never randomly cycle instruments note-to-note.",
+    ])
+    return "\n".join(lines)
+
+
 def build_user_prompt(request: CompositionRequest) -> str:
     """Generate the user prompt conveying desired musical parameters."""
     lines = [
@@ -157,6 +189,8 @@ def build_user_prompt(request: CompositionRequest) -> str:
         lines.append(f"- Form Structure: {request.structure}")
     if request.notes:
         lines.append(f"- Compositional Notes: {request.notes}")
+    if getattr(request, "enable_catalog_instruments", False) or getattr(request, "channel_instruments", None):
+        lines.append(build_catalog_prompt_section(request))
 
     if request.duration_seconds:
         bpm = request.bpm or 120

@@ -12,6 +12,7 @@ Transforms high-level, declarative AI compositions into:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from atari_music.ai.schema import (
@@ -34,6 +35,7 @@ from atari_music.ir import (
     IRSong,
     midi_to_note_name,
     note_name_to_midi,
+    song_requires_v2,
 )
 from atari_music.music_ir import (
     ChannelRole,
@@ -271,28 +273,80 @@ def _resolve_channel_instrument(
 def compile_composition_to_pokey_ir(
     doc: AICompositionDoc,
     music_song: Optional[MusicSong] = None,
+    *,
+    use_catalog: bool = False,
+    catalog_path: Optional[Path] = None,
 ) -> IRSong:
     """Compile AI Composition into POKEY IR (IRSong) ready for synthesis and MADS export."""
     if music_song is None:
         music_song = interpret_composition_to_music_ir(doc)
 
+    has_explicit_catalog = any(inst_def.catalog_id is not None for inst_def in doc.instruments)
+    catalog_mode = bool(use_catalog or has_explicit_catalog)
+
     # 1. Map instruments to POKEY IR instruments
     inst_id_to_int: Dict[str, int] = {}
     ir_instruments: List[IRInstrument] = []
+    catalog_inst_channels: Dict[str, str] = {}
 
-    for idx, inst_def in enumerate(doc.instruments):
-        inst_id_to_int[inst_def.id] = idx
-        dist, env, role = map_instrument_character(inst_def, doc.hardware.use_16bit_bass)
-        ir_instruments.append(
-            IRInstrument(
-                id=idx,
-                name=inst_def.name or inst_def.id,
-                distortion=dist,
-                role=role.value,
-                envelope=env,
-                is_16bit=(doc.hardware.use_16bit_bass and "bass" in inst_def.character.lower()),
-            )
+    if catalog_mode:
+        from atari_music.instruments import (
+            TARGET_V2_ITER1_XEX,
+            ChannelAssignmentRequest,
+            InstrumentPlanError,
+            POKEYRuntime,
+            load_instrument_catalog,
+            select_ai_catalog_instrument_id,
         )
+
+        catalog = load_instrument_catalog(catalog_path)
+        for idx, inst_def in enumerate(doc.instruments):
+            inst_id_to_int[inst_def.id] = idx
+            cid = inst_def.catalog_id
+            if cid is None and use_catalog:
+                cid = select_ai_catalog_instrument_id(
+                    catalog,
+                    inst_def.character,
+                    uses_16bit_bass=doc.hardware.use_16bit_bass,
+                )
+            if cid is not None:
+                if not catalog.has_profile(cid):
+                    available = ", ".join(p.instrument_id for p in catalog.instruments)
+                    raise InstrumentPlanError(
+                        f"AI instrument {inst_def.id!r} references unknown catalog_id {cid!r} (available: {available})",
+                        code="INSTRUMENT_NOT_FOUND",
+                    )
+                prof, beh = catalog.resolve_profile_behavior(cid)
+                ir_inst = IRInstrument.from_catalog_profile(idx, prof, beh)
+                # Respect human-readable name from composition while preserving catalog provenance
+                ir_instruments.append(ir_inst.model_copy(update={"name": inst_def.name or prof.display_name}))
+                catalog_inst_channels[inst_def.id] = cid
+            else:
+                dist, env, role = map_instrument_character(inst_def, doc.hardware.use_16bit_bass)
+                ir_instruments.append(
+                    IRInstrument(
+                        id=idx,
+                        name=inst_def.name or inst_def.id,
+                        distortion=dist,
+                        role=role.value,
+                        envelope=env,
+                        is_16bit=(doc.hardware.use_16bit_bass and "bass" in inst_def.character.lower()),
+                    )
+                )
+    else:
+        for idx, inst_def in enumerate(doc.instruments):
+            inst_id_to_int[inst_def.id] = idx
+            dist, env, role = map_instrument_character(inst_def, doc.hardware.use_16bit_bass)
+            ir_instruments.append(
+                IRInstrument(
+                    id=idx,
+                    name=inst_def.name or inst_def.id,
+                    distortion=dist,
+                    role=role.value,
+                    envelope=env,
+                    is_16bit=(doc.hardware.use_16bit_bass and "bass" in inst_def.character.lower()),
+                )
+            )
 
     # Ensure at least standard channels have instrument mappings
     if not ir_instruments:
@@ -307,6 +361,7 @@ def compile_composition_to_pokey_ir(
     # Map pattern events from AI Doc directly into IRNote tracks with matching instrument IDs
     ai_pat_map = {p.id: p for p in doc.patterns}
     pokey_patterns: List[IRPattern] = []
+    ch_catalog_profiles: Dict[int, List[str]] = {c: [] for c in range(1, 5)}
 
     for sp in music_song.patterns:
         ai_pat = ai_pat_map.get(sp.name)
@@ -314,26 +369,79 @@ def compile_composition_to_pokey_ir(
 
         ai_has_zero = any(str(k).strip() == "0" for k in ai_pat.channels.keys()) if ai_pat else False
         for ch_idx, track in sp.tracks.items():
-            # POKEY writes AUDC distortion once per channel, so a track uses exactly
-            # one instrument. Resolve it deterministically. This also documents the
-            # loss explicitly instead of silently taking the first event's instrument.
-            inst_id = _resolve_channel_instrument(
+            default_inst_id = _resolve_channel_instrument(
                 ai_pat, ch_idx, ai_has_zero, track, ir_instruments, inst_id_to_int
             )
-            ir_notes = [
-                IRNote(
-                    pitch=n.pitch_name,
-                    midi_pitch=n.pitch,
-                    duration=n.duration,
-                    volume=n.velocity,
-                    instrument_id=inst_id,
-                    channel_role=track.role.value,
-                    is_rest=n.is_rest,
-                )
-                for n in track.notes
-            ]
+            if catalog_mode and ai_pat is not None:
+                # Build step -> instrument_id lookup from AI events so valid mid-channel PROGRAM_CHANGE works!
+                step_inst_map: Dict[int, int] = {}
+                for orig_k, ev_list in ai_pat.channels.items():
+                    if normalize_channel_idx(orig_k, has_zero=ai_has_zero) != ch_idx:
+                        continue
+                    for ev in ev_list:
+                        if ev.instrument in inst_id_to_int:
+                            step_inst_map[int(ev.step)] = inst_id_to_int[ev.instrument]
+                            cid = catalog_inst_channels.get(ev.instrument)
+                            if cid and cid not in ch_catalog_profiles[ch_idx]:
+                                ch_catalog_profiles[ch_idx].append(cid)
+
+                ir_notes = []
+                cur_step = 0
+                prev_inst_id: Optional[int] = None
+                for n in track.notes:
+                    if not n.is_rest and cur_step in step_inst_map:
+                        n_inst_id = step_inst_map[cur_step]
+                        pending: Tuple[int, ...] = (
+                            (n_inst_id,) if (prev_inst_id is not None and n_inst_id != prev_inst_id) else ()
+                        )
+                        prev_inst_id = n_inst_id
+                    else:
+                        n_inst_id = prev_inst_id if prev_inst_id is not None else default_inst_id
+                        pending = ()
+                    ir_notes.append(
+                        IRNote(
+                            pitch=n.pitch_name,
+                            midi_pitch=n.pitch,
+                            duration=n.duration,
+                            volume=n.velocity,
+                            instrument_id=n_inst_id,
+                            channel_role=track.role.value,
+                            is_rest=n.is_rest,
+                            pending_program_changes=pending,
+                        )
+                    )
+                    cur_step += int(n.duration)
+            else:
+                ir_notes = [
+                    IRNote(
+                        pitch=n.pitch_name,
+                        midi_pitch=n.pitch,
+                        duration=n.duration,
+                        volume=n.velocity,
+                        instrument_id=default_inst_id,
+                        channel_role=track.role.value,
+                        is_rest=n.is_rest,
+                    )
+                    for n in track.notes
+                ]
             ir_tracks[ch_idx] = ir_notes
         pokey_patterns.append(IRPattern(id=sp.id, name=sp.name, rows=sp.rows, tracks=ir_tracks))
+
+    if catalog_mode:
+        requests = [
+            ChannelAssignmentRequest(channel=ch, instrument_ids=tuple(cids))
+            for ch, cids in ch_catalog_profiles.items()
+            if cids
+        ]
+        if requests:
+            rt_report = POKEYRuntime().resolve(requests, catalog, target=TARGET_V2_ITER1_XEX)
+            if not rt_report.is_compatible:
+                errs = "; ".join(d.message for d in rt_report.diagnostics if d.severity == "ERROR")
+                raise InstrumentPlanError(
+                    errs,
+                    code=next((d.code for d in rt_report.diagnostics if d.severity == "ERROR"), "RUNTIME_CONFLICT"),
+                    diagnostics=rt_report.diagnostics,
+                )
 
     # Calculate frames per tick from tempo
     if music_song.tempo_bpm <= 80:
@@ -345,7 +453,8 @@ def compile_composition_to_pokey_ir(
     else:
         frames_per_tick = 3
 
-    return IRSong(
+    uses_16bit_final = bool(doc.hardware.use_16bit_bass or any(i.is_16bit for i in ir_instruments))
+    song = IRSong(
         title=music_song.title,
         author=doc.metadata.author,
         tempo_bpm=music_song.tempo_bpm,
@@ -355,5 +464,9 @@ def compile_composition_to_pokey_ir(
         instruments=ir_instruments,
         patterns=pokey_patterns,
         sequence=music_song.sequence,
-        uses_16bit_bass=doc.hardware.use_16bit_bass,
+        uses_16bit_bass=uses_16bit_final,
     )
+    if catalog_mode and song_requires_v2(song):
+        from atari_music.ir import resolve_initial_channel_instruments
+        song = song.model_copy(update={"initial_channel_instruments": resolve_initial_channel_instruments(song)})
+    return song

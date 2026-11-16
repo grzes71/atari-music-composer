@@ -22,6 +22,9 @@ class CompositionRequest:
     seed: Optional[int] = None
     format: str = "json"  # "json" or "dsl"
     dsl_version: str = "v1.1"  # "v1" or "v1.1"
+    channel_instruments: Optional[Dict[int, str]] = None
+    enable_catalog_instruments: bool = False
+    instrument_catalog_path: Optional[str] = None
 
 
 @dataclass

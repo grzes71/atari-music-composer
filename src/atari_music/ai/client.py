@@ -185,9 +185,28 @@ def generate_music_from_composition(
     pokey_song = compile_composition_to_pokey_ir(doc, music_song)
 
     # 3. Calculate metrics
-    mem_size = calculate_ir_binary_size(pokey_song)
-    frames = compile_ir_to_pokey_frames(pokey_song)
+    from atari_music.instruments.planner import resolve_export_format_version
+    from atari_music.ir import song_requires_v2
+
+    export_ver = resolve_export_format_version(pokey_song)
+    mem_size = calculate_ir_binary_size(pokey_song, format_version=export_ver)
+    if song_requires_v2(pokey_song):
+        from atari_music.frame_simulator import simulate_ir_song_frames
+        frames = simulate_ir_song_frames(pokey_song, format_version=2)
+    else:
+        frames = compile_ir_to_pokey_frames(pokey_song)
     duration_s = float(len(frames)) / 50.0
+    sound_profiles_meta = [
+        {
+            "ir_instrument_id": inst.id,
+            "instrument_id": inst.profile_id,
+            "display_name": inst.name,
+            "behavior_id": inst.behavior_id,
+            "profile_fingerprint": inst.profile_fingerprint,
+        }
+        for inst in pokey_song.instruments
+        if inst.profile_id is not None
+    ]
 
     metadata = MusicGenerationMetadata(
         profile=doc.intent.style if doc.intent and doc.intent.style else "ai_composition",
@@ -203,6 +222,8 @@ def generate_music_from_composition(
         sequence_length=len(pokey_song.sequence),
         frames_per_tick=pokey_song.frames_per_tick,
         uses_16bit_bass=pokey_song.uses_16bit_bass,
+        format_version=export_ver,
+        sound_profiles=sound_profiles_meta,
     )
 
     quality = ComposerV4QualityReport(
@@ -644,7 +665,10 @@ def build_xex_from_composition(
         # is what both the WAV preview and the exported assembly are built from, so the
         # two outputs cannot disagree about the hardware configuration.
         res = result_transform(res, comp_doc)
-    song_asm = export_mads_asm(res)
+    from atari_music.instruments.planner import resolve_export_format_version
+    player_ver = kwargs.get("player_version", "auto")
+    export_ver = resolve_export_format_version(res.pokey_ir, str(player_ver))
+    song_asm = export_mads_asm(res, format_version=export_ver)
 
     out_p = Path(output_path)
     out_p.parent.mkdir(parents=True, exist_ok=True)
