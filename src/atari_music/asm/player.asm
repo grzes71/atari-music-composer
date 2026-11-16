@@ -525,6 +525,48 @@ advance_channel_loop:
     lda #0
     sta ch_env_frame,x
     sta ch_cur_vol,x
+
+    ; v2 per-note behavior initialization (pitch envelope & transient macro)
+    lda is_v2
+    beq @note_init_done
+
+    lda ch_p_dur,x
+    beq @no_note_pitch
+    sta ch_pitch_rem,x
+    lda ch_p_start,x
+    sta ch_pitch_delta,x
+@no_note_pitch:
+
+    lda ch_macro_off,x
+    cmp #$FF
+    beq @note_init_done
+    tay
+    lda macros_ptr_lo
+    sta zp_tmp_ptr
+    lda macros_ptr_hi
+    sta zp_tmp_ptr + 1
+    lda (zp_tmp_ptr),y
+    sta ch_macro_lo,x
+    iny
+    lda (zp_tmp_ptr),y
+    sta ch_macro_hi,x
+    ora ch_macro_lo,x
+    beq @note_init_done         ; guard against null macro pointer ($0000)
+
+    lda ch_macro_lo,x
+    sta zp_tmp_ptr
+    lda ch_macro_hi,x
+    sta zp_tmp_ptr + 1
+    ldy #0
+    lda (zp_tmp_ptr),y          ; step 0 frames_per_step ($00 = end)
+    beq @note_init_done
+    sta ch_macro_cnt,x
+    lda #0
+    sta ch_macro_step,x
+    lda #1
+    sta ch_macro_active,x
+
+@note_init_done:
     rts
 
 @is_rest:
@@ -776,6 +818,29 @@ advance_channel_loop:
 ; The phase advances once per call whether or not the frame is sounding, so the alternation
 ; stays in step with the frame offsets the renderer uses.
 ; =============================================================================
+; =============================================================================
+; add_signed_clamp
+; Input:  A = unsigned byte (0..255), tmp_delta = signed two's complement offset
+; Output: A = clamp_0_255(A + signed tmp_delta). Preserves X; clobbers Y.
+; Timing: 12..16 cycles.
+; =============================================================================
+.proc add_signed_clamp
+    ldy tmp_delta               ; 4 cy: N = sign of delta
+    bpl @pos_off                ; 2/3 cy
+    clc                         ; 2 cy
+    adc tmp_delta               ; 4 cy: C=1 => sum >= 0; C=0 => underflow < 0
+    bcs @ok                     ; 2/3 cy
+    lda #$00                    ; 2 cy
+    rts                         ; 6 cy
+@pos_off:
+    clc                         ; 2 cy
+    adc tmp_delta               ; 4 cy: C=1 => overflow >= 256
+    bcc @ok                     ; 2/3 cy
+    lda #$FF                    ; 2 cy
+@ok:
+    rts                         ; 6 cy
+.endp
+
 .proc apply_modulation
     ; Mirror base dist/vol -> ch_out_dist/ch_out_vol for unified POKEY write path
     ldx #3
@@ -788,29 +853,146 @@ advance_channel_loop:
     bpl @copy_out_defaults
 
     lda any_mod
-    beq @done                   ; an ordinary v1 song skips the loop
+    bne @run_mod
+    rts                         ; fast exit for v1 songs with no modulation
+@run_mod:
     ldx #0
 @loop:
     lda ch_mod,x
     and #MOD_OCTAVE_PULSE       ; check C1 octave pulse bit
-    beq @next_channel
+    beq @c1_nominal
     lda ch_mod_phase,x
     eor #1
     sta ch_mod_phase,x          ; Z reflects the toggled phase
-    beq @nominal
+    beq @c1_nominal
     lda ch_cur_vol,x
-    beq @nominal                ; silent frame -> the note's nominal divider
+    beq @c1_nominal             ; silent frame -> nominal divider
     lda ch_audf_base,x          ; sounding, phase 1 -> N // 2
     lsr
     sta ch_audf,x
-    jmp @next_channel
-@nominal:
+    jmp @check_v2_behaviors
+@c1_nominal:
     lda ch_audf_base,x
     sta ch_audf,x
+
+@check_v2_behaviors:
+    lda is_v2
+    bne @do_v2_behaviors
+    jmp @next_channel
+
+@do_v2_behaviors:
+    ; Skip behaviors on idle/rest channel
+    lda ch_env_phase,x
+    bne @ch_active_v2
+    lda ch_macro_active,x
+    bne @ch_active_v2
+    jmp @next_channel
+
+@ch_active_v2:
+    ; 1. Pitch Envelope (if active)
+    lda ch_pitch_rem,x
+    beq @after_pitch
+
+    lda ch_pitch_delta,x
+    sta tmp_delta
+    lda ch_audf,x
+    jsr add_signed_clamp
+    sta ch_audf,x
+
+    dec ch_pitch_rem,x
+    beq @pitch_expired
+    clc
+    lda ch_pitch_delta,x
+    adc ch_p_step,x
+    bvc @store_pitch_d
+    ldy ch_p_step,x
+    bpl @clamp_p_pos
+    lda #$80
+    jmp @store_pitch_d
+@clamp_p_pos:
+    lda #$7F
+@store_pitch_d:
+    sta ch_pitch_delta,x
+    jmp @after_pitch
+@pitch_expired:
+    lda #0
+    sta ch_pitch_delta,x
+
+@after_pitch:
+    ; 2. Transient Macro Engine (if active)
+    lda ch_macro_active,x
+    bne @run_macro
+    jmp @next_channel
+
+@run_macro:
+    lda ch_macro_lo,x
+    sta zp_tmp_ptr
+    lda ch_macro_hi,x
+    sta zp_tmp_ptr + 1
+    ldy ch_macro_step,x
+    iny                         ; +1: flags
+    lda (zp_tmp_ptr),y
+    sta tmp_m_flags
+    iny                         ; +2: audc_val
+    lda (zp_tmp_ptr),y
+    sta tmp_m_audc
+    iny                         ; +3: audf_val
+    lda (zp_tmp_ptr),y
+    sta tmp_m_audf
+
+    ; Optional distortion override
+    lda tmp_m_flags
+    and #MACRO_FLAG_USE_DIST
+    beq @skip_m_dist
+    lda tmp_m_audc
+    and #$E0
+    sta ch_out_dist,x
+@skip_m_dist:
+
+    ; Optional volume override
+    lda tmp_m_flags
+    and #MACRO_FLAG_USE_VOL
+    beq @skip_m_vol
+    lda tmp_m_audc
+    and #$0F
+    sta ch_out_vol,x
+@skip_m_vol:
+
+    ; AUDF: fixed value or signed offset
+    lda tmp_m_flags
+    and #MACRO_FLAG_AUDF_FIXED
+    beq @m_audf_offset
+    lda tmp_m_audf
+    sta ch_audf,x
+    jmp @advance_macro
+@m_audf_offset:
+    lda tmp_m_audf
+    sta tmp_delta
+    lda ch_audf,x
+    jsr add_signed_clamp
+    sta ch_audf,x
+
+@advance_macro:
+    dec ch_macro_cnt,x
+    bne @next_channel
+    lda ch_macro_step,x
+    clc
+    adc #4
+    sta ch_macro_step,x
+    tay
+    lda (zp_tmp_ptr),y          ; next step frames_per_step ($00 = end)
+    beq @macro_finished
+    sta ch_macro_cnt,x
+    jmp @next_channel
+@macro_finished:
+    lda #0
+    sta ch_macro_active,x
+
 @next_channel:
     inx
     cpx #4
-    bne @loop
+    beq @done
+    jmp @loop
 @done:
     rts
 .endp
@@ -988,3 +1170,7 @@ cmd_guard       .byte 0
 tmp_ch_x        .byte 0
 tmp_soa_row     .byte 0
 tmp_ptr_adv     .byte 0
+tmp_delta       .byte 0
+tmp_m_flags     .byte 0
+tmp_m_audc      .byte 0
+tmp_m_audf      .byte 0

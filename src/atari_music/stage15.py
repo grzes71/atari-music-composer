@@ -2083,8 +2083,10 @@ def player_capabilities(asm_path: Path = DEFAULT_PLAYER_ASM) -> Dict[str, Any]:
 #: 886 was the player before the C1 per-channel modulation; 1016 added C1
 #: modulation; the Phase 1 ADSR envelope & channel muting fixes (linear Attack/Decay
 #: ramps via ``scale_env_step``, VBI-frame Release, ``ch_sus_lvl``, and ``$00`` muting
-#: in ``write_pokey_registers``) bring it to 1144.
-PLAYER_ASSEMBLED_BYTES_RECORDED = 1144
+#: in ``write_pokey_registers``) bring it to 1144; Stage C Iter 1 (``SONG_FORMAT_VERSION = 2``
+#: dispatch, SoA instrument loader, ``PROGRAM_CHANGE``, Transient Macro Engine, and Pitch
+#: Envelope) brings it to 1785 bytes (263 bytes below the 2048-byte limit).
+PLAYER_ASSEMBLED_BYTES_RECORDED = 1785
 PLAYER_ASSEMBLED_BYTES_METHOD = (
     "mads.exe tools/mads/mads.exe on a wrapper: org $6000 / player_start: icl '../player.asm'"
 )
