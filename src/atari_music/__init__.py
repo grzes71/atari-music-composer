@@ -31,7 +31,7 @@ try:
 
     __version__ = version("atari-music")
 except (PackageNotFoundError, ImportError):
-    __version__ = "0.9.0"
+    __version__ = "0.9.1"
 
 __all__ = [
     "generate_music",

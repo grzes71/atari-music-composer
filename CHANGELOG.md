@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.9.1 (2026-11-16)
+
+### Bug Fixes
+
+- **scripts**: Resolve relative -OutputDirectory against PowerShell location
+  ([`2239a32`](https://github.com/grzes71/atari-music-composer/commit/2239a32cc617c3b5ea8c1977c8ac273f551e2006))
+
+
 ## v0.9.0 (2026-11-16)
 
 ### Bug Fixes
