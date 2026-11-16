@@ -12,7 +12,6 @@ poc_output/
 /tools/
 /inventory.csv
 /inventory.json
-/HISTORY.md
 /reports/
 /measure.bin
 *.bin
