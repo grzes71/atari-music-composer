@@ -1,0 +1,9 @@
+{
+  "schema": "atari-music/sound-profile-binding/1",
+  "bank": "../../tests/data/sound_profiles/bank",
+  "instruments": {
+    "bass": "pokey_ref_331fbbd7",
+    "lead": "pokey_ref_1ef377fc",
+    "perc": "pokey_ref_6db98eb5"
+  }
+}

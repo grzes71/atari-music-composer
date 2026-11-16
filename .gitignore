@@ -22,10 +22,15 @@ poc_output/
 /stage11_xex
 /listening*
 /generated
-src/atari_music/stage3_reporter.py
-src/atari_music/stage4_reporter.py
 /visualizations
-/examples
+/examples/*
+!/examples/songs/
+!/examples/ai/
+/examples/ai/live/
+/examples/ai/live2/
+/examples/ai/*.asm
+/examples/ai/*.wav
+/examples/ai/*.xex
 /*.xex
 /experiments
 

@@ -778,6 +778,9 @@ def test_the_library_entry_is_accepted_on_import_json(tmp_path: Path) -> None:
 
 
 def test_the_library_entry_is_accepted_on_build_xex(tmp_path: Path) -> None:
+    from conftest import require_local_artifact
+
+    require_local_artifact(MADS)
     dsl = _write_dsl(tmp_path)
     result = runner.invoke(cli, ["build-xex", str(dsl), "--format", "dsl", "--mads", str(MADS),
                                  "--instrument", "lead=c1_octave_pulse",
