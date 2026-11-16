@@ -108,3 +108,5 @@ target/
 *.pdb
 *.dll
 *.dylib
+PROJECT_ARCHITECTURE_AUDIT.md
+output/
