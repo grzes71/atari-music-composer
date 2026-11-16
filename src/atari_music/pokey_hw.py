@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from atari_music.constants import (
     AUDC_NOTPOLY5,
@@ -39,6 +39,16 @@ from atari_music.constants import (
     PAL_64KHZ_CLOCK,
     PAL_CLOCK_HZ,
 )
+
+POKEY_DIV_64KHZ = 28
+POKEY_DIV_15KHZ = 114
+AUDF_179MHZ_8BIT_OFFSET = 4
+AUDF_179MHZ_16BIT_OFFSET = 7
+
+POLY4_PERIOD = 15
+POLY5_PERIOD = 31
+POLY9_PERIOD = 511
+POLY17_PERIOD = 131071
 
 
 class Waveform(str, Enum):
@@ -165,8 +175,84 @@ def is_octave_pulse(descriptor: int) -> bool:
 
 
 
+def _base_clock_divisor(audctl: int) -> int:
+    """CPU clock divisor shared by 64 kHz (div 28) and 15 kHz (div 114) base clocks."""
+    return POKEY_DIV_15KHZ if (audctl & AUDCTL_15KHZ) else POKEY_DIV_64KHZ
+
+
 def _base_clock_hz(audctl: int) -> float:
     return PAL_15KHZ_CLOCK if (audctl & AUDCTL_15KHZ) else PAL_64KHZ_CLOCK
+
+
+def channel_period_cpu_cycles(audf_regs: Sequence[int], audctl: int, channel: int) -> int:
+    """Exact CPU clock cycles between consecutive timer underflows for ``channel`` (1..4).
+
+    Matches POKEY silicon and atari800 (``pokeysnd.c`` / ``mzpokeysnd.c``):
+    - 16-bit joined CH1+CH2 (``AUDCTL $10``) outputs on channel 2.
+    - 16-bit joined CH3+CH4 (``AUDCTL $08``) outputs on channel 4.
+    - 1.79 MHz adds +4 CPU cycles in 8-bit mode (CH1/CH3) and +7 in 16-bit mode.
+    - 64 kHz / 15 kHz modes multiply ``(divider + 1)`` by 28 or 114 respectively.
+    """
+    if channel not in (1, 2, 3, 4):
+        raise ValueError(f"channel must be in 1..4, got {channel!r}")
+    if len(audf_regs) < 4:
+        raise ValueError(f"audf_regs must have length >= 4, got {len(audf_regs)}")
+
+    base_div = _base_clock_divisor(audctl)
+    if channel == 2 and (audctl & AUDCTL_JOIN_1_2_16BIT):
+        div16 = (int(audf_regs[0]) & 0xFF) | ((int(audf_regs[1]) & 0xFF) << 8)
+        if audctl & AUDCTL_CH1_179MHZ:
+            return div16 + AUDF_179MHZ_16BIT_OFFSET
+        return (div16 + 1) * base_div
+
+    if channel == 4 and (audctl & AUDCTL_JOIN_3_4_16BIT):
+        div16 = (int(audf_regs[2]) & 0xFF) | ((int(audf_regs[3]) & 0xFF) << 8)
+        if audctl & AUDCTL_CH3_179MHZ:
+            return div16 + AUDF_179MHZ_16BIT_OFFSET
+        return (div16 + 1) * base_div
+
+    audf = int(audf_regs[channel - 1]) & 0xFF
+    if _uses_hs_clock(audctl, channel):
+        return audf + AUDF_179MHZ_8BIT_OFFSET
+    return (audf + 1) * base_div
+
+
+def _lfsr_sequence(bits: int, tap_a: int, tap_b: int, *, invert: bool = False) -> Tuple[int, ...]:
+    mask = (1 << bits) - 1
+    state = mask
+    shift_out = bits - 1
+    seq: List[int] = []
+    for _ in range(mask):
+        bit = (state >> shift_out) & 1
+        seq.append(1 - bit if invert else bit)
+        new_bit = ((state >> tap_a) ^ (state >> tap_b)) & 1
+        state = ((state << 1) | new_bit) & mask
+    return tuple(seq)
+
+
+def generate_lfsr4_sequence() -> Tuple[int, ...]:
+    """Generate the 15-state POKEY 4-bit polynomial sequence (x^4 + x^3 + 1)."""
+    return _lfsr_sequence(4, 3, 0)
+
+
+def generate_lfsr5_sequence(*, active_gate_polarity: bool = False) -> Tuple[int, ...]:
+    """Generate the 31-state POKEY 5-bit polynomial sequence (x^5 + x^3 + 1).
+
+    When ``active_gate_polarity=True``, returns POKEY's XNOR-inverted active gate
+    polarity (15 gating pulses per 31 states), producing the hardware 62-tick
+    subharmonic toggle doubling observed on ASAP / real hardware for ``$20``/``$60``.
+    """
+    return _lfsr_sequence(5, 4, 1, invert=active_gate_polarity)
+
+
+def generate_lfsr9_sequence() -> Tuple[int, ...]:
+    """Generate the 511-state POKEY 9-bit polynomial sequence (x^9 + x^4 + 1)."""
+    return _lfsr_sequence(9, 8, 3)
+
+
+def generate_lfsr17_sequence() -> Tuple[int, ...]:
+    """Generate the 131071-state POKEY 17-bit polynomial sequence (x^17 + x^12 + 1)."""
+    return _lfsr_sequence(17, 16, 11)
 
 
 def describe_audctl(audctl: int) -> str:
@@ -311,6 +397,43 @@ def split_audf16(divider: int) -> tuple[int, int]:
     """Split a 16-bit divider into (AUDF_lsb, AUDF_msb)."""
     divider = max(0, min(AUDF_MAX_16BIT, int(divider)))
     return divider & 0xFF, (divider >> 8) & 0xFF
+
+
+def audf_for_poly4_8bit(freq_hz: float, audctl: int = 0, channel: int = 1) -> int:
+    """Closest 8-bit tracker AUDF for ``$C0`` Poly4 avoiding mod-3 / mod-5 subcycle stalls."""
+    if freq_hz <= 0:
+        return AUDF_TRACKER_MAX
+    is_hs = _uses_hs_clock(audctl, channel)
+    clk = PAL_CLOCK_HZ if is_hs else _base_clock_hz(audctl)
+    offset = AUDF_179MHZ_8BIT_OFFSET if is_hs else 1
+    best_audf = 0
+    best_cents = float("inf")
+    for n in range(0, AUDF_TRACKER_MAX + 1):
+        m = n + offset
+        if (m % 3 == 0) or (m % 5 == 0):
+            continue
+        actual_hz = clk / (POLY4_PERIOD * m)
+        cents = abs(1200.0 * math.log2(actual_hz / freq_hz))
+        if cents < best_cents:
+            best_cents = cents
+            best_audf = n
+    return best_audf
+
+
+def audf16_for_poly5(freq_hz: float, audctl: int = 0, channel: int = 1) -> int:
+    """Closest 16-bit divider for ``$20`` Poly5+Pure avoiding mod-31 stall periods."""
+    if freq_hz <= 0:
+        return AUDF_MAX_16BIT
+    is_hs = _pair_uses_hs_clock(audctl, channel)
+    clk = PAL_CLOCK_HZ if is_hs else _base_clock_hz(audctl)
+    offset = AUDF_179MHZ_16BIT_OFFSET if is_hs else 1
+    ideal = int(round(clk / (2.0 * POLY5_PERIOD * freq_hz))) - offset
+    ideal = max(0, min(AUDF_MAX_16BIT, ideal))
+    for delta in range(0, 64):
+        for cand in (ideal + delta, ideal - delta):
+            if 0 <= cand <= AUDF_MAX_16BIT and (cand + offset) % POLY5_PERIOD != 0:
+                return cand
+    return ideal
 
 
 # ---------------------------------------------------------------------------
