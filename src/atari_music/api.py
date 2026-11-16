@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 import random
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,7 @@ class MusicGenerationMetadata(BaseModel):
     sequence_length: int
     frames_per_tick: int
     uses_16bit_bass: bool
+    format_version: int = 1
     length_intent: Optional[str] = None
     intensity_intent: Optional[float] = None
     variation_intent: Optional[float] = None
@@ -88,9 +89,15 @@ class MusicGenerationResult(BaseModel):
 
     def render_wav(self, output_path: str | Path, sample_rate: int = 44100) -> Path:
         """Render the generated POKEY composition directly to a standard PCM WAV audio file."""
+        from atari_music.ir import song_requires_v2
+
         out_p = Path(output_path)
         out_p.parent.mkdir(parents=True, exist_ok=True)
-        frames = compile_ir_to_pokey_frames(self.pokey_ir)
+        if song_requires_v2(self.pokey_ir):
+            from atari_music.frame_simulator import simulate_ir_song_frames
+            frames = simulate_ir_song_frames(self.pokey_ir, format_version=2)
+        else:
+            frames = compile_ir_to_pokey_frames(self.pokey_ir)
         render_pokey_to_wav(frames, out_p, sample_rate=sample_rate)
         return out_p
 
@@ -111,6 +118,10 @@ def generate_music(
     intensity: Optional[float] = None,
     variation: Optional[float] = None,
     uses_16bit_bass: Optional[bool] = None,
+    channel_instruments: Optional[Mapping[int | str, str]] = None,
+    program_changes: Optional[Sequence[Mapping[str, Any] | Any]] = None,
+    instrument_catalog_path: Optional[Path] = None,
+    player_version: str = "auto",
 ) -> MusicGenerationResult:
     """Public Music Generation API.
     
@@ -221,6 +232,10 @@ def generate_music(
         novelty=variation,
         duration=target_duration,
         uses_16bit_bass=actual_16bit,
+        channel_instruments=channel_instruments,
+        program_changes=program_changes,
+        instrument_catalog_path=instrument_catalog_path,
+        player_version=player_version,
     )
 
     q = v4_res.quality_report
@@ -240,9 +255,11 @@ def generate_music(
         sequence_length=len(v4_res.pokey_ir.sequence),
         frames_per_tick=v4_res.pokey_ir.frames_per_tick,
         uses_16bit_bass=v4_res.pokey_ir.uses_16bit_bass,
+        format_version=q.format_version,
         length_intent=norm_length,
         intensity_intent=intensity,
         variation_intent=variation,
+        sound_profiles=list(v4_res.sound_profiles),
     )
 
     return MusicGenerationResult(

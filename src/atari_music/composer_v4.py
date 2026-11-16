@@ -30,7 +30,7 @@ import logging
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +95,10 @@ class ComposerV4Config:
     max_size: int = 2048
     max_attempts: int = 100
     uses_16bit_bass: bool = False
+    channel_instruments: Optional[Mapping[int | str, str]] = None
+    program_changes: Optional[Sequence[Mapping[str, Any] | Any]] = None
+    instrument_catalog_path: Optional[Path] = None
+    player_version: str = "auto"
 
 
 class ComposerV4QualityReport(BaseModel):
@@ -115,6 +119,7 @@ class ComposerV4QualityReport(BaseModel):
     harmonic_complexity: float
     pattern_count: int
     attempts_needed: int
+    format_version: int = 1
     section_channel_counts: Dict[str, int] = Field(default_factory=dict)
     active_frame_pct: Dict[int, float] = Field(default_factory=dict)
 
@@ -127,6 +132,7 @@ class ComposerV4Result(BaseModel):
     arrangement: SongArrangement
     quality_report: ComposerV4QualityReport
     wav_path: Optional[str] = None
+    sound_profiles: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 def compose_song_v4(
@@ -140,6 +146,10 @@ def compose_song_v4(
     max_size: int = 2048,
     max_attempts: int = 100,
     uses_16bit_bass: bool = False,
+    channel_instruments: Optional[Mapping[int | str, str]] = None,
+    program_changes: Optional[Sequence[Mapping[str, Any] | Any]] = None,
+    instrument_catalog_path: Optional[Path] = None,
+    player_version: str = "auto",
 ) -> ComposerV4Result:
     """Master entry point for Composer v4: Full 4-Channel Arrangement Engine."""
     cfg = ComposerV4Config(
@@ -153,12 +163,38 @@ def compose_song_v4(
         max_size=max_size,
         max_attempts=max_attempts,
         uses_16bit_bass=uses_16bit_bass,
+        channel_instruments=channel_instruments,
+        program_changes=program_changes,
+        instrument_catalog_path=instrument_catalog_path,
+        player_version=player_version,
     )
     return _execute_composer_v4(cfg)
 
 
 def _execute_composer_v4(config: ComposerV4Config) -> ComposerV4Result:
     """Generate-and-Test loop for Composer v4."""
+    from atari_music.instruments.planner import (
+        InstrumentPlanError,
+        normalize_player_version,
+        resolve_channel_instrument_plan,
+        resolve_export_format_version,
+    )
+    from atari_music.ir import song_requires_v2
+
+    ver_choice = normalize_player_version(config.player_version)
+    instrument_plan = None
+    if config.channel_instruments is not None or config.program_changes:
+        instrument_plan = resolve_channel_instrument_plan(
+            config.channel_instruments,
+            program_changes=config.program_changes,
+            catalog_path=config.instrument_catalog_path,
+            uses_16bit_bass=config.uses_16bit_bass,
+            player_version=ver_choice,
+        )
+    effective_16bit = bool(
+        config.uses_16bit_bass or (instrument_plan is not None and instrument_plan.uses_16bit_ch12)
+    )
+
     prof = get_profile(config.profile)
     rng = random.Random(config.seed)
 
@@ -208,7 +244,7 @@ def _execute_composer_v4(config: ComposerV4Config) -> ComposerV4Result:
         arrangement = plan_song_arrangement(
             profile=prof,
             unique_sections=unique_sections,
-            uses_16bit_bass=config.uses_16bit_bass,
+            uses_16bit_bass=effective_16bit,
             rng=rng,
         )
 
@@ -301,7 +337,7 @@ def _execute_composer_v4(config: ComposerV4Config) -> ComposerV4Result:
                 scale=scale,
                 root_midi=root_midi,
                 profile=prof,
-                uses_16bit_bass=config.uses_16bit_bass,
+                uses_16bit_bass=effective_16bit,
                 rng=rng,
             )
             patterns.append(pat)
@@ -332,14 +368,22 @@ def _execute_composer_v4(config: ComposerV4Config) -> ComposerV4Result:
         pokey_song = _compile_v4_to_pokey_ir(
             music_song=music_song,
             profile=prof,
-            uses_16bit=config.uses_16bit_bass,
+            uses_16bit=effective_16bit,
             rng=rng,
+            instrument_plan=instrument_plan,
         )
 
         # 10. CONSTRAINT CHECK & MEMORY DEDUPLICATION (< 2048 B)
         from atari_music.ir_optimizer import deduplicate_pokey_patterns
         pokey_song, _ = deduplicate_pokey_patterns(pokey_song)
-        mem_size = calculate_ir_binary_size(pokey_song)
+        v2_reasons = song_requires_v2(pokey_song)
+        if ver_choice == "v1" and v2_reasons:
+            raise InstrumentPlanError(
+                "selected song/instruments require format v2 (" + "; ".join(v2_reasons) + ")",
+                code="FORMAT_VERSION_CONFLICT",
+            )
+        export_ver = resolve_export_format_version(pokey_song, ver_choice)
+        mem_size = calculate_ir_binary_size(pokey_song, format_version=export_ver)
 
         if mem_size <= config.max_size:
             quality = _calculate_v4_quality_report(
@@ -350,6 +394,7 @@ def _execute_composer_v4(config: ComposerV4Config) -> ComposerV4Result:
                 profile=prof,
                 attempt=attempt,
                 novelty=actual_novelty,
+                format_version=export_ver,
             )
             return ComposerV4Result(
                 music_ir=music_song,
@@ -357,6 +402,7 @@ def _execute_composer_v4(config: ComposerV4Config) -> ComposerV4Result:
                 profile_name=prof.name,
                 arrangement=arrangement,
                 quality_report=quality,
+                sound_profiles=list(instrument_plan.sound_profiles_metadata) if instrument_plan else [],
             )
 
         rng.seed(config.seed + attempt * 31)
@@ -417,8 +463,9 @@ def _compile_v4_to_pokey_ir(
     profile: MusicProfile,
     uses_16bit: bool,
     rng: random.Random,
+    instrument_plan: Optional[Any] = None,
 ) -> IRSong:
-    """Compile MusicSong into IRSong with authentic POKEY timbres."""
+    """Compile MusicSong into IRSong with authentic POKEY timbres (legacy or v2 catalog)."""
     # Profile-tuned lead timbre
     if profile.name == "dungeon":
         lead_dist = DISTORTION_PURE_TONE
@@ -440,90 +487,219 @@ def _compile_v4_to_pokey_ir(
     # Bass timbre: 16-bit pure tone or 8-bit poly
     bass_dist = DISTORTION_PURE_TONE if uses_16bit else DISTORTION_4BIT_POLY
 
-    instruments = [
-        # Inst 0: Lead
-        IRInstrument(
-            id=0,
-            name=f"{profile.name.capitalize()} Lead",
-            distortion=lead_dist,
-            role="melody",
-            envelope=lead_env,
-            vibrato_depth=vibrato_d,
-            vibrato_speed=vibrato_s,
-            is_16bit=False,
-        ),
-        # Inst 1: Bass
-        IRInstrument(
-            id=1,
-            name="Bass Voice",
-            distortion=bass_dist,
-            role="bass",
-            envelope=IREnvelope(attack_frames=0, decay_frames=4, sustain_vol=11, release_frames=2),
-            is_16bit=uses_16bit,
-        ),
-        # Inst 2: Counter / Harmony Voice
-        IRInstrument(
-            id=2,
-            name="Counter Harmony",
-            distortion=DISTORTION_PURE_TONE,
-            role="harmony",
-            envelope=IREnvelope(attack_frames=1, decay_frames=3, sustain_vol=9, release_frames=2),
-            is_16bit=False,
-        ),
-        # Inst 3: Percussion Voice
-        IRInstrument(
-            id=3,
-            name="Percussion Voice",
-            distortion=DISTORTION_WHITE_NOISE,
-            role="percussion",
-            envelope=IREnvelope(attack_frames=0, decay_frames=3, sustain_vol=8, release_frames=2),
-            is_16bit=False,
-        ),
-        # Inst 4: Melodic Ornament Voice (pure tone)
-        IRInstrument(
-            id=4,
-            name="Ornament Voice",
-            distortion=DISTORTION_PURE_TONE,
-            role="harmony",
-            envelope=IREnvelope(attack_frames=1, decay_frames=3, sustain_vol=8, release_frames=2),
-            is_16bit=False,
-        ),
-    ]
+    if instrument_plan is None:
+        instruments = [
+            # Inst 0: Lead
+            IRInstrument(
+                id=0,
+                name=f"{profile.name.capitalize()} Lead",
+                distortion=lead_dist,
+                role="melody",
+                envelope=lead_env,
+                vibrato_depth=vibrato_d,
+                vibrato_speed=vibrato_s,
+                is_16bit=False,
+            ),
+            # Inst 1: Bass
+            IRInstrument(
+                id=1,
+                name="Bass Voice",
+                distortion=bass_dist,
+                role="bass",
+                envelope=IREnvelope(attack_frames=0, decay_frames=4, sustain_vol=11, release_frames=2),
+                is_16bit=uses_16bit,
+            ),
+            # Inst 2: Counter / Harmony Voice
+            IRInstrument(
+                id=2,
+                name="Counter Harmony",
+                distortion=DISTORTION_PURE_TONE,
+                role="harmony",
+                envelope=IREnvelope(attack_frames=1, decay_frames=3, sustain_vol=9, release_frames=2),
+                is_16bit=False,
+            ),
+            # Inst 3: Percussion Voice
+            IRInstrument(
+                id=3,
+                name="Percussion Voice",
+                distortion=DISTORTION_WHITE_NOISE,
+                role="percussion",
+                envelope=IREnvelope(attack_frames=0, decay_frames=3, sustain_vol=8, release_frames=2),
+                is_16bit=False,
+            ),
+            # Inst 4: Melodic Ornament Voice (pure tone)
+            IRInstrument(
+                id=4,
+                name="Ornament Voice",
+                distortion=DISTORTION_PURE_TONE,
+                role="harmony",
+                envelope=IREnvelope(attack_frames=1, decay_frames=3, sustain_vol=8, release_frames=2),
+                is_16bit=False,
+            ),
+        ]
 
-    pokey_patterns: List[IRPattern] = []
-    for sp in music_song.patterns:
-        ir_tracks: Dict[int, List[IRNote]] = {}
-        for ch, track in sp.tracks.items():
-            ir_notes: List[IRNote] = []
-            for n in track.notes:
-                # Assign instrument based on channel role & characteristics
-                if track.role == ChannelRole.MELODY:
-                    inst_id = 0
-                elif track.role == ChannelRole.BASS:
-                    inst_id = 1
-                elif track.role == ChannelRole.PERCUSSION:
-                    inst_id = 3
-                else:  # HARMONY / COUNTER / ORNAMENT
-                    if ch == 4 and n.pitch is not None and n.pitch >= 70:
-                        inst_id = 4  # High ornament
-                    elif ch == 4 and n.pitch is not None and n.pitch < 65:
-                        inst_id = 4  # Dark ostinato
-                    else:
-                        inst_id = 2  # Counterpoint harmony
+        pokey_patterns: List[IRPattern] = []
+        for sp in music_song.patterns:
+            ir_tracks: Dict[int, List[IRNote]] = {}
+            for ch, track in sp.tracks.items():
+                ir_notes: List[IRNote] = []
+                for n in track.notes:
+                    # Assign instrument based on channel role & characteristics
+                    if track.role == ChannelRole.MELODY:
+                        inst_id = 0
+                    elif track.role == ChannelRole.BASS:
+                        inst_id = 1
+                    elif track.role == ChannelRole.PERCUSSION:
+                        inst_id = 3
+                    else:  # HARMONY / COUNTER / ORNAMENT
+                        if ch == 4 and n.pitch is not None and n.pitch >= 70:
+                            inst_id = 4  # High ornament
+                        elif ch == 4 and n.pitch is not None and n.pitch < 65:
+                            inst_id = 4  # Dark ostinato
+                        else:
+                            inst_id = 2  # Counterpoint harmony
 
-                ir_notes.append(
-                    IRNote(
-                        pitch=midi_to_note_name(n.pitch) if n.pitch else None,
-                        midi_pitch=n.pitch,
-                        duration=n.duration,
-                        volume=n.velocity,
-                        instrument_id=inst_id,
-                        channel_role=track.role.value,
-                        is_rest=n.is_rest or (n.pitch is None and track.role != ChannelRole.PERCUSSION),
+                    ir_notes.append(
+                        IRNote(
+                            pitch=midi_to_note_name(n.pitch) if n.pitch else None,
+                            midi_pitch=n.pitch,
+                            duration=n.duration,
+                            volume=n.velocity,
+                            instrument_id=inst_id,
+                            channel_role=track.role.value,
+                            is_rest=n.is_rest or (n.pitch is None and track.role != ChannelRole.PERCUSSION),
+                        )
                     )
+                ir_tracks[ch] = ir_notes
+            pokey_patterns.append(IRPattern(id=sp.id, name=sp.name, rows=sp.rows, tracks=ir_tracks))
+        initial_ch_map: Optional[Dict[int, int]] = None
+    else:
+        from atari_music.instruments.planner import InstrumentPlanError
+
+        instruments = list(instrument_plan.ir_instruments)
+        needs_v2_bank = bool(instrument_plan.requires_v2)
+
+        def _ensure_fallback(role_name: str, name: str, dist: int, env: IREnvelope, is16: bool = False) -> int:
+            for existing in instruments:
+                if existing.role == role_name and existing.profile_id is None and existing.is_16bit == is16:
+                    return existing.id
+            new_id = len(instruments)
+            instruments.append(
+                IRInstrument(
+                    id=new_id,
+                    name=name,
+                    distortion=dist,
+                    role=role_name,
+                    envelope=env,
+                    vibrato_depth=0 if needs_v2_bank else (vibrato_d if role_name == "melody" else 0),
+                    vibrato_speed=0 if needs_v2_bank else (vibrato_s if role_name == "melody" else 0),
+                    is_16bit=is16,
                 )
-            ir_tracks[ch] = ir_notes
-        pokey_patterns.append(IRPattern(id=sp.id, name=sp.name, rows=sp.rows, tracks=ir_tracks))
+            )
+            return new_id
+
+        fallback_ids: Dict[int, int] = {}
+        init_ch_resolved: Dict[int, int] = {}
+        for ch in range(1, 5):
+            prof_id = instrument_plan.initial_channel_profiles.get(ch)
+            if prof_id is not None:
+                init_ch_resolved[ch] = instrument_plan.profile_to_ir_index[prof_id]
+            elif ch == 1:
+                init_ch_resolved[ch] = _ensure_fallback(
+                    "bass", "Bass Voice", bass_dist,
+                    IREnvelope(attack_frames=0, decay_frames=4, sustain_vol=11, release_frames=2), uses_16bit
+                )
+            elif ch == 2:
+                init_ch_resolved[ch] = init_ch_resolved[1] if uses_16bit else _ensure_fallback(
+                    "harmony", "Counter Harmony", DISTORTION_PURE_TONE,
+                    IREnvelope(attack_frames=1, decay_frames=3, sustain_vol=9, release_frames=2),
+                )
+            elif ch == 3:
+                init_ch_resolved[ch] = _ensure_fallback(
+                    "melody", f"{profile.name.capitalize()} Lead", lead_dist, lead_env,
+                )
+            else:
+                init_ch_resolved[ch] = _ensure_fallback(
+                    "percussion", "Percussion Voice", DISTORTION_WHITE_NOISE,
+                    IREnvelope(attack_frames=0, decay_frames=3, sustain_vol=8, release_frames=2),
+                )
+            fallback_ids[ch] = init_ch_resolved[ch]
+
+        # Build lookup for ProgramChangeSpec -> (pat_idx, ch) -> {note_idx: ir_inst_id}
+        pc_map: Dict[Tuple[int, int], Dict[int, int]] = {}
+        available_sections = [sp.name[4:] if sp.name.startswith("Pat ") else sp.name for sp in music_song.patterns]
+        for pc in instrument_plan.program_changes:
+            target_ir_id = instrument_plan.profile_to_ir_index[pc.instrument_id]
+            matched_indices: List[int] = []
+            if pc.pattern_index is not None:
+                if pc.pattern_index >= len(music_song.patterns):
+                    raise InstrumentPlanError(
+                        f"program_change pattern_index={pc.pattern_index} out of range 0..{len(music_song.patterns) - 1}",
+                        code="INVALID_PROGRAM_CHANGE_TARGET",
+                    )
+                matched_indices.append(pc.pattern_index)
+            elif pc.section is not None:
+                sec_norm = pc.section.strip().upper()
+                if sec_norm.startswith("PAT "):
+                    sec_norm = sec_norm[4:].strip()
+                for p_idx, sp in enumerate(music_song.patterns):
+                    sp_norm = sp.name.upper()
+                    if sp_norm.startswith("PAT "):
+                        sp_norm = sp_norm[4:].strip()
+                    if sp_norm == sec_norm:
+                        matched_indices.append(p_idx)
+                if not matched_indices:
+                    raise InstrumentPlanError(
+                        f"program_change section {pc.section!r} does not exist in generated form "
+                        f"(available sections: {available_sections})",
+                        code="INVALID_PROGRAM_CHANGE_SECTION",
+                    )
+            for p_idx in matched_indices:
+                pc_map.setdefault((p_idx, pc.channel), {})[pc.note_index] = target_ir_id
+
+        pokey_patterns = []
+        for p_idx, sp in enumerate(music_song.patterns):
+            ir_tracks = {}
+            for ch, track in sp.tracks.items():
+                base_ch_inst = init_ch_resolved.get(ch, fallback_ids.get(ch, 0))
+                pat_changes = pc_map.get((p_idx, ch), {})
+                active_inst = base_ch_inst
+                notes_list = track.notes
+                if pat_changes and notes_list:
+                    max_req = max(pat_changes.keys())
+                    if max_req >= len(notes_list):
+                        raise InstrumentPlanError(
+                            f"program_change note_index={max_req} exceeds channel {ch} note count ({len(notes_list)}) in {sp.name!r}",
+                            code="INVALID_PROGRAM_CHANGE_TARGET",
+                        )
+                ir_notes = []
+                target_inst_obj = instruments[base_ch_inst]
+                for n_idx, n in enumerate(notes_list):
+                    pending_pc: Tuple[int, ...] = ()
+                    if n_idx in pat_changes:
+                        active_inst = pat_changes[n_idx]
+                        pending_pc = (active_inst,)
+                        target_inst_obj = instruments[active_inst]
+                    is_perc = (
+                        target_inst_obj.role == "percussion"
+                        or track.role == ChannelRole.PERCUSSION
+                    )
+                    ir_notes.append(
+                        IRNote(
+                            pitch=midi_to_note_name(n.pitch) if n.pitch else None,
+                            midi_pitch=n.pitch,
+                            duration=n.duration,
+                            volume=n.velocity,
+                            instrument_id=active_inst,
+                            channel_role=("percussion" if (is_perc and n.pitch is None) else track.role.value),
+                            is_rest=n.is_rest or (n.pitch is None and track.role != ChannelRole.PERCUSSION),
+                            pending_program_changes=pending_pc,
+                        )
+                    )
+                ir_tracks[ch] = ir_notes
+            pokey_patterns.append(IRPattern(id=sp.id, name=sp.name, rows=sp.rows, tracks=ir_tracks))
+
+        initial_ch_map = dict(init_ch_resolved) if needs_v2_bank else None
 
     if music_song.tempo_bpm <= 80:
         frames_per_tick = 6
@@ -545,6 +721,7 @@ def _compile_v4_to_pokey_ir(
         patterns=pokey_patterns,
         sequence=music_song.sequence,
         uses_16bit_bass=uses_16bit,
+        initial_channel_instruments=initial_ch_map,
     )
 
 
@@ -556,9 +733,14 @@ def _calculate_v4_quality_report(
     profile: MusicProfile,
     attempt: int,
     novelty: float,
+    format_version: int = 1,
 ) -> ComposerV4QualityReport:
     """Calculate thorough structural and audio quality metrics."""
-    frames = compile_ir_to_pokey_frames(pokey_song)
+    if format_version == 2:
+        from atari_music.frame_simulator import simulate_ir_song_frames
+        frames = simulate_ir_song_frames(pokey_song, format_version=2)
+    else:
+        frames = compile_ir_to_pokey_frames(pokey_song)
     duration_sec = round(frames.shape[0] / 50.0, 2)
     total_frames = frames.shape[0]
 
@@ -621,6 +803,7 @@ def _calculate_v4_quality_report(
         harmonic_complexity=harmonic_complexity,
         pattern_count=len(pokey_song.patterns),
         attempts_needed=attempt,
+        format_version=format_version,
         section_channel_counts=sec_ch_counts,
         active_frame_pct=active_frame_pct,
     )
