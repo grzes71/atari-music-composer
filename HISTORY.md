@@ -2,6 +2,12 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-17] - Register `ai/prompt_library` and `ai/critique` in `CORE_MODULES`
+
+Fixed 3 CI boundary test failures in [tests/test_architecture_boundaries.py](tests/test_architecture_boundaries.py) on `feat/rich-prompts`.
+
+- Added `"ai/prompt_library"` and `"ai/critique"` to `CORE_MODULES` in [tests/test_architecture_boundaries.py](tests/test_architecture_boundaries.py).
+
 ## [2026-11-17] - Add Opt-In Rich Prompt Profile, Pre-Composition Brief, and Musical Critique Loop (`ai-compose`)
 
 Added an opt-in `rich` prompt profile (`--prompt-profile rich`), pre-composition `MusicalBrief` planning (`--plan-first`), post-validation musical critique/revision loop (`--quality-passes`), DSL/JSON catalog parity, and new CLI flags while keeping the default `classic` profile byte-for-byte unchanged.
