@@ -268,6 +268,8 @@ def test_cli_instruments_workflow_and_backward_compatibility(tmp_path: Path) -> 
     assert res_list_json.exit_code == 0, res_list_json.output
     payload = json.loads(res_list_json.output)
     assert len(payload["instruments"]) >= 16
+    assert "midi_range" in payload["instruments"][0]
+    assert "envelope" in payload["instruments"][0]
 
     res_insp = runner.invoke(cli, ["inspect-instrument", "lead_attack_bite"])
     assert res_insp.exit_code == 0, res_insp.output

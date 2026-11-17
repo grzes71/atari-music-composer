@@ -2,6 +2,15 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-17] - Unified Smart Batch Arrangement Script (`generate_arrangements.py`)
+
+Replaced the separate 8-bit and 16-bit PowerShell batch scripts with a single stdlib-only Python orchestrator that queries `atari-music.exe`, analyzes each composition's hardware mode and per-channel note statistics, ranks matching instruments, compiles numbered WAV/XEX outputs plus a `vanilla` (`v1`) baseline, and writes `arrangements.log`.
+
+- Enriched `atari-music list-instruments --json` in [src/atari_music/cli.py](src/atari_music/cli.py) with `midi_range`, `waveform_family`, `preferred_clock_hz`, `required_audctl_bits`, `poly4_safe_tuning`, and `envelope` fields (and added assertions in [tests/test_stage_d_integration.py](tests/test_stage_d_integration.py)).
+- Added [generate_arrangements.py](generate_arrangements.py) supporting `.dsl` (auto-converted via `atari-music.exe import-dsl`) and `.json` (`AICompositionDoc` / `IRSong`), auto-detecting `uses_16bit_bass` and per-channel roles (`bass`, `melody`, `harmony`, `percussion`), scoring compatible instruments from `list-instruments --target xex_v2 --json` by MIDI range, clock mode, duration/short-note articulation, and pitch count, selecting diverse top-ranked `01_...`..`06_...` variants plus `vanilla` (`v1`), rendering WAV + XEX, and logging full match scores and CLI commands to `arrangements.log`.
+- Removed legacy `generate-arrangements-8bit.ps1` and `generate-arrangements-16bit.ps1` and documented [generate_arrangements.py](generate_arrangements.py) in [README.md](README.md).
+- Added `@pytest.mark.core` test coverage in [tests/test_generate_arrangements_script.py](tests/test_generate_arrangements_script.py).
+
 ## [2026-11-16] - Use `atari-music.exe` & Add `vanilla` (`v1`) Variant in Batch Scripts
 
 Switched both PowerShell batch arrangement scripts from invoking `python -m atari_music` to calling `atari-music.exe` directly, and added a `vanilla` variant targeting the legacy `v1` player.

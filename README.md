@@ -531,6 +531,23 @@ python scripts/generate_instrument_test_suite.py --dry-run
 python scripts/generate_instrument_test_suite.py --output-dir output/instrument_tests
 ```
 
+### Smart Batch Arrangement Runner (`generate_arrangements.py`)
+
+For arranging any single `.dsl` or JSON composition (`AICompositionDoc` or POKEY IR `IRSong`), [generate_arrangements.py](generate_arrangements.py) replaces the legacy 8-bit/16-bit PowerShell wrappers with one adaptive Python pipeline:
+
+1. Queries `atari-music.exe list-instruments --target xex_v2 --json` for compatible SSOT catalog instruments.
+2. Converts `.dsl` inputs automatically via `atari-music.exe import-dsl` into a temporary JSON file.
+3. Detects 16-bit (`CH1+CH2` joined) vs. 8-bit bass and analyzes each active channel's role (`bass`, `melody`, `harmony`, `percussion`), MIDI span, note duration, short-note ratio, and pitch diversity.
+4. Scores and ranks compatible instrument combinations (generating numbered `01_...`..`06_...` `v2` variants plus the `v1` `vanilla` baseline) into `.wav` and `.xex` outputs, and records full scoring rationale and executed commands in `arrangements.log`:
+
+```bash
+# Preview matched channels, candidate scores, and planned outputs without rendering
+python generate_arrangements.py -i examples/songs/wybierak-2.dsl -o output/wybierak2 --dry-run
+
+# Render ranked arrangements (.wav + .xex) + arrangements.log
+python generate_arrangements.py -i examples/songs/wybierak-2.dsl -o output/wybierak2 -m tools/mads/mads.exe
+```
+
 ---
 
 ## Export and Atari Playback
