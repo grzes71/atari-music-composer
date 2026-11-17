@@ -32,6 +32,8 @@ CORE_MODULES: Set[str] = {
     "ai/schema",
     "ai/dsl",
     "ai/prompts",
+    "ai/prompt_library",
+    "ai/critique",
     "ai/providers/__init__",
     "ai/providers/base",
     "ai/providers/mock",
