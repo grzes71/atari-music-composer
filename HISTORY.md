@@ -2,6 +2,12 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-17] - Add Valid YAML Frontmatter to `SKILL.md`
+
+Added required `name` and `description` YAML frontmatter to [SKILL.md](SKILL.md) to fix skill loader parsing (`failed to parse frontmatter`).
+
+- Prepended `---` YAML frontmatter block (`name: atari-music-composer`, `description: >- ...`) at the top of [SKILL.md](SKILL.md).
+
 ## [2026-11-17] - Update `SKILL.md` for Instrument Catalog, `arrange`, and `generate_arrangements.py`
 
 Updated [SKILL.md](SKILL.md) to reflect the SSOT instrument catalog workflow, `v1`/`v2` output formats, `arrange`, and `generate_arrangements.py`.
