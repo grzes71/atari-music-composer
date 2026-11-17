@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.11.0 (2026-11-17)
+
+### Features
+
+- **scripts**: Replace PowerShell batch scripts with adaptive generate_arrangements.py
+  ([`05fd9bf`](https://github.com/grzes71/atari-music-composer/commit/05fd9bfa8588209f57f1dfea695100a4ee02ed9f))
+
+
 ## v0.10.0 (2026-11-16)
 
 ### Features
