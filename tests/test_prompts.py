@@ -106,3 +106,24 @@ def test_user_prompt_includes_request_parameters_and_declarative_duration():
     assert "engine computes exact PAL 50Hz duration" in prompt
     # No forced 6-9 pattern recipe
     assert "Create 6 to 9 distinct patterns" not in prompt
+
+
+def test_classic_profile_dispatch_is_byte_identical():
+    """Verify default CompositionRequest dispatches byte-for-byte identical classic prompts."""
+    from atari_music.ai.prompts import (
+        build_dsl_system_prompt,
+        build_dsl_user_prompt,
+        get_system_prompt,
+        get_user_prompt,
+    )
+
+    req_json = CompositionRequest(style="action", bpm=125, duration_seconds=24)
+    assert req_json.prompt_profile == "classic"
+    assert get_system_prompt() == build_system_prompt()
+    assert get_system_prompt(req_json) == build_system_prompt()
+    assert get_user_prompt(req_json) == build_user_prompt(req_json)
+
+    req_dsl = CompositionRequest(style="action", bpm=125, duration_seconds=24, format="dsl")
+    assert get_system_prompt(req_dsl) == build_dsl_system_prompt(version="v1.1")
+    assert get_user_prompt(req_dsl) == build_dsl_user_prompt(req_dsl)
+

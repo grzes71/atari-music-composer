@@ -25,6 +25,13 @@ class CompositionRequest:
     channel_instruments: Optional[Dict[int, str]] = None
     enable_catalog_instruments: bool = False
     instrument_catalog_path: Optional[str] = None
+    prompt_profile: str = "classic"  # "classic" or "rich"
+    temperature: Optional[float] = None  # None uses provider default (0.7)
+    plan_first: bool = False  # Phase 4: generate a MusicalBrief before notes
+    quality_passes: int = 0  # Phase 5: number of musical critique/revision passes
+    tempo_grid: str = "describe"  # "describe" or "exact"
+    musical_brief: Optional[Dict[str, Any]] = None  # Attached brief when plan_first=True
+
 
 
 @dataclass

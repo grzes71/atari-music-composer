@@ -2,6 +2,18 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-17] - Add Opt-In Rich Prompt Profile, Pre-Composition Brief, and Musical Critique Loop (`ai-compose`)
+
+Added an opt-in `rich` prompt profile (`--prompt-profile rich`), pre-composition `MusicalBrief` planning (`--plan-first`), post-validation musical critique/revision loop (`--quality-passes`), DSL/JSON catalog parity, and new CLI flags while keeping the default `classic` profile byte-for-byte unchanged.
+
+- Created [src/atari_music/ai/prompt_library.py](src/atari_music/ai/prompt_library.py) with ground-truth PAL 50 Hz timing grid (`build_timing_grid_section`, `--tempo-grid [describe|exact]`), POKEY chiptune craft techniques (`build_craft_section`), archetype idioms (`build_style_idioms_section`), `INSTRUMENT` directive syntax help, and validated `RICH_DSL_EXAMPLE` / `rich_json_example()`.
+- Created [src/atari_music/ai/critique.py](src/atari_music/ai/critique.py) (`MusicalCritique.from_doc`, `format_revision_feedback`) evaluating melodic range, pitch class diversity, duration variety, dynamic contrast, consonance, active channels, and structural diversity.
+- Added `MusicalBrief` models and `CompositionAttempt.critique_score` / `critique_findings` in [src/atari_music/ai/schema.py](src/atari_music/ai/schema.py), and extended `CompositionRequest` in [src/atari_music/ai/providers/base.py](src/atari_music/ai/providers/base.py).
+- Added `get_system_prompt` and `get_user_prompt` dispatchers and opt-in DSL catalog parity in [src/atari_music/ai/prompts.py](src/atari_music/ai/prompts.py); updated [src/atari_music/ai/providers/openai.py](src/atari_music/ai/providers/openai.py), [src/atari_music/ai/providers/mock.py](src/atari_music/ai/providers/mock.py), and [src/atari_music/ai/client.py](src/atari_music/ai/client.py) (`_run_quality_passes`, `plan_first`).
+- Extended `ai-compose` in [src/atari_music/cli.py](src/atari_music/cli.py) with `--key`, `--mode`, `--notes`, `--prompt-profile`, `--temperature`, `--tempo-grid`, `--plan-first`, and `--quality-passes`, and documented them in [README.md](README.md) and [SKILL.md](SKILL.md).
+- Added [tests/test_prompt_library.py](tests/test_prompt_library.py), classic snapshot regression test in [tests/test_prompts.py](tests/test_prompts.py), and [scripts/benchmark_prompts.py](scripts/benchmark_prompts.py).
+
+
 ## [2026-11-17] - Add Valid YAML Frontmatter to `SKILL.md`
 
 Added required `name` and `description` YAML frontmatter to [SKILL.md](SKILL.md) to fix skill loader parsing (`failed to parse frontmatter`).

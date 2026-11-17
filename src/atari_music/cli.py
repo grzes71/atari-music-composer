@@ -1680,10 +1680,28 @@ def build_xex_cmd(
 @click.option("--mood", "-m", multiple=True, help="Mood keywords (can be specified multiple times)")
 @click.option("--duration", type=float, default=25.0, help="Target duration in seconds")
 @click.option("--bpm", type=int, default=120, help="Target BPM")
+@click.option("--key", type=str, default=None, help="Root musical key (e.g. A, D, E, F#, Bb)")
+@click.option("--mode", type=str, default=None, help="Musical mode/scale (e.g. minor, major, dorian, phrygian)")
+@click.option("--notes", type=str, default=None, help="Additional compositional notes or guidance")
 @click.option("--channels", type=int, default=4, help="POKEY channels (1..4)")
 @click.option("--use-16bit-bass/--no-16bit-bass", default=False, help="Enable 16-bit bass mode")
 @click.option("--structure", type=str, default="A-B-A", help="Song structure (e.g. A-B-A)")
 @click.option("--format", "composition_format", type=click.Choice(["json", "dsl"], case_sensitive=False), default="json", help="Composition format for LLM generation: json (default) or dsl")
+@click.option(
+    "--prompt-profile",
+    type=click.Choice(["classic", "rich"], case_sensitive=False),
+    default="classic",
+    help="Prompt engineering profile: classic (default, unchanged) or rich (grid, chiptune craft, style idioms, rich example).",
+)
+@click.option("--temperature", type=float, default=None, help="Optional LLM sampling temperature override (default: 0.7)")
+@click.option(
+    "--tempo-grid",
+    type=click.Choice(["describe", "exact"], case_sensitive=False),
+    default="describe",
+    help="Rhythmic grid mode in rich profile: describe (default) or exact (suggests exact PAL grid BPM).",
+)
+@click.option("--plan-first/--no-plan-first", default=False, help="Opt-in: generate a structured MusicalBrief plan before composing notes.")
+@click.option("--quality-passes", type=int, default=0, help="Opt-in: number of post-validation musical critique & revision passes (default: 0).")
 @click.option("--provider", type=click.Choice(["mock", "openai", "deepseek"], case_sensitive=False), default=None, help="AI provider override (overrides AI_PROVIDER, e.g. mock, openai, deepseek)")
 @click.option("--model", type=str, default=None, help="AI model name override")
 @click.option(
@@ -1744,10 +1762,18 @@ def ai_compose_cmd(
     mood: tuple[str, ...],
     duration: float,
     bpm: int,
+    key: Optional[str],
+    mode: Optional[str],
+    notes: Optional[str],
     channels: int,
     use_16bit_bass: bool,
     structure: str,
     composition_format: str,
+    prompt_profile: str,
+    temperature: Optional[float],
+    tempo_grid: str,
+    plan_first: bool,
+    quality_passes: int,
     provider: Optional[str],
     model: Optional[str],
     env_file: Optional[Path],
@@ -1801,6 +1827,9 @@ def ai_compose_cmd(
         mood=list(mood) if mood else ["mysterious", "tense"],
         duration_seconds=duration,
         bpm=bpm,
+        key=key,
+        mode=mode,
+        notes=notes,
         channels=channels,
         use_16bit_bass=use_16bit_bass,
         structure=structure,
@@ -1808,6 +1837,11 @@ def ai_compose_cmd(
         channel_instruments=ch_map,
         enable_catalog_instruments=bool(use_instrument_catalog or ch_map),
         instrument_catalog_path=str(instrument_catalog) if instrument_catalog else None,
+        prompt_profile=prompt_profile.lower(),
+        temperature=temperature,
+        tempo_grid=tempo_grid.lower(),
+        plan_first=plan_first,
+        quality_passes=quality_passes,
     )
     is_stdout = output is None or str(output) == "-"
 

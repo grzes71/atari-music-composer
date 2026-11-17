@@ -321,6 +321,8 @@ def build_dsl_user_prompt(request: CompositionRequest) -> str:
         lines.append(f"- Form Structure: {request.structure}")
     if request.notes:
         lines.append(f"- Compositional Notes: {request.notes}")
+    if getattr(request, "enable_catalog_instruments", False) or getattr(request, "channel_instruments", None):
+        lines.append(build_catalog_prompt_section(request))
 
     if request.duration_seconds:
         bpm = request.bpm or 120
@@ -341,6 +343,48 @@ def build_dsl_user_prompt(request: CompositionRequest) -> str:
 
     lines.append("\nReturn ONLY the plain text Music DSL document without markdown fences or commentary.")
     return "\n".join(lines)
+
+
+def get_system_prompt(request: Optional[CompositionRequest] = None) -> str:
+    """Dispatch system prompt according to ``request.prompt_profile`` and ``request.format``.
+
+    Defaults to the classic JSON system prompt when ``request`` is None or uses ``prompt_profile='classic'``.
+    """
+    if request is None:
+        return build_system_prompt()
+    fmt = getattr(request, "format", "json") or "json"
+    dsl_ver = getattr(request, "dsl_version", "v1.1") or "v1.1"
+    profile = (getattr(request, "prompt_profile", "classic") or "classic").lower()
+    if profile == "rich":
+        from atari_music.ai.prompt_library import build_rich_system_prompt
+
+        return build_rich_system_prompt(fmt=fmt, dsl_version=dsl_ver)
+    if fmt == "dsl":
+        return build_dsl_system_prompt(version=dsl_ver)
+    return build_system_prompt()
+
+
+def get_user_prompt(request: CompositionRequest) -> str:
+    """Dispatch user prompt according to ``request.prompt_profile`` and ``request.format``.
+
+    When ``prompt_profile='classic'`` and ``musical_brief`` is None, output is byte-for-byte
+    identical to ``build_user_prompt`` / ``build_dsl_user_prompt``.
+    """
+    fmt = getattr(request, "format", "json") or "json"
+    profile = (getattr(request, "prompt_profile", "classic") or "classic").lower()
+    if profile == "rich":
+        from atari_music.ai.prompt_library import build_rich_user_prompt
+
+        return build_rich_user_prompt(request)
+    base = build_dsl_user_prompt(request) if fmt == "dsl" else build_user_prompt(request)
+    brief = getattr(request, "musical_brief", None)
+    if brief:
+        from atari_music.ai.prompt_library import format_musical_brief_section
+
+        body, _, closing = base.rpartition("\n\n")
+        return body + "\n\n" + format_musical_brief_section(brief) + "\n\n" + closing
+    return base
+
 
 
 
