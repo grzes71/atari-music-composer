@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.11.1 (2026-11-17)
+
+### Bug Fixes
+
+- **skill**: Add required YAML frontmatter to SKILL.md
+  ([`5261803`](https://github.com/grzes71/atari-music-composer/commit/5261803c86073d67a26a42444b9691a5261c0c17))
+
+### Documentation
+
+- **skill**: Document SSOT instrument catalog, arrange, and generate_arrangements.py
+  ([`ec275cd`](https://github.com/grzes71/atari-music-composer/commit/ec275cd789b54bcd6894ecf99fe4ac6ec3f2b954))
+
+
 ## v0.11.0 (2026-11-17)
 
 ### Features
