@@ -2,6 +2,13 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-17] - Update `SKILL.md` for Instrument Catalog, `arrange`, and `generate_arrangements.py`
+
+Updated [SKILL.md](SKILL.md) to reflect the SSOT instrument catalog workflow, `v1`/`v2` output formats, `arrange`, and `generate_arrangements.py`.
+
+- Updated Capabilities Matrix, Pipeline Architecture, and Section 8 (`music_data.asm` `v1`/`v2` format details) in [SKILL.md](SKILL.md).
+- Added CLI reference subsections for `list-instruments` / `inspect-instrument` / `validate-instruments` (including the new JSON fields), `arrange`, and `generate_arrangements.py`, plus **Workflow H** and decoupled arrangement heuristics in Sections 11–12 of [SKILL.md](SKILL.md).
+
 ## [2026-11-17] - Unified Smart Batch Arrangement Script (`generate_arrangements.py`)
 
 Replaced the separate 8-bit and 16-bit PowerShell batch scripts with a single stdlib-only Python orchestrator that queries `atari-music.exe`, analyzes each composition's hardware mode and per-channel note statistics, ranks matching instruments, compiles numbered WAV/XEX outputs plus a `vanilla` (`v1`) baseline, and writes `arrangements.log`.
