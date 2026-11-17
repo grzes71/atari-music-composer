@@ -1,3 +1,11 @@
+---
+name: atari-music-composer
+description: >-
+  Atari 8-bit POKEY music composition, Music DSL, SSOT instrument catalog,
+  decoupled arrangement (atari-music arrange / generate_arrangements.py),
+  WAV preview synthesis, and relocatable MADS 6502 assembly/XEX compilation.
+---
+
 # Atari Music Composer — AI Agent Skill & Tooling Reference
 
 ## 1. Overview & Core Purpose
