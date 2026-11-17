@@ -185,6 +185,54 @@ class CompositionAttempt(BaseModel):
     report: ValidationReport
     usage: Optional[Dict[str, int]] = None
     wall_time_ms: Optional[float] = None
+    critique_score: Optional[float] = None
+    critique_findings: Optional[List[str]] = None
+
+
+# =============================================================================
+# Pre-composition Planning Brief Models (Phase 4 --plan-first)
+# =============================================================================
+
+class MusicalBriefSection(BaseModel):
+    """Planned musical section within a pre-composition brief."""
+    id: str = Field(description="Pattern/section ID (e.g. 'A', 'B', 'A_var')")
+    bars: int = Field(default=2, ge=1, le=16, description="Length of the section in 4/4 bars")
+    chords: List[str] = Field(default_factory=list, description="Chord progression for the section (e.g. ['Am', 'F', 'C', 'E'])")
+    texture: str = Field(default="full", description="Texture description (e.g. 'bass + arpeggio + lead + drums', 'sparse breakdown')")
+    dynamics: str = Field(default="mf", description="Dynamic level and contour (e.g. 'mp -> f', 'ff accented')")
+
+
+class MusicalBriefMotif(BaseModel):
+    """Core melodic motif plan."""
+    rhythm: str = Field(description="Rhythmic pattern of the main motif in steps (e.g. '6-3-3-3-3-6')")
+    contour: str = Field(description="Melodic contour (e.g. 'arch: leap up a 5th then stepwise descent')")
+    description: str = Field(description="How the motif is developed across sections")
+
+
+class MusicalBrief(BaseModel):
+    """Structured compositional plan produced before writing notes when plan_first=True."""
+    key: str = Field(default="A", description="Root key (e.g. 'A', 'D', 'E')")
+    mode: str = Field(default="minor", description="Scale/mode (e.g. 'minor', 'dorian', 'phrygian', 'major')")
+    effective_bpm: int = Field(default=125, ge=40, le=250, description="Target tempo in BPM")
+    form: List[str] = Field(default_factory=lambda: ["A", "A", "B", "A"], description="Ordered sequence of section IDs")
+    sections: List[MusicalBriefSection] = Field(default_factory=list, description="Section plans")
+    motif: MusicalBriefMotif = Field(
+        default_factory=lambda: MusicalBriefMotif(
+            rhythm="6-3-3-6",
+            contour="stepwise arch",
+            description="Repeated on tonic then sequenced to subdominant",
+        )
+    )
+    channel_roles: Dict[str, str] = Field(
+        default_factory=lambda: {
+            "1": "bass (octave bounce on roots/fifths)",
+            "2": "arpeggio / delayed echo voice",
+            "3": "lead melody with dynamic accents",
+            "4": "percussion groove (kick/snare/hihat + 4-bar fill)",
+        },
+        description="Role of each POKEY channel 1..4",
+    )
+
 
 
 

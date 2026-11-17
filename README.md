@@ -202,15 +202,20 @@ Generate a declarative composition (`AICompositionDoc` JSON or Music DSL) using 
 * **Options:**
   * `--style TEXT`: Musical style prompt (default `"dark dungeon exploration"`).
   * `-m, --mood TEXT`: Repeatable mood keyword.
-  * `--duration FLOAT`, `--bpm INTEGER`, `--channels INTEGER` (`1..4`), `--structure TEXT` (default `"A-B-A"`).
+  * `--duration FLOAT`, `--bpm INTEGER`, `--key TEXT`, `--mode TEXT`, `--notes TEXT`, `--channels INTEGER` (`1..4`), `--structure TEXT` (default `"A-B-A"`).
   * `--use-16bit-bass / --no-16bit-bass`: Enable `CH1+CH2` 16-bit bass coupling.
   * `--format [json|dsl]`: LLM output format (`json` default, or `dsl`).
+  * `--prompt-profile [classic|rich]`: Prompt engineering profile (`classic` default, or `rich` with PAL 50 Hz timing grid, POKEY chiptune craft techniques, style idioms, and richer few-shot example).
+  * `--temperature FLOAT`: Optional LLM sampling temperature override (default `0.7`).
+  * `--tempo-grid [describe|exact]`: Timing grid guidance mode in `rich` profile (`describe` default, or `exact` suggesting exact PAL grid BPMs).
+  * `--plan-first / --no-plan-first`: Opt-in pre-composition `MusicalBrief` planning stage before writing notes.
+  * `--quality-passes INTEGER`: Opt-in post-validation musical critique and revision passes (`0` default; keeps highest-scoring valid composition).
   * `--provider [mock|openai|deepseek]`: Override `AI_PROVIDER`.
   * `--model TEXT`: Override AI model name.
   * `--env-file FILE`: Override `.env` file path.
   * `--max-retries INTEGER`: Validation repair retries (default `3`).
   * `--channel-instrument CH=INSTRUMENT_ID`: Explicit SSOT catalog instrument assignment per channel (`1..4` or role).
-  * `--use-instrument-catalog / --no-use-instrument-catalog`: Opt-in exposure of SSOT catalog instruments & behaviors to the AI composer.
+  * `--use-instrument-catalog / --no-use-instrument-catalog`: Opt-in exposure of SSOT catalog instruments & behaviors to the AI composer (supported in both `json` and `dsl` formats).
   * `--instrument-catalog FILE`, `--player-version [auto|v1|v2]`.
   * `--output-ir PATH`, `--output-asm PATH`, `--output-wav PATH`, `-o, --output PATH` (omitted or `-` writes to stdout).
 * **Inputs / Outputs:** Prompt parameters -> canonical JSON (`atari-music-composition`) or `.dsl` text, plus optional POKEY IR JSON / WAV / ASM.
@@ -221,6 +226,14 @@ python -m atari_music ai-compose --provider mock --style "dark dungeon explorati
 
 # Generate compact Music DSL with catalog awareness enabled
 python -m atari_music ai-compose --provider mock --format dsl --use-instrument-catalog -o composition.dsl
+
+# Generate richer Music DSL using the 'rich' prompt profile, pre-composition brief, and 1 musical critique pass
+python -m atari_music ai-compose --format dsl --prompt-profile rich --style "boss fight" \
+  --key E --mode phrygian --bpm 125 --duration 40 --use-16bit-bass \
+  --tempo-grid exact --plan-first --quality-passes 1 -o boss.dsl
+
+# Benchmark classic vs rich prompt profiles across melodic, rhythmic, and structural metrics
+python scripts/benchmark_prompts.py --provider mock --runs 3
 ```
 
 ---

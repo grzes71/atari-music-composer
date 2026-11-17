@@ -1,3 +1,4 @@
+from dataclasses import replace
 import json
 import logging
 import os
@@ -11,6 +12,8 @@ from atari_music.ai.prompts import (
     build_dsl_user_prompt,
     build_system_prompt,
     build_user_prompt,
+    get_system_prompt,
+    get_user_prompt,
 )
 from atari_music.ai.providers.base import AICompositionProvider, CompositionRequest
 from atari_music.ai.schema import (
@@ -259,8 +262,10 @@ class OpenAICompositionProvider(AICompositionProvider):
     ) -> Dict[str, Any]:
         client = self._get_client()
 
-        system_prompt = build_system_prompt()
-        user_prompt = build_user_prompt(request)
+        req_json = replace(request, format="json") if getattr(request, "format", "json") != "json" else request
+        system_prompt = get_system_prompt(req_json)
+        user_prompt = get_user_prompt(req_json)
+        temp = request.temperature if getattr(request, "temperature", None) is not None else 0.7
         response_id: Optional[str] = None
         doc_dict: Optional[Dict[str, Any]] = None
 
@@ -386,7 +391,7 @@ class OpenAICompositionProvider(AICompositionProvider):
                             model=self.model,
                             messages=messages,
                             response_format={"type": "json_object"},
-                            temperature=0.7,
+                            temperature=temp,
                         )
                         response_id = getattr(response, "id", None)
                         usage_obj = getattr(response, "usage", None)
@@ -503,8 +508,10 @@ class OpenAICompositionProvider(AICompositionProvider):
         client = self._get_client()
 
         dsl_ver = getattr(request, "dsl_version", "v1.1")
-        system_prompt = build_dsl_system_prompt(version=dsl_ver)
-        user_prompt = build_dsl_user_prompt(request)
+        req_dsl = replace(request, format="dsl") if getattr(request, "format", "dsl") != "dsl" else request
+        system_prompt = get_system_prompt(req_dsl)
+        user_prompt = get_user_prompt(req_dsl)
+        temp = request.temperature if getattr(request, "temperature", None) is not None else 0.7
 
         logger.debug("Music DSL System Prompt (version=%s):\n%s", dsl_ver, system_prompt)
         logger.debug("Music DSL User Prompt:\n%s", user_prompt)
@@ -564,7 +571,7 @@ class OpenAICompositionProvider(AICompositionProvider):
                 response = client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=0.7,
+                    temperature=temp,
                 )
                 usage_obj = getattr(response, "usage", None)
                 if usage_obj is not None:
@@ -601,4 +608,46 @@ class OpenAICompositionProvider(AICompositionProvider):
                 raise AIProviderAPIError(f"API request failed: {err_msg}") from err
 
         raise AIProviderAPIError("Failed to obtain DSL completion.")
+
+    def generate_brief(self, request: CompositionRequest) -> Dict[str, Any]:
+        """Generate a pre-composition ``MusicalBrief`` JSON dict, falling back on error."""
+        from atari_music.ai.prompt_library import (
+            build_brief_system_prompt,
+            build_brief_user_prompt,
+            build_default_musical_brief,
+        )
+        from atari_music.ai.schema import MusicalBrief
+
+        try:
+            client = self._get_client()
+            messages = [
+                {"role": "system", "content": build_brief_system_prompt()},
+                {"role": "user", "content": build_brief_user_prompt(request)},
+            ]
+            temp = request.temperature if getattr(request, "temperature", None) is not None else 0.7
+            if hasattr(client, "beta") and hasattr(client.beta, "chat") and hasattr(client.beta.chat, "completions"):
+                try:
+                    completion = client.beta.chat.completions.parse(
+                        model=self.model,
+                        messages=messages,
+                        response_format=MusicalBrief,
+                    )
+                    parsed = getattr(completion.choices[0].message, "parsed", None)
+                    if isinstance(parsed, MusicalBrief):
+                        return parsed.model_dump(mode="json")
+                except Exception:
+                    pass
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                response_format={"type": "json_object"},
+                temperature=temp,
+            )
+            raw = response.choices[0].message.content or "{}"
+            data = self._parse_json_content(raw)
+            return MusicalBrief.model_validate(data).model_dump(mode="json")
+        except Exception as err:
+            logger.warning("Pre-composition brief generation failed (%s); falling back to default brief.", err)
+            return build_default_musical_brief(request)
+
 

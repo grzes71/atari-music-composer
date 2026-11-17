@@ -258,6 +258,93 @@ def generate_music_from_json(json_source: Union[str, Path, Dict[str, Any]]) -> M
     return generate_music_from_composition(json_source)
 
 
+def _run_quality_passes(
+    request: CompositionRequest,
+    provider: AICompositionProvider,
+    initial_doc: AICompositionDoc,
+    initial_dsl: Optional[str],
+    history: List[CompositionAttempt],
+) -> AICompositionDoc:
+    """Run opt-in musical critique & revision passes (`request.quality_passes > 0`).
+
+    Keeps the highest-scoring valid composition so a failed or lower-scoring revision
+    never degrades the already-validated result.
+    """
+    from atari_music.ai.critique import MusicalCritique
+
+    passes = max(0, int(getattr(request, "quality_passes", 0) or 0))
+    best_doc = initial_doc
+    best_critique = MusicalCritique.from_doc(best_doc)
+    if history:
+        history[-1].critique_score = best_critique.score
+        history[-1].critique_findings = list(best_critique.findings)
+
+    is_dsl_mode = (getattr(request, "format", "json") or "json").lower() == "dsl"
+    curr_dsl = initial_dsl
+    curr_dict = best_doc.model_dump(mode="json")
+
+    for pass_idx in range(1, passes + 1):
+        rev_feedback = best_critique.format_revision_feedback()
+        t0 = time.perf_counter()
+        attempt_no = len(history) + 1
+        try:
+            if is_dsl_mode:
+                cand_dsl = provider.generate_composition_dsl(
+                    request,
+                    feedback=rev_feedback,
+                    previous_dsl=curr_dsl,
+                )
+                cand_parsed = parse_music_dsl(cand_dsl, validate=False)
+                cand_report = validate_composition_report(cand_parsed)
+                cand_dict = cand_parsed.model_dump(mode="json")
+            else:
+                cand_dict = provider.generate_composition(
+                    request,
+                    feedback=rev_feedback,
+                    previous_composition=curr_dict,
+                )
+                cand_report = validate_composition_report(cand_dict)
+                cand_dsl = None
+        except Exception as exc:
+            logger.warning("Quality pass %d/%d failed (%s); keeping previous best composition.", pass_idx, passes, exc)
+            continue
+
+        wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+        if not cand_report.valid:
+            history.append(
+                CompositionAttempt(
+                    attempt_number=attempt_no,
+                    composition=cand_dict,
+                    report=cand_report,
+                    usage=getattr(provider, "last_usage", None),
+                    wall_time_ms=wall_ms,
+                )
+            )
+            logger.debug("Quality pass %d/%d produced invalid revision; keeping previous best.", pass_idx, passes)
+            continue
+
+        cand_doc = validate_composition(cand_parsed if is_dsl_mode else cand_dict)
+        cand_critique = MusicalCritique.from_doc(cand_doc)
+        history.append(
+            CompositionAttempt(
+                attempt_number=attempt_no,
+                composition=cand_dict,
+                report=cand_report,
+                usage=getattr(provider, "last_usage", None),
+                wall_time_ms=wall_ms,
+                critique_score=cand_critique.score,
+                critique_findings=list(cand_critique.findings),
+            )
+        )
+        if cand_critique.score >= best_critique.score:
+            best_doc = cand_doc
+            best_critique = cand_critique
+            curr_dict = cand_dict
+            curr_dsl = cand_dsl
+
+    return best_doc
+
+
 def generate_composition_with_retry(
     request: CompositionRequest,
     provider: AICompositionProvider,
@@ -298,6 +385,18 @@ def generate_composition_with_retry(
     previous_composition: Optional[Dict[str, Any]] = None
     previous_dsl: Optional[str] = None
     is_dsl_mode = (getattr(request, "format", "json") or "json").lower() == "dsl"
+
+    if getattr(request, "plan_first", False) and getattr(request, "musical_brief", None) is None:
+        from atari_music.ai.prompt_library import build_default_musical_brief
+
+        try:
+            if hasattr(provider, "generate_brief"):
+                request.musical_brief = provider.generate_brief(request)
+            else:
+                request.musical_brief = build_default_musical_brief(request)
+        except Exception as brief_err:
+            logger.warning("Pre-composition brief failed (%s); falling back to default brief.", brief_err)
+            request.musical_brief = build_default_musical_brief(request)
 
     for attempt_idx in range(1, max_attempts + 1):
         attempt_start_time = time.perf_counter()
@@ -399,6 +498,8 @@ def generate_composition_with_retry(
                     attempt_idx,
                 )
                 valid_doc = validate_composition(doc)
+                if getattr(request, "quality_passes", 0) and int(getattr(request, "quality_passes", 0)) > 0:
+                    valid_doc = _run_quality_passes(request, provider, valid_doc, raw_dsl, history)
                 if return_history:
                     return valid_doc, history
                 return valid_doc
@@ -443,6 +544,8 @@ def generate_composition_with_retry(
                     attempt_idx,
                 )
                 valid_doc = validate_composition(raw_dict)
+                if getattr(request, "quality_passes", 0) and int(getattr(request, "quality_passes", 0)) > 0:
+                    valid_doc = _run_quality_passes(request, provider, valid_doc, None, history)
                 if return_history:
                     return valid_doc, history
                 return valid_doc

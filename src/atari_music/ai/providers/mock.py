@@ -120,10 +120,12 @@ class MockAICompositionProvider(AICompositionProvider):
         self.received_feedbacks.append(feedback)
         self.received_previous_compositions.append({"raw_dsl": previous_dsl} if previous_dsl else None)
 
-        from atari_music.ai.prompts import build_dsl_system_prompt, build_dsl_user_prompt
+        from dataclasses import replace
+        from atari_music.ai.prompts import get_system_prompt, get_user_prompt
         dsl_ver = getattr(request, "dsl_version", "v1.1")
-        system_prompt = build_dsl_system_prompt(version=dsl_ver)
-        user_prompt = build_dsl_user_prompt(request)
+        req_dsl = replace(request, format="dsl") if getattr(request, "format", "dsl") != "dsl" else request
+        system_prompt = get_system_prompt(req_dsl)
+        user_prompt = get_user_prompt(req_dsl)
         logger.debug("Music DSL System Prompt (mock, version=%s):\n%s", dsl_ver, system_prompt)
         logger.debug("Music DSL User Prompt (mock):\n%s", user_prompt)
         if feedback:
@@ -147,6 +149,57 @@ class MockAICompositionProvider(AICompositionProvider):
         doc_dict = self._generate_base_valid(request)
         doc = AICompositionDoc.model_validate(doc_dict)
         return export_music_dsl(doc)
+
+    def generate_brief(self, request: CompositionRequest) -> Dict[str, Any]:
+        """Return a deterministic pre-composition MusicalBrief dictionary."""
+        from atari_music.ai.prompt_library import build_default_musical_brief
+
+        return build_default_musical_brief(request)
+
+    def _generate_rich_valid(self, request: CompositionRequest) -> Dict[str, Any]:
+        """Generate a richer composition (arpeggios, echo voice, octave bass, drum fills) for prompt_profile='rich'."""
+        from atari_music.ai.dsl import parse_music_dsl
+        from atari_music.ai.prompt_library import RICH_DSL_EXAMPLE
+
+        doc = parse_music_dsl(RICH_DSL_EXAMPLE, validate=False)
+        data = doc.model_dump(mode="json")
+        style = (request.style or "action").strip().lower()
+        use_16 = bool(request.use_16bit_bass)
+        req_ch = request.channels or 4
+
+        data["metadata"]["title"] = f"AI {style.capitalize()} Citadel"
+        if request.bpm:
+            data["metadata"]["bpm"] = request.bpm
+        if request.key:
+            data["metadata"]["key"] = request.key
+        if request.mode:
+            data["metadata"]["mode"] = request.mode
+        if request.duration_seconds:
+            data["metadata"]["duration_seconds"] = float(request.duration_seconds)
+        data["hardware"]["channels"] = req_ch
+        data["hardware"]["use_16bit_bass"] = use_16
+
+        for pat in data["patterns"]:
+            if use_16:
+                pat["channels"]["1"] = []
+            if req_ch < 4:
+                pat["channels"] = {k: v for k, v in pat["channels"].items() if int(k) < req_ch}
+
+        data["intent"] = {
+            "style": style,
+            "mood": request.mood or [style],
+            "structure": request.structure or "A-A-B-A",
+            "composition_notes": request.notes or "Rich profile motif with arpeggio, echo voice, and drum fill.",
+        }
+        data["provenance"] = {
+            "source": "ai",
+            "provider": "mock",
+            "model": "mock-composer-v2-rich",
+            "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "request_id": f"mock-rich-{abs(hash(style)) % 10000:04d}",
+        }
+        return data
+
 
     def _generate_catalog_valid(self, request: CompositionRequest) -> Dict[str, Any]:
         """Generate a valid SSOT-catalog composition with musically coherent channel timbres."""
@@ -330,6 +383,9 @@ class MockAICompositionProvider(AICompositionProvider):
     def _generate_base_valid(self, request: CompositionRequest) -> Dict[str, Any]:
         if getattr(request, "enable_catalog_instruments", False) or getattr(request, "channel_instruments", None):
             return self._generate_catalog_valid(request)
+        if (getattr(request, "prompt_profile", "classic") or "classic").lower() == "rich":
+            return self._generate_rich_valid(request)
+
 
         style = (request.style or "action").strip().lower()
         use_16 = request.use_16bit_bass or ("dungeon" in style)

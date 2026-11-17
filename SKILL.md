@@ -423,6 +423,21 @@ atari-music ai-compose \
     --style "dark dungeon exploration" \
     --format dsl \
     --output dungeon.dsl
+
+# Generate richer composition with PAL timing grid, chiptune craft, pre-planning & musical critique:
+atari-music ai-compose \
+    --format dsl \
+    --prompt-profile rich \
+    --style "boss fight" \
+    --key E \
+    --mode phrygian \
+    --bpm 125 \
+    --duration 40 \
+    --use-16bit-bass \
+    --tempo-grid exact \
+    --plan-first \
+    --quality-passes 1 \
+    --output boss.dsl
 ```
 
 #### 3. `import-json` (Validate, Render & Export Composition JSON)
