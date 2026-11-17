@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.12.0 (2026-11-17)
+
+### Bug Fixes
+
+- **tests**: Register ai/prompt_library and ai/critique in CORE_MODULES
+  ([`c513ce5`](https://github.com/grzes71/atari-music-composer/commit/c513ce530b49708b093846bcf7fbbc4f3a21a945))
+
+### Features
+
+- **ai**: Add rich prompt profile, pre-composition brief, and critique loop
+  ([`4fb5e20`](https://github.com/grzes71/atari-music-composer/commit/4fb5e209ec425f95fe70d88121cde3f22bc05ad2))
+
+
 ## v0.11.1 (2026-11-17)
 
 ### Bug Fixes
