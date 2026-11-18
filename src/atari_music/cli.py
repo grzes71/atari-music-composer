@@ -1702,6 +1702,12 @@ def build_xex_cmd(
 )
 @click.option("--plan-first/--no-plan-first", default=False, help="Opt-in: generate a structured MusicalBrief plan before composing notes.")
 @click.option("--quality-passes", type=int, default=0, help="Opt-in: number of post-validation musical critique & revision passes (default: 0).")
+@click.option(
+    "--rhythmic-density",
+    type=click.Choice(["low", "medium", "high", "extreme"], case_sensitive=False),
+    default=None,
+    help="Opt-in rhythmic density target independent of BPM (low, medium, high, extreme).",
+)
 @click.option("--provider", type=click.Choice(["mock", "openai", "deepseek"], case_sensitive=False), default=None, help="AI provider override (overrides AI_PROVIDER, e.g. mock, openai, deepseek)")
 @click.option("--model", type=str, default=None, help="AI model name override")
 @click.option(
@@ -1774,6 +1780,7 @@ def ai_compose_cmd(
     tempo_grid: str,
     plan_first: bool,
     quality_passes: int,
+    rhythmic_density: Optional[str],
     provider: Optional[str],
     model: Optional[str],
     env_file: Optional[Path],
@@ -1842,6 +1849,7 @@ def ai_compose_cmd(
         tempo_grid=tempo_grid.lower(),
         plan_first=plan_first,
         quality_passes=quality_passes,
+        rhythmic_density=rhythmic_density.lower() if rhythmic_density else None,
     )
     is_stdout = output is None or str(output) == "-"
 

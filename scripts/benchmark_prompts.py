@@ -26,10 +26,14 @@ def run_profile_benchmark(
     fmt: str,
     plan_first: bool = False,
     quality_passes: int = 0,
+    rhythmic_density: str | None = None,
     model: str | None = None,
 ) -> Dict[str, Any]:
     """Run ``runs`` generations for a given prompt profile and aggregate metrics."""
     records: List[Dict[str, float]] = []
+    role_keys = ("lead", "bass", "arpeggio", "percussion")
+    role_records: Dict[str, List[Dict[str, float]]] = {r: [] for r in role_keys}
+
     for _ in range(runs):
         provider = get_ai_provider(provider_name, model=model)
         req = CompositionRequest(
@@ -40,11 +44,12 @@ def run_profile_benchmark(
             prompt_profile=profile,
             plan_first=plan_first,
             quality_passes=quality_passes,
+            rhythmic_density=rhythmic_density,
         )
         doc, history = generate_composition_with_retry(req, provider, return_history=True)
         analysis = analyze_composition(doc)
         struct = analyze_composition_structure(doc)
-        critique = MusicalCritique.from_doc(doc)
+        critique = MusicalCritique.from_doc(doc, rhythmic_density=rhythmic_density)
         overall_div = (struct.melodic_diversity + struct.rhythmic_diversity + struct.harmonic_diversity) / 3.0
         records.append(
             {
@@ -56,22 +61,47 @@ def run_profile_benchmark(
                 "consonance_ratio": float(analysis.harmony.consonance_ratio),
                 "overall_diversity": float(overall_div),
                 "attempts": float(len(history)),
+                "intro_delay_s": float(analysis.rhythm.intro_melody.intro_melody_delay_seconds or 0.0),
             }
         )
+        for role in role_keys:
+            rm = analysis.rhythm.role_rhythm.get(role)
+            if rm is None:
+                continue
+            role_records[role].append(
+                {
+                    "notes_per_sec": float(rm.notes_per_sec),
+                    "avg_note_steps": float(rm.avg_note_steps),
+                    "median_note_steps": float(rm.median_note_steps),
+                    "short_note_pct": float(rm.short_note_ratio * 100.0),
+                    "rest_pct": float(rm.rest_ratio * 100.0),
+                }
+            )
 
     keys = list(records[0].keys()) if records else []
     means = {k: round(statistics.mean(r[k] for r in records), 2) for k in keys}
+    role_means: Dict[str, Dict[str, float]] = {}
+    for role in role_keys:
+        r_list = role_records[role]
+        if r_list:
+            r_keys = list(r_list[0].keys())
+            role_means[role] = {
+                k: round(statistics.mean(item[k] for item in r_list), 2) for k in r_keys
+            }
+
     return {
         "profile": profile,
         "plan_first": plan_first,
         "quality_passes": quality_passes,
+        "rhythmic_density": rhythmic_density,
         "runs": runs,
         "means": means,
+        "role_means": role_means,
     }
 
 
 def format_markdown_table(results: Sequence[Dict[str, Any]]) -> str:
-    """Render benchmark results as a Markdown comparison table."""
+    """Render main benchmark comparison table plus per-role rhythmic density breakdown."""
     headers = [
         "Profile",
         "Critique Score",
@@ -81,6 +111,7 @@ def format_markdown_table(results: Sequence[Dict[str, Any]]) -> str:
         "Volume Levels",
         "Consonance",
         "Diversity",
+        "Intro Delay (s)",
         "Attempts",
     ]
     lines = [
@@ -94,6 +125,8 @@ def format_markdown_table(results: Sequence[Dict[str, Any]]) -> str:
             label += "+plan"
         if row.get("quality_passes"):
             label += f"+qa{row['quality_passes']}"
+        if row.get("rhythmic_density"):
+            label += f"+dens:{row['rhythmic_density']}"
         cols = [
             label,
             f"{m.get('critique_score', 0.0):.2f}",
@@ -103,9 +136,53 @@ def format_markdown_table(results: Sequence[Dict[str, Any]]) -> str:
             f"{m.get('distinct_volumes', 0.0):.1f}",
             f"{m.get('consonance_ratio', 0.0):.2f}",
             f"{m.get('overall_diversity', 0.0):.2f}",
+            f"{m.get('intro_delay_s', 0.0):.2f}",
             f"{m.get('attempts', 0.0):.1f}",
         ]
         lines.append("| " + " | ".join(cols) + " |")
+
+    role_headers = [
+        "Profile",
+        "Role",
+        "Notes/s",
+        "Avg Steps",
+        "Med Steps",
+        "Short %",
+        "Rest %",
+    ]
+    lines.extend([
+        "",
+        "| " + " | ".join(role_headers) + " |",
+        "| " + " | ".join(["---"] * len(role_headers)) + " |",
+    ])
+    for row in results:
+        label = row["profile"]
+        if row.get("plan_first"):
+            label += "+plan"
+        if row.get("quality_passes"):
+            label += f"+qa{row['quality_passes']}"
+        if row.get("rhythmic_density"):
+            label += f"+dens:{row['rhythmic_density']}"
+        for role in ("lead", "bass", "arpeggio", "percussion"):
+            rm = row.get("role_means", {}).get(role)
+            if not rm:
+                continue
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        label,
+                        role,
+                        f"{rm.get('notes_per_sec', 0.0):.2f}",
+                        f"{rm.get('avg_note_steps', 0.0):.2f}",
+                        f"{rm.get('median_note_steps', 0.0):.1f}",
+                        f"{rm.get('short_note_pct', 0.0):.1f}%",
+                        f"{rm.get('rest_pct', 0.0):.1f}%",
+                    ]
+                )
+                + " |"
+            )
+
     return "\n".join(lines)
 
 
@@ -118,12 +195,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--style", default="action", help="Style description (default: action)")
     parser.add_argument("--bpm", type=int, default=125, help="Target BPM (default: 125)")
     parser.add_argument("--format", default="dsl", choices=["json", "dsl"], help="Generation format (default: dsl)")
+    parser.add_argument(
+        "--rhythmic-density",
+        default=None,
+        choices=["low", "medium", "high", "extreme"],
+        help="Optional opt-in rhythmic density target (default: None)",
+    )
     parser.add_argument("--json-output", type=Path, default=None, help="Optional output JSON report path")
     args = parser.parse_args(argv)
 
     results = [
         run_profile_benchmark("classic", args.provider, args.runs, args.style, args.bpm, args.format, model=args.model),
-        run_profile_benchmark("rich", args.provider, args.runs, args.style, args.bpm, args.format, model=args.model),
+        run_profile_benchmark(
+            "rich",
+            args.provider,
+            args.runs,
+            args.style,
+            args.bpm,
+            args.format,
+            rhythmic_density=args.rhythmic_density,
+            model=args.model,
+        ),
         run_profile_benchmark(
             "rich",
             args.provider,
@@ -133,6 +225,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.format,
             plan_first=True,
             quality_passes=1,
+            rhythmic_density=args.rhythmic_density,
             model=args.model,
         ),
     ]

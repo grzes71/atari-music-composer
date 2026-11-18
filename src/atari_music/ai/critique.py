@@ -8,9 +8,16 @@ revision guidance.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
-from atari_music.ai.analysis import analyze_composition
+from atari_music.ai.analysis import CompositionAnalysisReport, analyze_composition, calculate_bpm_frames_per_tick
+from atari_music.ai.prompt_library import (
+    DENSITY_PROFILES,
+    effective_bpm,
+    normalize_rhythmic_density,
+    recommended_steps_per_beat,
+    short_step_threshold,
+)
 from atari_music.ai.schema import AICompositionDoc
 from atari_music.ai.structure_analysis import analyze_composition_structure
 
@@ -23,6 +30,122 @@ MAX_REPETITION_RATIO = 0.75
 MIN_ACTIVE_CHANNELS = 2
 
 
+def _evaluate_rhythmic_density(
+    doc: AICompositionDoc,
+    report: CompositionAnalysisReport,
+    rhythmic_density: Optional[str],
+) -> Tuple[float, List[str], Dict[str, Any]]:
+    """Compute opt-in rhythmic-density penalty and numeric findings without penalizing regular pulse."""
+    norm = normalize_rhythmic_density(rhythmic_density)
+    if norm is None or norm == "low":
+        return 0.0, [], {"density_penalty": 0.0}
+
+    prof = DENSITY_PROFILES[norm]
+    bpm = doc.metadata.bpm
+    fpt = calculate_bpm_frames_per_tick(bpm)
+    step_s = fpt / 50.0
+    spb = recommended_steps_per_beat(bpm)
+    eff = effective_bpm(bpm, spb)
+    short_thr = short_step_threshold(spb)
+
+    lead = report.rhythm.role_rhythm.get("lead")
+    lead_ch = f"CH{report.rhythm.lead_channel}" if report.rhythm.lead_channel else "lead"
+
+    if lead is None or lead.notes_count < 2:
+        missing_pen = {"medium": 15.0, "high": 25.0, "extreme": 30.0}[norm]
+        count = lead.notes_count if lead is not None else 0
+        finding = (
+            f"Active lead melody missing for rhythmic-density='{norm}' (found {count} lead note(s)). "
+            f"Add a dedicated lead/melody line with short <= {short_thr}-step figures entering early."
+        )
+        return missing_pen, [finding], {"density_penalty": round(missing_pen, 2), "lead_notes_count": count}
+
+    penalty = 0.0
+    findings: List[str] = []
+
+    assert prof.max_avg_note_beats is not None
+    assert prof.max_median_note_beats is not None
+    assert prof.min_notes_per_beat is not None
+    assert prof.max_intro_delay_beats is not None
+    assert prof.max_longest_silence_beats is not None
+
+    max_avg_steps = max(1.0, prof.max_avg_note_beats * spb)
+    max_med_steps = max(1.0, prof.max_median_note_beats * spb)
+    if lead.avg_note_steps > max_avg_steps or lead.median_note_steps > max_med_steps:
+        excess = max(
+            (lead.avg_note_steps / max_avg_steps) - 1.0,
+            (lead.median_note_steps / max_med_steps) - 1.0,
+            0.0,
+        )
+        dur_pen = min(12.0, excess * 18.0)
+        penalty += dur_pen
+        grid_hint = (
+            "Use 2-3 step asymmetric groupings (e.g. 2+3 / 2+2+1) instead of 5-7 step holds."
+            if spb == 5
+            else f"Shorten lead notes toward 1-{short_thr} steps."
+        )
+        findings.append(
+            f"Lead melody ({lead_ch}) notes are too long for rhythmic-density='{norm}' at {bpm} BPM "
+            f"({spb} steps/beat, {step_s * 1000:.0f} ms/step): avg={lead.avg_note_steps:.2f} steps "
+            f"(target <= {max_avg_steps:.2f}), median={lead.median_note_steps:.1f} (target <= {max_med_steps:.1f}). {grid_hint}"
+        )
+
+    target_nps = prof.min_notes_per_beat * (eff / 60.0)
+    if lead.notes_per_sec < target_nps and target_nps > 0:
+        deficit = (target_nps - lead.notes_per_sec) / target_nps
+        nps_pen = min(10.0, deficit * 15.0)
+        penalty += nps_pen
+        findings.append(
+            f"Lead melody ({lead_ch}) density is too low ({lead.notes_per_sec:.2f} notes/s < target "
+            f"{target_nps:.2f} notes/s for rhythmic-density='{norm}'); increase melodic phrasing density rather than relying only on accompaniment."
+        )
+
+    if lead.short_note_ratio < prof.min_short_note_ratio:
+        short_pen = min(8.0, (prof.min_short_note_ratio - lead.short_note_ratio) * 16.0)
+        penalty += short_pen
+        findings.append(
+            f"Too few short lead notes ({lead.short_note_ratio:.0%} <= {short_thr} steps vs target >= {prof.min_short_note_ratio:.0%}); "
+            f"incorporate crisp <= {short_thr}-step melodic figures."
+        )
+
+    max_intro_steps = max(1.0, prof.max_intro_delay_beats * spb)
+    intro_delay_steps = report.rhythm.intro_melody.intro_melody_delay_steps
+    if intro_delay_steps is not None and intro_delay_steps > max_intro_steps:
+        intro_pen = min(
+            10.0,
+            3.0 + ((intro_delay_steps - max_intro_steps) / max(1.0, max_intro_steps)) * 5.0,
+        )
+        penalty += intro_pen
+        findings.append(
+            f"INTRO melody delay is {intro_delay_steps} steps ({intro_delay_steps * step_s:.2f}s) before lead enters in sequence "
+            f"(limit for '{norm}' is <= {int(round(max_intro_steps))} steps / {max_intro_steps * step_s:.2f}s); introduce the lead motif much earlier."
+        )
+
+    max_silence_steps = max(1.0, prof.max_longest_silence_beats * spb)
+    sil_pen = 0.0
+    if lead.longest_silence_steps > max_silence_steps:
+        sil_pen += min(2.0, ((lead.longest_silence_steps - max_silence_steps) / max(1.0, max_silence_steps)) * 2.0)
+    if lead.rest_ratio > prof.max_rest_ratio:
+        denom = max(0.05, 1.0 - prof.max_rest_ratio)
+        sil_pen += min(1.0, ((lead.rest_ratio - prof.max_rest_ratio) / denom) * 1.5)
+    if sil_pen > 0.0:
+        penalty += sil_pen
+        findings.append(
+            f"Lead melody ({lead_ch}) has excessive silence (longest gap={lead.longest_silence_steps} steps vs <= {int(round(max_silence_steps))}, "
+            f"rest_ratio={lead.rest_ratio:.0%} vs <= {prof.max_rest_ratio:.0%})."
+        )
+
+    extra_summary = {
+        "density_penalty": round(penalty, 2),
+        "lead_notes_per_sec": round(lead.notes_per_sec, 3),
+        "lead_avg_note_steps": round(lead.avg_note_steps, 3),
+        "lead_median_note_steps": round(lead.median_note_steps, 3),
+        "lead_short_note_ratio": round(lead.short_note_ratio, 3),
+        "intro_melody_delay_steps": intro_delay_steps,
+    }
+    return penalty, findings, extra_summary
+
+
 @dataclass
 class MusicalCritique:
     """Result of evaluating the musical richness of a validated composition."""
@@ -32,7 +155,12 @@ class MusicalCritique:
     metrics_summary: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_doc(cls, doc: AICompositionDoc) -> "MusicalCritique":
+    def from_doc(
+        cls,
+        doc: AICompositionDoc,
+        *,
+        rhythmic_density: Optional[str] = None,
+    ) -> "MusicalCritique":
         """Compute musical quality score (0..100) and actionable composer findings."""
         report = analyze_composition(doc)
         struct = analyze_composition_structure(doc)
@@ -125,6 +253,12 @@ class MusicalCritique:
             + min(5.0, max(0, len(dist) - 1) * 1.6)
             + min(5.0, overall_div * 5.0)
         )
+        density_penalty, density_findings, density_summary = _evaluate_rhythmic_density(
+            doc, report, rhythmic_density
+        )
+        score -= density_penalty
+        findings.extend(density_findings)
+
         final_score = round(max(0.0, min(100.0, (score - 15.0) + richness_score)), 2)
 
         summary = {
@@ -135,6 +269,7 @@ class MusicalCritique:
             "consonance_ratio": round(report.harmony.consonance_ratio, 3),
             "active_channels": active_chs,
             "overall_diversity": round(overall_div, 3),
+            **density_summary,
         }
         return cls(score=final_score, findings=findings, metrics_summary=summary)
 

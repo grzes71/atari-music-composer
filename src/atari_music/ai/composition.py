@@ -50,40 +50,85 @@ from atari_music.music_ir import (
 # Semantic Timbre Mapping
 # =============================================================================
 
+_KICK_ALIASES: Tuple[str, ...] = ("kick", "tom", "thud")
+_PERCUSSION_ALIASES: Tuple[str, ...] = (
+    "percussion",
+    "perc",
+    "noise",
+    "drum",
+    "snare",
+    "hihat",
+    "hat",
+    "cymbal",
+    "clap",
+    "shake",
+)
+_BASS_ALIASES: Tuple[str, ...] = ("bass",)
+_PAD_DARK_ALIASES: Tuple[str, ...] = ("dark", "pad", "drone")
+_ECHO_ALIASES: Tuple[str, ...] = ("echo", "delay")
+_HARMONY_ALIASES: Tuple[str, ...] = ("harm", "chord", "counter")
+_BELL_ARP_ALIASES: Tuple[str, ...] = ("bell", "ornament", "arp", "high")
+
+
+def infer_character_from_id(inst_id: str) -> str:
+    """Infer canonical semantic instrument character from an instrument ID or character label."""
+    name = (inst_id or "").strip().lower()
+    if any(k in name for k in _KICK_ALIASES):
+        return "kick"
+    if any(k in name for k in _PERCUSSION_ALIASES):
+        return "percussion"
+    if any(k in name for k in _BASS_ALIASES):
+        return "bass"
+    if any(k in name for k in _PAD_DARK_ALIASES):
+        return "dark_lead"
+    if any(k in name for k in _ECHO_ALIASES):
+        return "echo"
+    if any(k in name for k in _HARMONY_ALIASES):
+        return "harmony"
+    if any(k in name for k in _BELL_ARP_ALIASES):
+        return "bell"
+    return "bright_lead"
+
+
 def map_instrument_character(
     inst_def: AIInstrumentDef,
     is_16bit_bass: bool = False,
 ) -> Tuple[int, IREnvelope, ChannelRole]:
     """Map semantic character string to POKEY distortion, ADSR envelope, and channel role."""
-    char = (inst_def.character or "bright_lead").strip().lower()
+    archetype = infer_character_from_id(inst_def.character or "bright_lead")
 
-    if any(k in char for k in ("kick", "tom", "thud")):
+    if archetype == "kick":
         # Low membrane percussion -> poly4 (the classic POKEY kick/tom buzz).
         role = ChannelRole.PERCUSSION
         default_dist = DISTORTION_4BIT_POLY
         default_env = IREnvelope(attack_frames=0, decay_frames=4, sustain_vol=6, release_frames=3)
-    elif any(k in char for k in ("percussion", "noise", "drum", "snare", "hihat", "hat", "cymbal", "clap", "shake")):
+    elif archetype == "percussion":
         # POKEY's real noise generator is $80 (poly9/poly17 direct). $E0 is NOT noise.
         role = ChannelRole.PERCUSSION
         default_dist = DISTORTION_WHITE_NOISE
         default_env = IREnvelope(attack_frames=0, decay_frames=3, sustain_vol=8, release_frames=2)
-    elif "bass" in char:
+    elif archetype == "bass":
         role = ChannelRole.BASS
         default_dist = DISTORTION_PURE_TONE if is_16bit_bass else DISTORTION_4BIT_POLY
         default_env = IREnvelope(attack_frames=0, decay_frames=4, sustain_vol=11, release_frames=2)
-    elif "dark" in char or "pad" in char or "drone" in char:
+    elif archetype == "dark_lead":
         role = ChannelRole.HARMONY
         default_dist = DISTORTION_PURE_TONE
         default_env = IREnvelope(attack_frames=2, decay_frames=6, sustain_vol=10, release_frames=4)
-    elif "bell" in char or "ornament" in char or "high" in char:
+    elif archetype == "bell":
         role = ChannelRole.HARMONY
         default_dist = DISTORTION_PURE_TONE
         default_env = IREnvelope(attack_frames=0, decay_frames=2, sustain_vol=14, release_frames=1)
-    elif "counter" in char or "harmony" in char:
+    elif archetype == "echo":
+        # Delayed echo / repetition voice acts as softer accompaniment, never primary melody.
+        role = ChannelRole.HARMONY
+        default_dist = DISTORTION_PURE_TONE
+        default_env = IREnvelope(attack_frames=1, decay_frames=3, sustain_vol=8, release_frames=3)
+    elif archetype == "harmony":
         role = ChannelRole.HARMONY
         default_dist = DISTORTION_PURE_TONE
         default_env = IREnvelope(attack_frames=1, decay_frames=3, sustain_vol=9, release_frames=2)
-    else:  # bright_lead, lead, default
+    else:  # bright_lead
         role = ChannelRole.MELODY
         default_dist = DISTORTION_PURE_TONE
         default_env = IREnvelope(attack_frames=1, decay_frames=3, sustain_vol=13, release_frames=2)
