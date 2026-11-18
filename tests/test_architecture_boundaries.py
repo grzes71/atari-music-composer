@@ -74,6 +74,12 @@ CORE_MODULES: Set[str] = {
     "studio/loader",
     "studio/instruments",
     "studio/renderer",
+    "studio/exporter",
+}
+
+#: Optional PySide6 UI modules: excluded from CORE_MODULES so headless CORE modules never
+#: depend on studio/ui/*, while still audited not to import legacy/experimental modules.
+STUDIO_UI_MODULES: Set[str] = {
     "studio/ui/__init__",
     "studio/ui/app",
     "studio/ui/worker",
@@ -81,6 +87,7 @@ CORE_MODULES: Set[str] = {
     "studio/ui/instrument_picker",
     "studio/ui/transport_bar",
     "studio/ui/main_window",
+    "studio/ui/xex_export_dialog",
 }
 
 #: Hidden LEGACY CLI commands (`@cli.command(..., hidden=True)`) permitted to lazy-import
@@ -274,11 +281,27 @@ def _load_src_sources() -> Dict[str, str]:
 
 
 def test_core_modules_have_no_non_core_imports() -> None:
-    """Verify CORE modules do not import LEGACY/EXPERIMENTAL modules via absolute or relative imports."""
+    """Verify CORE modules do not import LEGACY/EXPERIMENTAL or optional Studio UI modules."""
     sources = _load_src_sources()
     assert CORE_MODULES <= set(sources.keys())
     violations = find_core_import_violations(sources, CORE_MODULES)
     assert not violations, f"Unexpected CORE -> non-CORE imports: {violations}"
+
+
+def test_studio_ui_modules_have_no_legacy_or_experimental_imports() -> None:
+    """Verify optional Studio UI modules only import CORE or peer Studio UI modules."""
+    sources = _load_src_sources()
+    assert STUDIO_UI_MODULES <= set(sources.keys())
+    allowed = CORE_MODULES | STUDIO_UI_MODULES
+    non_core = set(sources.keys()) - allowed
+    violations: List[str] = []
+    for mod in sorted(STUDIO_UI_MODULES):
+        tree = ast.parse(sources[mod], filename=f"{mod}.py")
+        for node in ast.walk(tree):
+            for target in _imported_atari_music_targets(node, mod):
+                if _matches_non_core(target, non_core):
+                    violations.append(f"{mod}.py:{getattr(node, 'lineno', '?')} -> {target}")
+    assert not violations, f"Unexpected Studio UI -> legacy/experimental imports: {violations}"
 
 
 def test_relative_import_legacy_is_detected() -> None:

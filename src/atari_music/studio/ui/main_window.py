@@ -5,10 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Optional
 
-from PySide6.QtCore import QThreadPool
+from PySide6.QtCore import QThreadPool, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from atari_music.studio.exporter import ExportService, PreparedXexArrangement
 from atari_music.studio.instruments import InstrumentService
 from atari_music.studio.loader import load_studio_composition
 from atari_music.studio.models import (
@@ -28,12 +30,15 @@ from atari_music.studio.models import (
     CachedRenderEntry,
     LoadedCompositionState,
     StudioArrangementConfig,
+    XexExportOptions,
+    XexExportResult,
 )
 from atari_music.studio.renderer import RenderService
 from atari_music.studio.ui.channel_strip import ChannelStripWidget
 from atari_music.studio.ui.instrument_picker import InstrumentCatalogInspector
 from atari_music.studio.ui.transport_bar import TransportBar
-from atari_music.studio.ui.worker import RenderWorker
+from atari_music.studio.ui.worker import ExportXexWorker, RenderWorker
+from atari_music.studio.ui.xex_export_dialog import XexExportDialog
 
 
 def _format_config_summary(config: StudioArrangementConfig) -> str:
@@ -50,6 +55,9 @@ def _format_config_summary(config: StudioArrangementConfig) -> str:
 class MainWindow(QMainWindow):
     """Instrument Explorer main window (explicit Render Preview, zero auto-render)."""
 
+    xex_export_succeeded = Signal(object)  # XexExportResult
+    xex_export_failed = Signal(str)  # error_message
+
     def __init__(
         self,
         *,
@@ -63,17 +71,24 @@ class MainWindow(QMainWindow):
 
         self._instrument_service = InstrumentService(catalog_path=catalog_path)
         self._render_service = RenderService(self._instrument_service)
+        self._export_service = ExportService(self._instrument_service)
         self._thread_pool = QThreadPool.globalInstance()
 
         self._state: Optional[LoadedCompositionState] = None
         self._working_config: StudioArrangementConfig = StudioArrangementConfig()
         self._evaluation: Optional[ArrangementEvaluation] = None
         self._last_rendered_entry: Optional[CachedRenderEntry] = None
+        self._last_exported_result: Optional[XexExportResult] = None
         self._selected_channel: int = 1
         self._active_request_id: int = 0
+        self._active_export_request_id: int = 0
         self._is_rendering: bool = False
+        self._is_exporting: bool = False
         self._updating_controls: bool = False
         self._open_workers: Dict[int, RenderWorker] = {}
+        self._open_export_workers: Dict[int, ExportXexWorker] = {}
+        self._custom_mads_bin: Optional[Path] = None
+        self._custom_player_asm: Optional[Path] = None
 
         self._build_ui()
         if initial_file is not None:
@@ -95,6 +110,10 @@ class MainWindow(QMainWindow):
     def last_rendered_entry(self) -> Optional[CachedRenderEntry]:
         return self._last_rendered_entry
 
+    @property
+    def last_exported_result(self) -> Optional[XexExportResult]:
+        return self._last_exported_result
+
     def _build_ui(self) -> None:
         central = QWidget(self)
         self.setCentralWidget(central)
@@ -112,6 +131,12 @@ class MainWindow(QMainWindow):
         self._revert_btn.setEnabled(False)
         self._revert_btn.clicked.connect(self.revert_to_original)
         top_bar.addWidget(self._revert_btn)
+
+        self._export_xex_btn = QPushButton("Export XEX...")
+        self._export_xex_btn.setEnabled(False)
+        self._export_xex_btn.setToolTip("Load a composition first.")
+        self._export_xex_btn.clicked.connect(self._on_export_xex_clicked)
+        top_bar.addWidget(self._export_xex_btn)
 
         top_bar.addStretch(1)
         root.addLayout(top_bar)
@@ -209,7 +234,9 @@ class MainWindow(QMainWindow):
     def load_composition_file(self, path: Path) -> None:
         state = load_studio_composition(path)
         self._active_request_id += 1  # Invalidate any in-flight render
+        self._active_export_request_id += 1  # Invalidate any in-flight XEX export
         self._is_rendering = False
+        self._is_exporting = False
         self._transport.stop_and_release()
         self._transport.set_rendered_wav(None)
         self._transport.set_rendering(False, "Composition loaded. Click 'Render Preview' to synthesize WAV.")
@@ -217,8 +244,11 @@ class MainWindow(QMainWindow):
         self._state = state
         self._working_config = state.baseline_config
         self._last_rendered_entry = None
+        self._last_exported_result = None
         self._selected_channel = 1 if state.channels[1].active else 3
         self._revert_btn.setEnabled(True)
+        self._export_xex_btn.setEnabled(True)
+        self._export_xex_btn.setText("Export XEX...")
 
         self._sync_policy_combos_from_config()
         self._reevaluate_and_refresh_ui()
@@ -291,6 +321,8 @@ class MainWindow(QMainWindow):
                 strip.clear_state()
             self._inspector.set_slot_evaluation(None)
             self._transport.set_render_enabled(False, "Load a composition first.")
+            self._export_xex_btn.setEnabled(False)
+            self._export_xex_btn.setToolTip("Load a composition first.")
             return
 
         evaluation = self._instrument_service.evaluate_arrangement(self._state, self._working_config)
@@ -370,7 +402,7 @@ class MainWindow(QMainWindow):
                 state_kind="outdated",
             )
 
-        # Render button guard
+        # Render & XEX export button guards
         if self._is_rendering:
             self._transport.set_render_enabled(False, "Render already in progress...")
         elif not evaluation.is_valid:
@@ -380,6 +412,106 @@ class MainWindow(QMainWindow):
             )
         else:
             self._transport.set_render_enabled(True, "Arrange and synthesize WAV for current selection.")
+
+        if self._is_exporting:
+            self._export_xex_btn.setEnabled(False)
+            self._export_xex_btn.setText("Exporting XEX...")
+            self._export_xex_btn.setToolTip("XEX compilation in progress...")
+        else:
+            self._export_xex_btn.setEnabled(True)
+            self._export_xex_btn.setText("Export XEX...")
+            self._export_xex_btn.setToolTip(
+                "Compile the current working configuration to an Atari .xex binary via MADS."
+            )
+
+    def _current_preview_sync_note(self) -> str:
+        if self._state is None:
+            return "No composition loaded"
+        if self._last_rendered_entry is None:
+            return "No WAV preview rendered yet (export uses current working configuration)"
+        working_key = self._render_service.build_cache_key(self._state, self._working_config).digest()
+        if self._last_rendered_entry.cache_key == working_key:
+            return "UP TO DATE with current working configuration"
+        return "OUTDATED WAV preview (export uses current working configuration)"
+
+    def _on_export_xex_clicked(self) -> None:
+        if self._state is None or self._is_exporting:
+            return
+        prepared = self._export_service.prepare_xex_export(self._state, self._working_config)
+        dialog = XexExportDialog(
+            self._state,
+            prepared,
+            self._current_preview_sync_note(),
+            initial_mads=self._custom_mads_bin,
+            initial_player_asm=self._custom_player_asm,
+            parent=self,
+        )
+        if dialog.exec() != int(QDialog.DialogCode.Accepted):
+            return
+        self._custom_mads_bin = dialog.selected_mads_bin()
+        self._custom_player_asm = dialog.selected_player_asm()
+        self.export_prepared_xex(prepared, dialog.build_options())
+
+    def export_xex(self, options: XexExportOptions) -> None:
+        """Prepare the current working configuration once and compile XEX in background."""
+        if self._state is None:
+            return
+        prepared = self._export_service.prepare_xex_export(self._state, self._working_config)
+        self.export_prepared_xex(prepared, options)
+
+    def export_prepared_xex(
+        self,
+        prepared: PreparedXexArrangement,
+        options: XexExportOptions,
+    ) -> None:
+        """Execute background MADS compilation and atomic commit for *prepared*."""
+        if self._state is None or self._is_exporting:
+            return
+        self._active_export_request_id += 1
+        req_id = self._active_export_request_id
+        self._is_exporting = True
+        self._reevaluate_and_refresh_ui()
+        self.statusBar().showMessage(f"Exporting XEX to {options.output_path.name} in background...")
+
+        worker = ExportXexWorker(req_id, self._export_service, prepared, options)
+        self._open_export_workers[req_id] = worker
+        worker.signals.finished.connect(self._on_export_finished)
+        worker.signals.failed.connect(self._on_export_failed)
+        self._thread_pool.start(worker)
+
+    def _on_export_finished(self, request_id: int, result: XexExportResult) -> None:
+        self._open_export_workers.pop(request_id, None)
+        if request_id != self._active_export_request_id:
+            return
+        self._is_exporting = False
+        self._last_exported_result = result
+        seg_txt = ", ".join(f"${start:04X}-${end:04X}" for start, end, _role in result.segments)
+        asm_note = f" | ASM: {result.asm_path.name}" if result.asm_path is not None else ""
+        msg = (
+            f"Exported XEX -> {result.xex_path} ({result.size_bytes} bytes, Format v{result.format_version}"
+            f"{asm_note}) | Segments: {seg_txt}"
+        )
+        self.statusBar().showMessage(msg)
+        self._show_info_banner(msg)
+        self._reevaluate_and_refresh_ui()
+        self.xex_export_succeeded.emit(result)
+
+    def _on_export_failed(self, request_id: int, error_message: str) -> None:
+        self._open_export_workers.pop(request_id, None)
+        if request_id != self._active_export_request_id:
+            return
+        self._is_exporting = False
+        self.statusBar().showMessage(f"XEX export failed: {error_message}")
+        self._show_error_banner(f"XEX export failed: {error_message}")
+        self._reevaluate_and_refresh_ui()
+        self.xex_export_failed.emit(error_message)
+
+    def _show_info_banner(self, message: str) -> None:
+        self._diag_banner.setText(message)
+        self._diag_banner.setStyleSheet(
+            "background-color: #e8f5e9; color: #1b5e20; padding: 6px; border: 1px solid #a5d6a7;"
+        )
+        self._diag_banner.setVisible(True)
 
     def render_current_preview(self) -> None:
         if self._state is None or self._evaluation is None:
@@ -437,6 +569,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self._active_request_id += 1
+        self._active_export_request_id += 1
         self._transport.stop_and_release()
         self._render_service.cleanup()
         super().closeEvent(event)

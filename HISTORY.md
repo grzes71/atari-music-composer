@@ -2,6 +2,15 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-18] - Add Atari XEX Export to Atari Music Composer Studio
+
+Implemented Atari 8-bit executable (`.xex`) and optional companion MADS `.asm` export for **Atari Music Composer Studio** reusing the existing `arrange_song` / `build_xex` / `xex_layout` / `player_budget` pipeline.
+
+- Extended headless Studio backend models and XEX validation in [src/atari_music/studio/models.py](src/atari_music/studio/models.py) (`parse_atari_address`, `XexExportOptions` with syntactic address parsing + `$80-$F2` ZP equate bounds, `ToolchainPaths`, `XexExportResult`) and [src/atari_music/studio/instruments.py](src/atari_music/studio/instruments.py) (`validate_arranged_ir_for_xex`, `evaluate_for_xex`, resolved `auto`/`v1`/`v2` format checks via `resolve_export_format_version`/`song_requires_v2`, post-arrange `volume_contour` + MADS checks, and narrow `TARGET_NOT_IMPLEMENTED` handling strictly for `xex_v2`).
+- Created PySide6-free [src/atari_music/studio/exporter.py](src/atari_music/studio/exporter.py) (`ExportService`, `PreparedXexArrangement`, `resolve_default_mads_path`, `resolve_default_player_asm`, `_commit_staged_pairs`) enforcing a single `arrange_song` pass per export, toolchain preflight (`mads` + `player.asm`), same-volume staging under `output_path.parent`, and transactional backup/rollback commits that preserve pre-existing files on failure and keep companion `.asm` untouched when `keep_asm=False`; exported symbols in [src/atari_music/studio/__init__.py](src/atari_music/studio/__init__.py).
+- Added PySide6 UI support via [src/atari_music/studio/ui/xex_export_dialog.py](src/atari_music/studio/ui/xex_export_dialog.py) (`XexExportDialog` with live validation and overwrite confirmation), `ExportXexWorker` in [src/atari_music/studio/ui/worker.py](src/atari_music/studio/ui/worker.py), and `Export XEX...` workflow in [src/atari_music/studio/ui/main_window.py](src/atari_music/studio/ui/main_window.py) running off the UI thread without disrupting WAV playback or cache.
+- Separated `STUDIO_UI_MODULES` from headless `CORE_MODULES` while registering `studio/exporter` in [tests/test_architecture_boundaries.py](tests/test_architecture_boundaries.py), and added comprehensive tests in [tests/test_studio_xex_export.py](tests/test_studio_xex_export.py) and [tests/test_studio_ui.py](tests/test_studio_ui.py).
+
 ## [2026-11-18] - Implement Atari Music Composer Studio Vertical Slice (Phase 1)
 
 Implemented the Phase 1 vertical slice of **Atari Music Composer Studio — Instrument Explorer** with strict isolation between headless backend services and the optional PySide6 UI.

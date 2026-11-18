@@ -30,6 +30,13 @@ from atari_music.ir import (
     resolve_initial_channel_instruments,
     song_requires_v2,
 )
+from atari_music.mads_exporter import (
+    FormatVersionError,
+    ModulationNotExpressibleError,
+    StreamValidationError,
+    VolumeContourNotExpressibleError,
+    export_mads_asm,
+)
 from atari_music.studio.models import (
     ArrangementEvaluation,
     CatalogOptionStatus,
@@ -44,6 +51,28 @@ _TARGET_CAPABILITY_MAP: Mapping[StudioTargetName, TargetCapability] = {
     "xex_v1": TARGET_V1_XEX,
     "wav": TARGET_WAV_PREVIEW,
 }
+
+
+def _is_stale_stage_a_xex_v2_notice(
+    diag: RuntimeDiagnostic,
+    resolved_target: TargetCapability,
+    effective_format_version: int,
+) -> bool:
+    """Return True strictly for the Stage-A planning notice on ``xex_v2`` during XEX v2 export.
+
+    ``TARGET_V2_ITER1_XEX`` retains ``is_implemented=False`` to preserve Stage-A runtime
+    contracts, whereas Stage C/D implemented full v2 compilation in ``mads_exporter``
+    (``SONG_FORMAT_VERSION_2``) and ``player.asm`` (``SONG_FORMAT_VERSION_V2``). Suppressing
+    this single warning ONLY when ``resolved_target`` is ``xex_v2`` and
+    ``effective_format_version == 2`` avoids misleading Studio users without hiding unrelated
+    hardware warnings (e.g., ``MIDI_RANGE_EXCEEDED``) or non-XEX planned targets (``asap``).
+    """
+    return (
+        diag.severity == "WARNING"
+        and diag.code == "TARGET_NOT_IMPLEMENTED"
+        and resolved_target.backend == "xex_v2"
+        and effective_format_version == 2
+    )
 
 
 class InstrumentService:
@@ -325,6 +354,182 @@ class InstrumentService:
             v2_reasons=v2_reasons,
             channels=ch_slots,
             diagnostics=tuple(diagnostics),
+            blocking_errors=tuple(blocking_errors),
+            warnings=tuple(warnings),
+        )
+
+    def _collect_arranged_channel_requests(
+        self,
+        state: LoadedCompositionState,
+        config: StudioArrangementConfig,
+        arranged_ir: IRSong,
+    ) -> List[ChannelAssignmentRequest]:
+        """Collect active catalog profiles from *arranged_ir* (overrides + preserved switches)."""
+        inst_by_id = {inst.id: inst for inst in arranged_ir.instruments}
+        init_map = resolve_initial_channel_instruments(arranged_ir)
+        assigned_map = config.assigned_map()
+        requests: List[ChannelAssignmentRequest] = []
+
+        for ch in (1, 2, 3, 4):
+            has_notes = self._channel_has_active_notes(arranged_ir, ch)
+            if ch == 2 and arranged_ir.uses_16bit_bass and not has_notes and ch not in assigned_map:
+                continue
+
+            ordered_pids: List[str] = []
+
+            def _record(ir_inst_id: int) -> None:
+                ir_inst = inst_by_id.get(ir_inst_id)
+                if (
+                    ir_inst is not None
+                    and ir_inst.profile_id
+                    and self._catalog.has_profile(ir_inst.profile_id)
+                    and ir_inst.profile_id not in ordered_pids
+                ):
+                    ordered_pids.append(ir_inst.profile_id)
+
+            if ch in init_map and (has_notes or ch in assigned_map):
+                _record(init_map[ch])
+            for pat in arranged_ir.patterns:
+                for note in pat.tracks.get(ch, ()):
+                    if not note.is_rest or note.pending_program_changes:
+                        _record(note.instrument_id)
+                    for pc_id in note.pending_program_changes:
+                        _record(pc_id)
+
+            if ordered_pids:
+                ch_stats = state.channels[ch]
+                requests.append(
+                    ChannelAssignmentRequest(
+                        channel=ch,
+                        instrument_ids=tuple(ordered_pids),
+                        midi_min=ch_stats.midi_min,
+                        midi_max=ch_stats.midi_max,
+                    )
+                )
+        return requests
+
+    def validate_arranged_ir_for_xex(
+        self,
+        state: LoadedCompositionState,
+        config: StudioArrangementConfig,
+        arranged_ir: IRSong,
+    ) -> Tuple[
+        Optional[int],
+        TargetCapability,
+        Tuple[RuntimeDiagnostic, ...],
+        Tuple[str, ...],
+        Tuple[str, ...],
+    ]:
+        """Validate a concrete *arranged_ir* for XEX compilation against its resolved format version.
+
+        Uses ``resolve_export_format_version(arranged_ir, config.player_version)`` so ``auto``,
+        ``v1``, and ``v2`` resolve identically to ``build_xex`` without duplicating version logic,
+        then validates runtime capabilities and in-memory MADS expressibility (including
+        ``volume_contour`` and modulations) strictly on *arranged_ir*.
+        """
+        blocking_errors: List[str] = []
+        warnings: List[str] = []
+        kept_diagnostics: List[RuntimeDiagnostic] = []
+
+        try:
+            effective_ver = resolve_export_format_version(arranged_ir, config.player_version)
+        except InstrumentPlanError as exc:
+            return None, TARGET_V1_XEX, (), (str(exc),), ()
+
+        if effective_ver == 1:
+            v2_reasons = song_requires_v2(arranged_ir)
+            if v2_reasons:
+                blocking_errors.append(
+                    "selected arrangement requires format v2 (" + "; ".join(v2_reasons) + ")"
+                )
+            resolved_target = TARGET_V1_XEX
+        else:
+            resolved_target = TARGET_V2_ITER1_XEX
+
+        requests = self._collect_arranged_channel_requests(state, config, arranged_ir)
+        if requests:
+            rt_report = POKEYRuntime.resolve(requests, self._catalog, target=resolved_target)
+            for diag in rt_report.diagnostics:
+                if _is_stale_stage_a_xex_v2_notice(diag, resolved_target, effective_ver):
+                    continue
+                kept_diagnostics.append(diag)
+                if diag.severity == "ERROR":
+                    if diag.message not in blocking_errors:
+                        blocking_errors.append(diag.message)
+                elif diag.severity == "WARNING":
+                    if diag.message not in warnings:
+                        warnings.append(diag.message)
+
+        try:
+            # Side-effect free (output_path=None): exercises authoritative volume_contour,
+            # modulation, and v1/v2 exporter rules directly on arranged_ir.
+            export_mads_asm(arranged_ir, output_path=None, format_version=effective_ver)
+        except (
+            FormatVersionError,
+            StreamValidationError,
+            VolumeContourNotExpressibleError,
+            ModulationNotExpressibleError,
+        ) as exc:
+            msg = str(exc)
+            if msg not in blocking_errors:
+                blocking_errors.append(msg)
+
+        return (
+            effective_ver,
+            resolved_target,
+            tuple(kept_diagnostics),
+            tuple(blocking_errors),
+            tuple(warnings),
+        )
+
+    def evaluate_for_xex(
+        self,
+        state: LoadedCompositionState,
+        config: StudioArrangementConfig,
+    ) -> ArrangementEvaluation:
+        """Fast lightweight XEX readiness evaluation for UI controls without audio simulation."""
+        # Always evaluate against XEX rules rather than TARGET_WAV_PREVIEW, while respecting
+        # effective format version resolution (auto/v1/v2).
+        assigned_map = config.assigned_map()
+        blocking_errors: List[str] = []
+        warnings: List[str] = []
+        diagnostics: Tuple[RuntimeDiagnostic, ...] = ()
+        effective_format_version: Optional[int] = None
+        effective_uses_16bit = self._effective_ch1_is_16bit(state, config)
+        effective_audctl = resolve_audctl_mode(state.base_pokey_ir)
+        v2_reasons: Tuple[str, ...] = state.base_v2_reasons
+
+        try:
+            arranged_ir, _ = arrange_ir_song(
+                state.base_pokey_ir,
+                channel_instruments=assigned_map or None,
+                program_change_policy=config.program_change_policy,
+                catalog=self._catalog,
+                player_version=config.player_version,
+            )
+            effective_uses_16bit = bool(arranged_ir.uses_16bit_bass)
+            effective_audctl = resolve_audctl_mode(arranged_ir)
+            v2_reasons = tuple(song_requires_v2(arranged_ir))
+            (
+                effective_format_version,
+                _resolved_target,
+                diagnostics,
+                xex_errors,
+                xex_warnings,
+            ) = self.validate_arranged_ir_for_xex(state, config, arranged_ir)
+            blocking_errors.extend(xex_errors)
+            warnings.extend(xex_warnings)
+        except InstrumentPlanError as exc:
+            blocking_errors.append(str(exc))
+
+        return ArrangementEvaluation(
+            is_valid=(len(blocking_errors) == 0),
+            effective_format_version=effective_format_version,
+            effective_uses_16bit_bass=effective_uses_16bit,
+            effective_audctl=effective_audctl,
+            v2_reasons=v2_reasons,
+            channels={},
+            diagnostics=diagnostics,
             blocking_errors=tuple(blocking_errors),
             warnings=tuple(warnings),
         )
