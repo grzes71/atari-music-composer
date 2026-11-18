@@ -69,6 +69,18 @@ CORE_MODULES: Set[str] = {
     "instruments/catalog",
     "instruments/runtime",
     "instruments/planner",
+    "studio/__init__",
+    "studio/models",
+    "studio/loader",
+    "studio/instruments",
+    "studio/renderer",
+    "studio/ui/__init__",
+    "studio/ui/app",
+    "studio/ui/worker",
+    "studio/ui/channel_strip",
+    "studio/ui/instrument_picker",
+    "studio/ui/transport_bar",
+    "studio/ui/main_window",
 }
 
 #: Hidden LEGACY CLI commands (`@cli.command(..., hidden=True)`) permitted to lazy-import

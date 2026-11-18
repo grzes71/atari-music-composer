@@ -2,6 +2,15 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-18] - Implement Atari Music Composer Studio Vertical Slice (Phase 1)
+
+Implemented the Phase 1 vertical slice of **Atari Music Composer Studio — Instrument Explorer** with strict isolation between headless backend services and the optional PySide6 UI.
+
+- Added optional `studio` dependency (`PySide6>=6.6.0`) and GUI script `atari-music-studio` in [pyproject.toml](pyproject.toml) without modifying `requirements.txt`.
+- Created PySide6-free backend package under [src/atari_music/studio/](src/atari_music/studio/__init__.py): [models.py](src/atari_music/studio/models.py), [loader.py](src/atari_music/studio/loader.py) (immutable baseline snapshot + explicit `CompositionFidelityError` check guarding `PROGRAM_CHANGE` switches), [instruments.py](src/atari_music/studio/instruments.py) (dynamic CH1/CH2 availability + `POKEYRuntime` / `arrange_ir_song` validation), and [renderer.py](src/atari_music/studio/renderer.py) (`arrange_song` + session temp WAV cache keyed by `RenderCacheKey`).
+- Created PySide6 UI under [src/atari_music/studio/ui/](src/atari_music/studio/ui/__init__.py): [app.py](src/atari_music/studio/ui/app.py), [main_window.py](src/atari_music/studio/ui/main_window.py), [channel_strip.py](src/atari_music/studio/ui/channel_strip.py), [instrument_picker.py](src/atari_music/studio/ui/instrument_picker.py), [transport_bar.py](src/atari_music/studio/ui/transport_bar.py), and [worker.py](src/atari_music/studio/ui/worker.py) supporting explicit Render Preview, `QThreadPool` background synthesis, outdated-preview detection, invalid-config render blocking, Play/Stop (`QMediaPlayer`), and Revert Original.
+- Registered Studio modules in `CORE_MODULES` ([tests/test_architecture_boundaries.py](tests/test_architecture_boundaries.py)) and added tests in [tests/test_studio_vertical_slice.py](tests/test_studio_vertical_slice.py) and [tests/test_studio_ui.py](tests/test_studio_ui.py).
+
 ## [2026-11-17] - Register `ai/prompt_library` and `ai/critique` in `CORE_MODULES`
 
 Fixed 3 CI boundary test failures in [tests/test_architecture_boundaries.py](tests/test_architecture_boundaries.py) on `feat/rich-prompts`.
