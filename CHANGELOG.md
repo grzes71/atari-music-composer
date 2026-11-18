@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.14.0 (2026-11-18)
+
+### Features
+
+- **studio**: Add Atari XEX export workflow with safe transactional commit
+  ([`a79ea63`](https://github.com/grzes71/atari-music-composer/commit/a79ea63431824214fad9b95ef1b5871631d6d346))
+
+
 ## v0.13.0 (2026-11-18)
 
 ### Features
