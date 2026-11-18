@@ -21,10 +21,16 @@ dependencies = [
 [project.scripts]
 atari-music = "atari_music.cli:cli"
 
+[project.gui-scripts]
+atari-music-studio = "atari_music.studio.ui.app:main"
+
 [project.optional-dependencies]
 dev = [
     "build>=1.0.0",
     "python-semantic-release>=9.15.0",
+]
+studio = [
+    "PySide6>=6.6.0",
 ]
 
 [tool.setuptools.packages.find]
