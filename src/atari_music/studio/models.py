@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Dict, Literal, Optional, Tuple
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from atari_music.ai.schema import AICompositionDoc
 from atari_music.instruments.planner import PlayerVersionChoice, ProgramChangePolicy
@@ -17,6 +17,37 @@ from atari_music.ir import IRSong
 from atari_music.music_ir import MusicSong
 
 StudioTargetName = Literal["xex_v2", "xex_v1", "wav"]
+
+
+def parse_atari_address(raw: str | int | bool, *, label: str = "address") -> int:
+    """Parse user-entered hex (``$6000``, ``0x6000``) or decimal address into ``0..$FFFF``.
+
+    This is purely syntactic integer conversion; XEX segment boundaries and overlaps are
+    validated authoritatively by ``atari_music.xex_layout.validate_xex_layout``.
+    """
+    if isinstance(raw, bool):
+        raise ValueError(f"Invalid {label}: boolean is not a valid address.")
+    if isinstance(raw, int):
+        val = int(raw)
+    else:
+        text = str(raw).strip()
+        if not text:
+            raise ValueError(f"{label} cannot be empty.")
+        try:
+            if text.startswith("$"):
+                val = int(text[1:], 16)
+            elif text.lower().startswith("0x"):
+                val = int(text, 16)
+            else:
+                val = int(text, 10)
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid {label} {raw!r}; expected hex ($6000 / 0x6000) or decimal integer."
+            ) from exc
+
+    if val < 0 or val > 0xFFFF:
+        raise ValueError(f"{label} ${val:X} out of 16-bit 6502 address range ($0000-$FFFF).")
+    return val
 
 
 class CompositionFidelityError(ValueError):
@@ -204,3 +235,90 @@ class CachedRenderEntry:
     arranged_ir_sha256: str
     from_cache: bool = False
     diagnostics: Tuple[str, ...] = field(default_factory=tuple)
+
+
+class XexExportOptions(BaseModel):
+    """Immutable export parameters for compiling a Studio arrangement to Atari XEX.
+
+    ``player_address`` and ``music_address`` undergo 16-bit integer parsing only here; memory
+    region bounds (``$0400-$BFFF``) and overlaps are judged authoritatively on built segments by
+    ``atari_music.xex_layout.validate_xex_layout``. ``zp_base`` is checked against ``$80-$F2``
+    because ``PLAYER_ZP_BASE`` (+0..13) is a compile-time equate not present as a load segment.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    output_path: Path
+    player_address: int = Field(default=0x6000, ge=0x0000, le=0xFFFF)
+    music_address: Optional[int] = Field(default=0x8000, ge=0x0000, le=0xFFFF)
+    zp_base: int = Field(default=0x80, ge=0x80, le=0xF2)
+    keep_asm: bool = True
+    mads_bin: Optional[Path] = None
+    player_asm: Optional[Path] = None
+
+    @field_validator("player_address", mode="before")
+    @classmethod
+    def _parse_player_addr(cls, value: str | int | bool) -> int:
+        return parse_atari_address(value, label="player_address")
+
+    @field_validator("music_address", mode="before")
+    @classmethod
+    def _parse_music_addr(cls, value: Optional[str | int | bool]) -> Optional[int]:
+        if value is None:
+            return None
+        if isinstance(value, str) and not value.strip():
+            return None
+        return parse_atari_address(value, label="music_address")
+
+    @field_validator("zp_base", mode="before")
+    @classmethod
+    def _parse_zp_base(cls, value: str | int | bool) -> int:
+        val = parse_atari_address(value, label="zp_base")
+        if val < 0x80 or val > 0xF2:
+            raise ValueError(
+                f"zp_base ${val:02X} out of safe user Zero Page bounds ($80-$F2; "
+                "player+harness uses 14 bytes PLAYER_ZP_BASE+0..13 within $80-$FF)."
+            )
+        return val
+
+    @model_validator(mode="after")
+    def _validate_paths(self) -> "XexExportOptions":
+        if not str(self.output_path).strip():
+            raise ValueError("output_path cannot be empty.")
+        return self
+
+
+@dataclass(frozen=True)
+class ToolchainPaths:
+    """Resolved MADS toolchain paths and preflight availability diagnostics."""
+
+    mads_bin: Optional[Path]
+    player_asm: Optional[Path]
+    mads_error: Optional[str] = None
+    player_asm_error: Optional[str] = None
+
+    @property
+    def is_ready(self) -> bool:
+        return (
+            self.mads_bin is not None
+            and self.player_asm is not None
+            and self.mads_error is None
+            and self.player_asm_error is None
+        )
+
+
+@dataclass(frozen=True)
+class XexExportResult:
+    """Metadata produced after successful MADS compilation and atomic XEX commit."""
+
+    xex_path: Path
+    asm_path: Optional[Path]
+    size_bytes: int
+    format_version: int
+    uses_16bit_bass: bool
+    effective_audctl: int
+    player_address: int
+    music_address: Optional[int]
+    zp_base: int
+    segments: Tuple[Tuple[int, int, str], ...]
+    warnings: Tuple[str, ...] = ()
