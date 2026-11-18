@@ -584,9 +584,21 @@ atari-music-studio examples/songs/Vaults-of-Nhyrmeth.dsl
 python -m atari_music.studio.ui.app examples/songs/Vaults-of-Nhyrmeth.dsl --catalog data/instruments/catalog.json
 ```
 
+* **Tab-Based Studio Workspace (`1120×760` default, fits `900×680` and `1366×768`):** Separates persistent global actions (**Open Composition**, **Revert Original**, **Render Preview**, **Export XEX...**) at the top, the global **Preset Bar** directly below, four workspace tabs (**Instruments** [default], **A/B Comparison**, **Arrangement**, **Diagnostics**) with independent scroll areas, and the persistent **TransportBar** at the bottom so playback and rendering controls remain visible regardless of active tab or window height.
 * **Non-destructive Loading & Revert:** Opens `AICompositionDoc` JSON, `IRSong` JSON, or Music DSL (`.dsl`) files via `load_studio_composition()`, detects hardware/channel configuration (`CH1+CH2` 16-bit pairing, `PROGRAM_CHANGE` fidelity checks), and restores the original snapshot with **Revert Original**.
-* **Channel Instrument Explorer & Validation:** Dynamically filters compatible SSOT catalog instruments per channel (`CH1..CH4`), exposes `--program-change-policy` (`preserve`/`replace`/`remove`) and `--player-version` (`auto`/`v1`/`v2`), and surfaces blocking POKEY errors or hardware warnings before rendering or exporting.
-* **Explicit Background Preview (`Render Preview`):** Synthesizes WAV previews on demand on a worker thread (no automatic re-rendering on selection changes), caches renders by configuration key (`RenderCacheKey`), and provides Play/Stop transport controls.
+* **Channel Instrument Explorer, Arrangement Policies & Diagnostics:** Dynamically filters compatible SSOT catalog instruments per channel (`CH1..CH4`) in the **Instruments** tab, exposes `PROGRAM_CHANGE` policy (`preserve`/`replace`/`remove`), player version (`auto`/`v1`/`v2`), and target backend (`xex_v2`/`xex_v1`/`wav`) in the **Arrangement** tab, and surfaces blocking POKEY errors, hardware warnings, channel compatibility notes, render diagnostics, and preset scan errors in both alert banners and the dedicated **Diagnostics** tab.
+* **Explicit Background Preview & PCM Transport (`Render Preview`, `TransportBar`, `StudioAudioPlayer`):** Synthesizes WAV previews on demand on a worker thread (no automatic re-rendering on selection, preset apply, or A/B save/load changes), caches renders by deterministic configuration key (`RenderCacheKey`), and plays audio directly from memory via `QAudioSink` + `DualPcmStreamDevice` (`MM:SS / MM:SS` clock including tracks over 59 minutes, Play / Pause / Resume / Stop / Seek scrubbing, immediate OS file handle release after load).
+  * **Stale Editor Preview semantics:** If you edit channel/policy settings *while* a previously started **Render Preview** is still synthesizing configuration `X`, that render still completes into the transport as `Last rendered (prior): X` with an explicit **OUTDATED PREVIEW** notice alongside your newer `Selected: Y` arrangement; clicking **Render Preview** again renders `Y` (or hits shared cache) and restores **Preview UP TO DATE**.
+* **A/B Comparison (`ABComparisonPanel` & `ComparisonSession`):** Compare two independent arrangement snapshots (**Variant A** and **Variant B**) of the same composition over the shared `RenderService` cache ([docs/studio-ab-manual-test.md](docs/studio-ab-manual-test.md)):
+  * **Save to A / Save to B:** Snapshots deep copies of the current working configuration into Variant A or B without auto-rendering and without mutating the other slot; subsequent editor or preset edits leave saved A/B configurations intact and update the `Matches editor` / `Differs from editor` indicator.
+  * **Load A / Load B:** Copies the saved variant configuration back into the editor controls without triggering synthesis or interrupting current playback.
+  * **Render A / Render B (Serialized Shared Queue):** Queues variant synthesis through the same single-worker queue shared with **Render Preview** (preventing concurrent temp-file collisions on shared cache keys); identical A/B/Editor configurations share one cached WAV automatically. Rendering A or B updates slot readiness without interrupting or switching active transport playback.
+  * **Slot Statuses (`Empty`, `Not rendered`, `Ready`, `Outdated`):** Shows whether a variant has not been saved (`Empty`), has a saved arrangement pending synthesis (`Not rendered`), matches a valid WAV in shared cache (`Ready`), or was updated after a prior render (`Outdated`). Blocking hardware errors are flagged immediately and keep **Render** disabled until fixed.
+  * **Listen A / Listen B & Switch A/B (Position-Preserving Switching):** Switches playback directly from cached renders (never triggers rendering), preserving Play/Pause state (`prepare_paused_at()` avoids audible clicks when paused) and clamping playback cursor to `min(position, max(0, duration - 100 ms))` when switching to a shorter track. Opening a new composition clears A/B slots and ignores late worker results from previous songs without wiping global cache.
+* **Arrangement Presets (`PresetRepository` & `PresetBarWidget`):** Persistent JSON presets using schema `atari-music/arrangement-preset/1` stored atomically in `~/.atari_music_studio/presets/`:
+  * **Strict `Load` vs `Apply` separation:** Selecting or clicking **Load** reads and validates a preset from the repository without modifying the working arrangement; clicking **Apply** explicitly replaces the working configuration (including `null` / `None` entries, which restore `(Keep Original)` on those channels) and updates diagnostics/`OUTDATED PREVIEW` without triggering automatic WAV rendering.
+  * **Management & Guardrails:** Supports **Save...** (saves current working arrangement once a composition is open, confirming overwrites and preserving `created_at`), **Rename...**, and **Delete** (available even before opening a composition; **Delete** asks for confirmation and leaves active channel assignments untouched).
+  * **Conflicts & Malformed Files:** Unknown catalog instrument IDs reject `Apply` cleanly without altering working settings; valid catalog IDs that violate hardware constraints (such as assigning `CH2` on a 16-bit `CH1+CH2` song) are applied verbatim without silently stripping assignments, displaying blocking diagnostics and disabling **Render Preview** until resolved. Malformed or unsupported JSON files in the presets directory surface as persistent warnings without blocking valid presets.
 * **Validated Atari XEX Export (`Export XEX...`):** Compiles `.xex` binaries (with optional companion MADS `.asm` saving) off the UI thread using `ExportService`, validating `player_address`, `music_address`, `$80..$F2` Zero Page base, toolchain paths (`mads`, `player.asm`), and `xex_layout.validate_xex_layout()`, with same-volume staging and rollback so failed exports preserve existing files.
 
 ---
@@ -643,8 +655,8 @@ src/atari_music/
 │   ├── runtime.py           # Stateless POKEYRuntime capability & AUDCTL conflict checker
 │   └── planner.py           # Channel assignment, PROGRAM_CHANGE policy, v1/v2 resolution, arrange_ir_song
 ├── studio/                  # Atari Music Composer Studio (headless services + optional PySide6 UI)
-│   ├── models.py / loader.py / instruments.py / renderer.py / exporter.py
-│   └── ui/                  # Optional PySide6 desktop GUI (atari-music-studio)
+│   ├── models.py / loader.py / instruments.py / renderer.py / exporter.py / presets.py
+│   └── ui/                  # Optional PySide6 desktop GUI (atari-music-studio, preset_bar)
 ├── ai/                      # AI composition & analysis layer
 │   ├── schema.py            # AICompositionDoc v1 schema & ValidationReport
 │   ├── dsl.py               # Lossless Music DSL parser & serializer
@@ -696,8 +708,8 @@ pytest -m "core and not live" -q
 # Run fast POKEY / IR / MADS / player.asm / XEX regression subset
 pytest -m "audio and not live" -q
 
-# Stage C/D/E + Studio + rhythmic-density regression tests
-pytest tests/test_stage_c_player_v2_parity.py tests/test_stage_d_integration.py tests/test_stage_e_arrangement.py tests/test_studio_vertical_slice.py tests/test_studio_xex_export.py tests/test_rhythmic_density.py -v
+# Stage C/D/E + Studio + presets + rhythmic-density regression tests
+pytest tests/test_stage_c_player_v2_parity.py tests/test_stage_d_integration.py tests/test_stage_e_arrangement.py tests/test_studio_vertical_slice.py tests/test_studio_presets.py tests/test_studio_xex_export.py tests/test_rhythmic_density.py -v
 ```
 
 ---
