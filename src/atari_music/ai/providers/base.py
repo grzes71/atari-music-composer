@@ -31,6 +31,17 @@ class CompositionRequest:
     quality_passes: int = 0  # Phase 5: number of musical critique/revision passes
     tempo_grid: str = "describe"  # "describe" or "exact"
     musical_brief: Optional[Dict[str, Any]] = None  # Attached brief when plan_first=True
+    rhythmic_density: Optional[str] = None  # Opt-in: "low", "medium", "high", or "extreme"
+
+    def __post_init__(self) -> None:
+        if self.rhythmic_density is not None:
+            norm = str(self.rhythmic_density).strip().lower()
+            if norm not in ("low", "medium", "high", "extreme"):
+                raise ValueError(
+                    f"Unsupported rhythmic_density {self.rhythmic_density!r}; "
+                    "expected 'low', 'medium', 'high', or 'extreme'."
+                )
+            self.rhythmic_density = norm
 
 
 

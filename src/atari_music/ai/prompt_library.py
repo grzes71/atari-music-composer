@@ -13,7 +13,9 @@ All functions are pure and return prompt text sections.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
+import math
 from functools import lru_cache
 from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
 
@@ -24,9 +26,92 @@ if TYPE_CHECKING:
 
 PAL_FRAME_RATE = 50.0
 PROMPT_PROFILES: Tuple[str, ...] = ("classic", "rich")
+RHYTHMIC_DENSITY_LEVELS: Tuple[str, ...] = ("low", "medium", "high", "extreme")
 MIN_STEPS_PER_BEAT = 2
 MAX_STEPS_PER_BEAT = 12
 BPM_SEARCH_RANGE = range(40, 251)
+
+
+@dataclass(frozen=True)
+class RhythmicDensityProfile:
+    """Target rhythmic density thresholds calibrated relative to beat duration (``spb``)."""
+
+    name: str
+    min_notes_per_beat: Optional[float]
+    max_avg_note_beats: Optional[float]
+    max_median_note_beats: Optional[float]
+    min_short_note_ratio: float
+    max_intro_delay_beats: Optional[float]
+    max_longest_silence_beats: Optional[float]
+    max_rest_ratio: float
+    description: str
+
+
+DENSITY_PROFILES: Dict[str, RhythmicDensityProfile] = {
+    "low": RhythmicDensityProfile(
+        name="low",
+        min_notes_per_beat=None,
+        max_avg_note_beats=None,
+        max_median_note_beats=None,
+        min_short_note_ratio=0.0,
+        max_intro_delay_beats=None,
+        max_longest_silence_beats=None,
+        max_rest_ratio=1.0,
+        description="Spacious, sparse phrasing with sustained notes and deliberate silences.",
+    ),
+    "medium": RhythmicDensityProfile(
+        name="medium",
+        min_notes_per_beat=0.75,
+        max_avg_note_beats=1.35,
+        max_median_note_beats=1.20,
+        min_short_note_ratio=0.20,
+        max_intro_delay_beats=8.0,
+        max_longest_silence_beats=8.0,
+        max_rest_ratio=0.55,
+        description="Balanced phrasing mixing quarter-note anchors with eighth-note movement.",
+    ),
+    "high": RhythmicDensityProfile(
+        name="high",
+        min_notes_per_beat=1.25,
+        max_avg_note_beats=0.85,
+        max_median_note_beats=0.80,
+        min_short_note_ratio=0.50,
+        max_intro_delay_beats=4.0,
+        max_longest_silence_beats=4.0,
+        max_rest_ratio=0.35,
+        description="Driving rhythmic energy with predominantly sub-beat lead motion and early melody entry.",
+    ),
+    "extreme": RhythmicDensityProfile(
+        name="extreme",
+        min_notes_per_beat=1.75,
+        max_avg_note_beats=0.62,
+        max_median_note_beats=0.60,
+        min_short_note_ratio=0.75,
+        max_intro_delay_beats=2.0,
+        max_longest_silence_beats=2.0,
+        max_rest_ratio=0.25,
+        description="Relentless rapid lead articulation, short-note figures, and immediate thematic entry.",
+    ),
+}
+
+
+def normalize_rhythmic_density(density: Optional[str]) -> Optional[str]:
+    """Normalize optional rhythmic-density level string into canonical lowercase value."""
+    if density is None:
+        return None
+    norm = str(density).strip().lower()
+    if norm not in DENSITY_PROFILES:
+        raise ValueError(
+            f"Unsupported rhythmic_density {density!r}; expected one of {', '.join(RHYTHMIC_DENSITY_LEVELS)}."
+        )
+    return norm
+
+
+def short_step_threshold(spb: int) -> int:
+    """Return integer step threshold counting as a sub-beat short note for ``spb`` steps/beat."""
+    if spb <= 2:
+        return 1
+    return min(spb - 1, max(2, math.ceil(spb / 2.0)))
 
 
 # =============================================================================
@@ -108,7 +193,7 @@ CRAFT_SECTION = """COMPOSER CRAFT FOR POKEY CHIPTUNE (techniques, use when they 
 - PHRASING: think in 2- and 4-bar phrases; end phrases on chord tones, longer notes or rests. Let the melody breathe with short rests.
 - HARMONY FIRST: decide an explicit chord progression per section (e.g. i-VI-III-VII, i-iv-V-i, I-V-vi-IV). Bass plays roots/fifths on strong beats; the lead lands on chord tones on strong beats and uses passing/neighbour tones in between.
 - CHORD ARPEGGIO: a single channel can imply full chords by cycling chord tones rapidly (1-2 steps per note, e.g. A4 C5 E5 A4 C5 E5 ...). Classic Atari/C64 technique; keep it quieter than the lead.
-- ECHO VOICE: copy the lead onto a free channel delayed by 2-3 steps at volume 4-6 lower for space and width.
+- ECHO VOICE: copy the lead onto a free channel delayed by 2-3 steps at volume 4-6 lower for space and width; declare it as its own instrument with character=echo (or counter/harmony — NEVER character=lead or bright_lead) so it stays distinct from the main lead melody.
 - BASS PATTERNS: octave bouncing (A2 A3 A2 A3), root-fifth, walking lines into the next chord, syncopated pushes before the downbeat.
 - PERCUSSION ON ONE NOISE CHANNEL: vary pitch per hit - low = loose/kick-like hit, mid = snare, high = closed hi-hat. Build a steady groove (kick on beats 1/3, snare on 2/4, hats on off-beats) and add a fill every 4 or 8 bars.
 - DYNAMICS: use per-note volume accents (DSL `note/dur:vol`, JSON `volume`) - accent downbeats and melodic peaks, softer verses, louder chorus, drop channels out for breakdowns.
@@ -160,6 +245,7 @@ CHANNELS 4
 LOOP 0
 
 # 125 BPM -> 6 steps per beat, 24 steps per bar. A = Am | F, B = Dm | E.
+INSTRUMENT echo character=echo
 SEQUENCE A A B A
 
 [PATTERN A]
@@ -184,8 +270,8 @@ CH1 BASS V12
 D2/3 D3/3 D2/3 D3/3 D2/3 D3/3 A2/3 C3/3
 E2/3 E3/3 E2/3 E3/3 E2/3 E3/3 G#2/3 B2/3
 
-# CH2 becomes an echo of the lead: 3 steps late, quieter.
-CH2 ARP V7
+# CH2 becomes an echo of the lead: 3 steps late, quieter, using character=echo.
+CH2 echo V7
 R/3 D5/6 C5/3 B4/3 A4/3 B4/3 F4/6
 E4/3 G#4/3 B4/3 E5/9 R/3
 
@@ -201,7 +287,8 @@ C2/3:12 C6/3:5 G4/3:11 C6/3:5 G4/2:9 G4/2:10 G4/2:11 G4/2:12 G4/2:13 G4/2:15
 
 DSL_INSTRUMENT_DIRECTIVE_HELP = """5. Optional instrument shaping (header area, before SEQUENCE):
    INSTRUMENT <id> [character=<role>] [att=<frames>] [dec=<frames>] [sus=<0..15>] [rel=<frames>]
-   e.g. INSTRUMENT arp character=bell dec=3 sus=4 rel=1   (short plucky arpeggio)
+   e.g. INSTRUMENT arp character=bell dec=3 sus=4 rel=1    (short plucky arpeggio)
+   e.g. INSTRUMENT echo character=echo sus=8 rel=3         (delayed echo voice; never character=lead or bright_lead)
    Use the same <id> in channel headers (CH2 ARP V7). Omit it to use defaults inferred from the id name."""
 
 
@@ -274,6 +361,82 @@ def build_brief_system_prompt() -> str:
     )
 
 
+def _describe_grid_subdivisions(spb: int, step_ms: float) -> str:
+    """Describe exact integer subdivisions and tracker approximations accurately for *spb*."""
+    if spb == 6:
+        return (
+            "6 steps = quarter, 3 steps = exact eighth, 2 steps = eighth-triplet, "
+            "1 step = 1/6 beat (sixteenth-triplet; exact quarter/4 sixteenths require 1.5 steps, approximate via 2+1)"
+        )
+    if spb == 4:
+        return "4 steps = quarter, 2 steps = exact eighth, 1 step = exact sixteenth"
+    if spb % 2 != 0:
+        a = spb // 2
+        b = spb - a
+        fast_seq = "2+2+1" if spb == 5 else f"{max(1, a - 1)}+{max(1, a - 1)}+{spb - 2 * max(1, a - 1)}"
+        return (
+            f"{spb} steps = quarter; because {spb} is odd on a {step_ms:.0f} ms/tick integer grid, "
+            f"exact equal eighths ({spb / 2:.1f} steps) do not exist — use asymmetric {a}+{b} / {b}+{a} "
+            f"({a * step_ms:.0f}+{b * step_ms:.0f} ms) or {fast_seq} step groupings as tracker-grid "
+            f"approximations of fast eighth/sixteenth movement"
+        )
+    parts = [f"{spb} steps = quarter", f"{spb // 2} steps = exact eighth"]
+    if spb % 4 == 0:
+        parts.append(f"{spb // 4} steps = exact sixteenth")
+    elif spb % 3 == 0:
+        parts.append(f"{spb // 3} steps = eighth-triplet")
+    return ", ".join(parts)
+
+
+def build_rhythmic_density_section(bpm: Optional[int], rhythmic_density: str) -> str:
+    """Build concrete numeric rhythmic-density prompt targets for ``rhythmic_density``."""
+    norm = normalize_rhythmic_density(rhythmic_density)
+    assert norm is not None
+    prof = DENSITY_PROFILES[norm]
+    bpm_val = bpm or 120
+    fpt = calculate_bpm_frames_per_tick(bpm_val)
+    step_ms = step_duration_seconds(bpm_val) * 1000.0
+    spb = recommended_steps_per_beat(bpm_val)
+    eff = effective_bpm(bpm_val, spb)
+    short_thr = short_step_threshold(spb)
+
+    lines = [
+        f"RHYTHMIC DENSITY TARGET ({prof.name.upper()} — independent of nominal BPM):",
+        f"- Intent: {prof.description}",
+        f"- Active grid at {bpm_val} BPM: {fpt} frames/tick ({step_ms:.0f} ms/step), {spb} steps/beat (~{eff:.0f} audible BPM).",
+        f"- Subdivisions: {_describe_grid_subdivisions(spb, step_ms)}.",
+    ]
+    if norm == "low":
+        lines.extend([
+            "- Lead melody: favor sustained, unhurried notes (>= 1-2 beats) and generous breathing rests; do NOT force rapid fills.",
+            "- Accompaniment: keep texture sparse and calm.",
+        ])
+        return "\n".join(lines)
+
+    assert prof.min_notes_per_beat is not None
+    assert prof.max_avg_note_beats is not None
+    assert prof.max_median_note_beats is not None
+    assert prof.max_intro_delay_beats is not None
+
+    target_nps = prof.min_notes_per_beat * (eff / 60.0)
+    max_avg_steps = max(1.0, prof.max_avg_note_beats * spb)
+    max_med_steps = max(1.0, prof.max_median_note_beats * spb)
+    max_intro_steps = max(1, int(round(prof.max_intro_delay_beats * spb)))
+    max_intro_s = max_intro_steps * (fpt / PAL_FRAME_RATE)
+
+    lines.extend([
+        f"- Lead melody note durations: keep lead average <= {max_avg_steps:.1f} steps and median <= {max_med_steps:.1f} steps "
+        f"(at least {int(round(prof.min_short_note_ratio * 100))}% of lead notes must be short <= {short_thr} steps; "
+        f"do NOT rely on long {spb}-{spb + 2} step notes as the main rhythm).",
+        f"- Lead melody rate: target >= {target_nps:.1f} lead notes/second ({prof.min_notes_per_beat:.2f} notes/beat) "
+        f"with lead rest ratio <= {int(round(prof.max_rest_ratio * 100))}%.",
+        f"- INTRO / entry timing: bring the main lead melody in within <= {max_intro_steps} steps (~{max_intro_s:.1f}s) from step 0 — "
+        "do NOT leave multi-bar R/20 rests on the lead channel before the melody enters.",
+        "- Do NOT rely solely on quiet CH2 arpeggio for energy; drive the primary lead melody itself, supported by active bass and drums.",
+    ])
+    return "\n".join(lines)
+
+
 def build_brief_user_prompt(request: "CompositionRequest") -> str:
     """User prompt for Phase 4 pre-composition planning."""
     bpm = request.bpm or 120
@@ -286,6 +449,14 @@ def build_brief_user_prompt(request: "CompositionRequest") -> str:
         f"- Structure: {request.structure or 'A-A-B-A'}",
         f"- 16-bit bass: {'enabled (CH1 master, CH2 empty)' if request.use_16bit_bass else 'standard 8-bit'}",
     ]
+    density = getattr(request, "rhythmic_density", None)
+    if density:
+        prof = DENSITY_PROFILES[normalize_rhythmic_density(density)]
+        short_thr = short_step_threshold(spb)
+        lines.append(
+            f"- Rhythmic density target: {prof.name.upper()} ({prof.description}) — "
+            f"plan motif rhythms using <= {short_thr}-step figures when high/extreme and bring the lead melody in early."
+        )
     if request.notes:
         lines.append(f"- Notes: {request.notes}")
     lines.append("Return ONLY the MusicalBrief JSON object.")
@@ -299,6 +470,15 @@ def build_default_musical_brief(request: "CompositionRequest") -> Dict[str, obje
     bpm = request.bpm or 125
     spb = recommended_steps_per_beat(bpm)
     half = max(1, spb // 2)
+    density = normalize_rhythmic_density(getattr(request, "rhythmic_density", None))
+    if density in ("high", "extreme"):
+        half_b = max(1, spb - half)
+        sub = max(1, half // 2)
+        motif_rhythm = f"{sub}-{sub}-{half_b}-{half}-{half_b}" if spb >= 4 else f"{half}-{half_b}-{half}"
+    elif density == "low":
+        motif_rhythm = f"{2 * spb}-{spb}-{2 * spb}"
+    else:
+        motif_rhythm = f"{spb}-{half}-{half}-{spb}"
     key = request.key or "A"
     mode = request.mode or "minor"
     if request.use_16bit_bass:
@@ -337,7 +517,7 @@ def build_default_musical_brief(request: "CompositionRequest") -> Dict[str, obje
             ),
         ],
         motif=MusicalBriefMotif(
-            rhythm=f"{spb}-{half}-{half}-{spb}",
+            rhythm=motif_rhythm,
             contour="leap up to 5th then stepwise descent to root",
             description="Stated in A on tonic, sequenced a step lower in B with cadence fill",
         ),
@@ -358,6 +538,9 @@ def build_rich_user_prompt(request: "CompositionRequest") -> str:
         build_timing_grid_section(request.bpm, tempo_grid=tempo_grid),
         build_style_idioms_section(request.style, request.mood),
     ]
+    density = getattr(request, "rhythmic_density", None)
+    if density:
+        sections.append(build_rhythmic_density_section(request.bpm, density))
     brief = getattr(request, "musical_brief", None)
     if brief:
         sections.append(format_musical_brief_section(brief))

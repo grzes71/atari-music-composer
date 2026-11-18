@@ -2,6 +2,15 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-18] - Add Opt-In Rhythmic Density Control (`--rhythmic-density`) to AI Composer
+
+Added opt-in `--rhythmic-density low|medium|high|extreme` control (independent of `--bpm`, without aliasing `--energy`) plus per-channel/per-role rhythmic and INTRO delay analytics while preserving byte-for-byte identical default behavior when unset.
+
+- Extended `CompositionRequest` in [src/atari_music/ai/providers/base.py](src/atari_music/ai/providers/base.py) with `rhythmic_density: Optional[str] = None` (without altering `MusicalBrief` or `AICompositionDoc` schemas) and exposed `--rhythmic-density` on `ai-compose` in [src/atari_music/cli.py](src/atari_music/cli.py).
+- Added `ChannelRhythmMetrics`, `IntroMelodyMetrics`, semantic role classification (`catalog_id` / `intended_roles` -> `character` / `map_instrument_character` without duration heuristics), effective per-event instrument inheritance across `doc.sequence`, deduplicated `active_mask` / IOI calculations, and INTRO prefix detection in [src/atari_music/ai/analysis.py](src/atari_music/ai/analysis.py).
+- Added `DENSITY_PROFILES`, `short_step_threshold`, and `build_rhythmic_density_section` in [src/atari_music/ai/prompt_library.py](src/atari_music/ai/prompt_library.py) (including accurate `spb=6` / `spb=4` grid terminology and `2+3`/`2+2+1` tracker approximations at `140 BPM` / `spb=5`) and wired opt-in injection in [src/atari_music/ai/prompts.py](src/atari_music/ai/prompts.py).
+- Updated `MusicalCritique.from_doc(doc, *, rhythmic_density=None)` in [src/atari_music/ai/critique.py](src/atari_music/ai/critique.py) and `_run_quality_passes()` in [src/atari_music/ai/client.py](src/atari_music/ai/client.py) with continuous `density_penalty` (zero penalties for `None`, `low`, and regular IOI pulses), extended [scripts/benchmark_prompts.py](scripts/benchmark_prompts.py) with per-role (`lead`, `bass`, `arpeggio`, `percussion`) breakdown, unified character alias resolution (`infer_character_from_id`) across [src/atari_music/ai/composition.py](src/atari_music/ai/composition.py) and [src/atari_music/ai/dsl.py](src/atari_music/ai/dsl.py) (`character=perc` -> `ChannelRole.PERCUSSION`; `character=echo`/`delay` -> `ChannelRole.HARMONY` + separate `role_rhythm["echo"]` stats without ID-name heuristics), updated `ECHO VOICE` / `SEMANTIC INSTRUMENT PROFILES` guidance in [src/atari_music/ai/prompts.py](src/atari_music/ai/prompts.py) and [src/atari_music/ai/prompt_library.py](src/atari_music/ai/prompt_library.py), and added regression tests in [tests/test_rhythmic_density.py](tests/test_rhythmic_density.py).
+
 ## [2026-11-18] - Add Atari XEX Export to Atari Music Composer Studio
 
 Implemented Atari 8-bit executable (`.xex`) and optional companion MADS `.asm` export for **Atari Music Composer Studio** reusing the existing `arrange_song` / `build_xex` / `xex_layout` / `player_budget` pipeline.

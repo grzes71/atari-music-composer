@@ -15,6 +15,7 @@ import re
 import shlex
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from atari_music.ai.composition import infer_character_from_id
 from atari_music.ai.schema import (
     AICompositionDoc,
     AICompositionMetadata,
@@ -72,21 +73,8 @@ CHANNEL_HEADER_RE = re.compile(
 
 
 def _infer_character_from_id(inst_id: str) -> str:
-    """Infer semantic instrument archetype from identifier string."""
-    name = inst_id.strip().lower()
-    if any(k in name for k in ("kick", "tom", "thud")):
-        return "kick"
-    if any(k in name for k in ("perc", "drum", "snare", "hihat", "noise", "hat", "cymbal", "clap")):
-        return "percussion"
-    if "bass" in name:
-        return "bass"
-    if any(k in name for k in ("pad", "dark", "drone")):
-        return "dark_lead"
-    if any(k in name for k in ("harm", "chord", "counter")):
-        return "harmony"
-    if any(k in name for k in ("bell", "ornament", "arp", "high")):
-        return "bell"
-    return "bright_lead"
+    """Infer semantic instrument archetype using shared character alias rules."""
+    return infer_character_from_id(inst_id)
 
 
 # =============================================================================

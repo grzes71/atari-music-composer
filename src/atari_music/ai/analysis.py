@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Dict, List, Optional, Set, Tuple
+import math
+import statistics
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from pydantic import BaseModel, Field
 
 from atari_music.ai.composition import map_instrument_character
-from atari_music.ai.schema import AICompositionDoc, AIPatternChannelEvent
+from atari_music.ai.schema import AICompositionDoc, AIInstrumentDef, AIPatternChannelEvent, AIPatternDef
 from atari_music.ai.validation import normalize_channel_idx
 from atari_music.constants import (
     DISTORTION_PURE_TONE,
@@ -26,11 +28,43 @@ from atari_music.ir import (
     midi_pitch_to_frequency,
     note_name_to_midi,
 )
+from atari_music.music_ir import ChannelRole
 
 
 # =============================================================================
 # Analysis Metric Models
 # =============================================================================
+
+class ChannelRhythmMetrics(BaseModel):
+    """Per-channel or per-role rhythmic density and articulation metrics."""
+
+    notes_count: int = 0
+    active_steps: int = 0
+    notes_per_sec: float = 0.0
+    avg_note_steps: float = 0.0
+    median_note_steps: float = 0.0
+    short_note_ratio: float = 0.0
+    onset_interval_mean: float = 0.0
+    onset_interval_variation: float = 0.0
+    rest_ratio: float = 1.0
+    longest_silence_steps: int = 0
+    first_onset_step: Optional[int] = None
+    intro_delay_seconds: Optional[float] = None
+    dominant_role: Optional[str] = None
+    roles_present: Tuple[str, ...] = ()
+
+
+class IntroMelodyMetrics(BaseModel):
+    """Opening-sequence and INTRO melody entry diagnostics."""
+
+    has_explicit_intro: bool = False
+    intro_pattern_ids: Tuple[str, ...] = ()
+    intro_total_steps: int = 0
+    first_melody_onset_step_in_intro: Optional[int] = None
+    intro_melody_delay_steps: Optional[int] = None
+    intro_melody_delay_seconds: Optional[float] = None
+    intro_melody_rest_ratio: Optional[float] = None
+
 
 class RhythmMetrics(BaseModel):
     """Detailed rhythmic structure metrics."""
@@ -42,6 +76,10 @@ class RhythmMetrics(BaseModel):
     channel_activity: Dict[int, Dict[str, Any]] = Field(default_factory=dict, description="Per-channel note count and active steps")
     rest_ratio: float = Field(description="Ratio of completely silent steps across the piece (0.0 to 1.0)")
     rhythmic_repetition: float = Field(description="Degree of rhythmic pattern repetition (0.0 to 1.0)")
+    channel_rhythm: Dict[int, ChannelRhythmMetrics] = Field(default_factory=dict, description="Extended per-channel rhythm metrics")
+    role_rhythm: Dict[str, ChannelRhythmMetrics] = Field(default_factory=dict, description="Extended rhythm metrics grouped by semantic musical role")
+    lead_channel: Optional[int] = Field(default=None, description="Channel carrying the dominant lead/melody role")
+    intro_melody: IntroMelodyMetrics = Field(default_factory=IntroMelodyMetrics, description="INTRO and melody entry delay metrics")
 
 
 class MelodyMetrics(BaseModel):
@@ -324,6 +362,356 @@ def verify_duration_invariant(
 
 
 # =============================================================================
+# Per-Channel / Per-Role Rhythm & INTRO Helpers
+# =============================================================================
+
+_CANONICAL_ROLES: Tuple[str, ...] = ("lead", "bass", "arpeggio", "echo", "harmony", "percussion")
+_ARPEGGIO_MARKERS: Tuple[str, ...] = ("arp", "bell", "ornament")
+
+
+def _resolve_semantic_instrument_role(
+    inst_def: AIInstrumentDef,
+    *,
+    is_16bit_bass: bool,
+    catalog: Optional[Any],
+) -> str:
+    """Resolve canonical musical role strictly from semantic metadata (never note durations).
+
+    Priority: ``catalog_id`` (``intended_roles`` / ``family``) -> explicit ``character`` ->
+    ``map_instrument_character`` fallback. Never uses ``inst_def.id == "echo"`` heuristics.
+    """
+    from atari_music.ai.composition import infer_character_from_id
+
+    char_str = (inst_def.character or "").strip().lower()
+    char_archetype = infer_character_from_id(char_str)
+    sem_tokens = " ".join(
+        s for s in (inst_def.character or "", inst_def.id or "", inst_def.name or "") if s
+    ).lower()
+
+    if inst_def.catalog_id and catalog is not None and catalog.has_profile(inst_def.catalog_id):
+        prof = catalog.get_profile(inst_def.catalog_id)
+        roles = tuple(r.lower() for r in prof.intended_roles)
+        fam = (prof.family or "").lower()
+        pid_lower = (prof.instrument_id or "").lower()
+
+        if "percussion" in roles or "rhythm" in roles or fam == "percussion":
+            return "percussion"
+        if "bass" in roles or fam == "bass":
+            return "bass"
+        if fam == "lead" or roles == ("melody",):
+            return "lead"
+        # Accompaniment / harmony catalog profiles preserve declared echo role when tagged.
+        if char_archetype == "echo":
+            return "echo"
+        if any(m in pid_lower or m in sem_tokens for m in _ARPEGGIO_MARKERS):
+            return "arpeggio"
+        return "harmony"
+
+    _, _, mapped_role = map_instrument_character(inst_def, is_16bit_bass)
+    if mapped_role == ChannelRole.PERCUSSION:
+        return "percussion"
+    if mapped_role == ChannelRole.BASS:
+        return "bass"
+    if mapped_role == ChannelRole.MELODY:
+        if any(m in char_str for m in _ARPEGGIO_MARKERS):
+            return "arpeggio"
+        return "lead"
+    if char_archetype == "echo":
+        return "echo"
+    if any(m in sem_tokens for m in _ARPEGGIO_MARKERS):
+        return "arpeggio"
+    return "harmony"
+
+
+def _build_instrument_role_lookup(doc: AICompositionDoc) -> Dict[str, str]:
+    """Map each declared ``inst.id`` in *doc* to its canonical semantic role."""
+    catalog: Optional[Any] = None
+    if any(inst.catalog_id for inst in doc.instruments):
+        try:
+            from atari_music.instruments.catalog import load_instrument_catalog
+
+            catalog = load_instrument_catalog()
+        except Exception:  # noqa: BLE001
+            catalog = None
+
+    return {
+        inst.id: _resolve_semantic_instrument_role(
+            inst,
+            is_16bit_bass=bool(doc.hardware.use_16bit_bass),
+            catalog=catalog,
+        )
+        for inst in doc.instruments
+    }
+
+
+def _longest_false_run(mask: Sequence[bool]) -> int:
+    best = 0
+    curr = 0
+    for flag in mask:
+        if flag:
+            if curr > best:
+                best = curr
+            curr = 0
+        else:
+            curr += 1
+    if curr > best:
+        best = curr
+    return best
+
+
+def _summarize_rhythm_bucket(
+    events: Sequence[Tuple[int, int, str]],
+    total_steps: int,
+    step_s: float,
+    short_thr: int,
+) -> Tuple[ChannelRhythmMetrics, List[bool], List[int]]:
+    """Compute all per-channel/per-role metrics from ``(onset_step, dur, role)`` tuples."""
+    mask = [False] * total_steps
+    durations: List[int] = []
+    raw_onsets: List[int] = []
+    role_active_masks: Dict[str, List[bool]] = {}
+    role_onsets: Dict[str, int] = {}
+
+    for onset, dur, role in events:
+        durations.append(dur)
+        raw_onsets.append(onset)
+        end = min(total_steps, onset + dur)
+        for t in range(max(0, onset), end):
+            mask[t] = True
+        if role:
+            rmask = role_active_masks.setdefault(role, [False] * total_steps)
+            for t in range(max(0, onset), end):
+                rmask[t] = True
+            role_onsets[role] = role_onsets.get(role, 0) + 1
+
+    notes_count = len(durations)
+    active_steps = sum(1 for v in mask if v)
+    duration_s = total_steps * step_s if total_steps > 0 else 0.0
+    notes_per_sec = (notes_count / duration_s) if duration_s > 0 else 0.0
+    avg_steps = (sum(durations) / notes_count) if notes_count > 0 else 0.0
+    med_steps = float(statistics.median(durations)) if notes_count > 0 else 0.0
+    short_ratio = (sum(1 for d in durations if d <= short_thr) / notes_count) if notes_count > 0 else 0.0
+
+    onset_steps = sorted(set(raw_onsets))
+    iois = [onset_steps[i + 1] - onset_steps[i] for i in range(len(onset_steps) - 1)]
+    if iois:
+        ioi_mean = sum(iois) / len(iois)
+        ioi_var = (statistics.pstdev(iois) / ioi_mean) if (len(iois) >= 2 and ioi_mean > 0) else 0.0
+    else:
+        ioi_mean = 0.0
+        ioi_var = 0.0
+
+    rest_ratio = (1.0 - (active_steps / total_steps)) if total_steps > 0 else 1.0
+    longest_silence = _longest_false_run(mask) if total_steps > 0 else 0
+    first_onset = onset_steps[0] if onset_steps else None
+    intro_delay_s = round(first_onset * step_s, 4) if first_onset is not None else None
+
+    roles_present = tuple(sorted(role_active_masks.keys()))
+    dominant_role: Optional[str] = None
+    if role_active_masks:
+        role_priority = {"lead": 5, "bass": 4, "percussion": 3, "arpeggio": 2, "harmony": 1}
+        dominant_role = max(
+            role_active_masks.keys(),
+            key=lambda r: (sum(1 for x in role_active_masks[r] if x), role_onsets.get(r, 0), role_priority.get(r, 0)),
+        )
+
+    return (
+        ChannelRhythmMetrics(
+            notes_count=notes_count,
+            active_steps=active_steps,
+            notes_per_sec=round(notes_per_sec, 4),
+            avg_note_steps=round(avg_steps, 4),
+            median_note_steps=round(med_steps, 4),
+            short_note_ratio=round(short_ratio, 4),
+            onset_interval_mean=round(ioi_mean, 4),
+            onset_interval_variation=round(ioi_var, 4),
+            rest_ratio=round(rest_ratio, 4),
+            longest_silence_steps=longest_silence,
+            first_onset_step=first_onset,
+            intro_delay_seconds=intro_delay_s,
+            dominant_role=dominant_role,
+            roles_present=roles_present,
+        ),
+        mask,
+        onset_steps,
+    )
+
+
+def _detect_intro_prefix(
+    doc: AICompositionDoc,
+    pat_map: Dict[str, AIPatternDef],
+) -> Tuple[Tuple[str, ...], int]:
+    """Identify leading contiguous INTRO patterns in playback order along ``doc.sequence``."""
+    if not doc.sequence:
+        return (), 0
+
+    explicit_roles: Dict[str, str] = {
+        p.id: (p.role or "").strip().lower() for p in doc.patterns if p.role
+    }
+    if doc.form_plan and doc.form_plan.sections:
+        for sec in doc.form_plan.sections:
+            if sec.pattern_id and sec.pattern_id not in explicit_roles and sec.role:
+                explicit_roles[sec.pattern_id] = sec.role.strip().lower()
+
+    deduced_labels: Optional[Dict[str, str]] = None
+
+    intro_pids: List[str] = []
+    intro_steps = 0
+    for pid in doc.sequence:
+        pat = pat_map.get(pid)
+        if pat is None:
+            continue
+        explicit = explicit_roles.get(pid)
+        if explicit is not None:
+            is_intro = explicit == "intro"
+        else:
+            if deduced_labels is None:
+                from atari_music.ai.structure_analysis import compare_patterns, deduce_musical_form
+
+                comps = {}
+                for i in range(len(doc.patterns)):
+                    for j in range(i + 1, len(doc.patterns)):
+                        p1, p2 = doc.patterns[i], doc.patterns[j]
+                        comps[(p1.id, p2.id)] = compare_patterns(p1, p2)
+                deduced_labels = deduce_musical_form(doc, comps).pattern_labels
+            is_intro = deduced_labels.get(pid) == "INTRO"
+        if not is_intro:
+            break
+        intro_pids.append(pid)
+        intro_steps += pat.length_steps
+
+    return tuple(intro_pids), intro_steps
+
+
+def _compute_channel_and_role_rhythm(
+    doc: AICompositionDoc,
+    pat_map: Dict[str, AIPatternDef],
+    total_steps: int,
+    frames_per_tick: int,
+) -> Tuple[
+    Dict[int, ChannelRhythmMetrics],
+    Dict[str, ChannelRhythmMetrics],
+    Optional[int],
+    IntroMelodyMetrics,
+]:
+    """Compute per-channel and per-role rhythm metrics respecting effective instrument inheritance."""
+    from atari_music.ai.prompt_library import recommended_steps_per_beat, short_step_threshold
+
+    step_s = frames_per_tick / 50.0
+    short_thr = short_step_threshold(recommended_steps_per_beat(doc.metadata.bpm))
+    inst_map = {inst.id: inst for inst in doc.instruments}
+    inst_roles = _build_instrument_role_lookup(doc)
+
+    # Pre-scan default known instrument per channel in sequence (then defined patterns)
+    channel_default_inst: Dict[int, Optional[str]] = {ch: None for ch in range(1, 5)}
+    ordered_scan_pats = [pat_map[pid] for pid in doc.sequence if pid in pat_map] + [
+        p for p in doc.patterns if p.id not in set(doc.sequence)
+    ]
+    for pat in ordered_scan_pats:
+        has_zero = any(str(k).strip() == "0" for k in pat.channels.keys())
+        for ch_key, ev_list in pat.channels.items():
+            ch_idx = normalize_channel_idx(ch_key, has_zero=has_zero)
+            if ch_idx in channel_default_inst and channel_default_inst[ch_idx] is None:
+                for ev in sorted(ev_list, key=lambda e: e.step):
+                    cand = (ev.instrument or "").strip()
+                    if cand in inst_map:
+                        channel_default_inst[ch_idx] = cand
+                        break
+
+    current_inst_by_ch: Dict[int, Optional[str]] = dict(channel_default_inst)
+    events_by_ch: Dict[int, List[Tuple[int, int, str]]] = {ch: [] for ch in range(1, 5)}
+    events_by_role: Dict[str, List[Tuple[int, int, str]]] = {r: [] for r in _CANONICAL_ROLES}
+    lead_steps_by_ch: Dict[int, Set[int]] = {ch: set() for ch in range(1, 5)}
+    lead_onsets_by_ch: Dict[int, int] = {ch: 0 for ch in range(1, 5)}
+
+    step_offset = 0
+    for pid in doc.sequence:
+        pat = pat_map.get(pid)
+        if not pat:
+            continue
+        has_zero = any(str(k).strip() == "0" for k in pat.channels.keys())
+        per_ch_evs: Dict[int, List[AIPatternChannelEvent]] = {ch: [] for ch in range(1, 5)}
+        for ch_key, ev_list in pat.channels.items():
+            ch_idx = normalize_channel_idx(ch_key, has_zero=has_zero)
+            if ch_idx in per_ch_evs:
+                per_ch_evs[ch_idx].extend(ev_list)
+
+        for ch_idx in range(1, 5):
+            for ev in sorted(per_ch_evs[ch_idx], key=lambda e: e.step):
+                raw_inst = (ev.instrument or "").strip()
+                if raw_inst and raw_inst in inst_map:
+                    current_inst_by_ch[ch_idx] = raw_inst
+                eff_inst = current_inst_by_ch[ch_idx]
+                eff_role = inst_roles.get(eff_inst, "lead") if eff_inst else "lead"
+
+                is_rest = (ev.note is None) or str(ev.note).upper() in ("---", "REST", "OFF", "SIL", "")
+                if is_rest or ev.step < 0 or ev.step >= pat.length_steps:
+                    continue
+
+                clipped_dur = max(1, min(int(ev.duration), pat.length_steps - int(ev.step)))
+                global_onset = step_offset + int(ev.step)
+                events_by_ch[ch_idx].append((global_onset, clipped_dur, eff_role))
+                events_by_role.setdefault(eff_role, []).append((global_onset, clipped_dur, eff_role))
+                if eff_role == "lead":
+                    lead_onsets_by_ch[ch_idx] += 1
+                    for t in range(global_onset, min(total_steps, global_onset + clipped_dur)):
+                        lead_steps_by_ch[ch_idx].add(t)
+
+        step_offset += pat.length_steps
+
+    channel_rhythm: Dict[int, ChannelRhythmMetrics] = {}
+    for ch_idx in range(1, 5):
+        metrics, _mask, _onsets = _summarize_rhythm_bucket(
+            events_by_ch[ch_idx], total_steps, step_s, short_thr
+        )
+        channel_rhythm[ch_idx] = metrics
+
+    role_rhythm: Dict[str, ChannelRhythmMetrics] = {}
+    role_masks: Dict[str, List[bool]] = {}
+    role_onsets: Dict[str, List[int]] = {}
+    for role in _CANONICAL_ROLES:
+        metrics, rmask, ronsets = _summarize_rhythm_bucket(
+            events_by_role.get(role, ()), total_steps, step_s, short_thr
+        )
+        role_rhythm[role] = metrics
+        role_masks[role] = rmask
+        role_onsets[role] = ronsets
+
+    lead_channel: Optional[int] = None
+    active_lead_chs = [ch for ch in range(1, 5) if lead_onsets_by_ch[ch] > 0]
+    if active_lead_chs:
+        lead_channel = max(
+            active_lead_chs,
+            key=lambda ch: (len(lead_steps_by_ch[ch]), lead_onsets_by_ch[ch], -ch),
+        )
+
+    intro_pids, intro_steps = _detect_intro_prefix(doc, pat_map)
+    lead_metrics = role_rhythm["lead"]
+    lead_mask = role_masks["lead"]
+    lead_onset_list = role_onsets["lead"]
+
+    first_in_intro: Optional[int] = None
+    intro_rest_ratio: Optional[float] = None
+    if intro_steps > 0:
+        in_intro = [s for s in lead_onset_list if s < intro_steps]
+        first_in_intro = in_intro[0] if in_intro else None
+        intro_active = sum(1 for v in lead_mask[:intro_steps] if v)
+        intro_rest_ratio = round(1.0 - (intro_active / intro_steps), 4)
+
+    intro_melody = IntroMelodyMetrics(
+        has_explicit_intro=bool(intro_pids),
+        intro_pattern_ids=intro_pids,
+        intro_total_steps=intro_steps,
+        first_melody_onset_step_in_intro=first_in_intro,
+        intro_melody_delay_steps=lead_metrics.first_onset_step,
+        intro_melody_delay_seconds=lead_metrics.intro_delay_seconds,
+        intro_melody_rest_ratio=intro_rest_ratio,
+    )
+
+    return channel_rhythm, role_rhythm, lead_channel, intro_melody
+
+
+# =============================================================================
 # Analysis Engine
 # =============================================================================
 
@@ -396,6 +784,10 @@ def analyze_composition(doc: AICompositionDoc) -> CompositionAnalysisReport:
     else:
         rhythmic_repetition = 1.0 if len(seq_patterns) == 1 else 0.0
 
+    channel_rhythm, role_rhythm, lead_channel, intro_melody = _compute_channel_and_role_rhythm(
+        doc, pat_map, total_steps, frames_per_tick
+    )
+
     rhythm = RhythmMetrics(
         total_notes=total_notes_count,
         total_active_steps=active_steps_global,
@@ -405,6 +797,10 @@ def analyze_composition(doc: AICompositionDoc) -> CompositionAnalysisReport:
         channel_activity=channel_activity,
         rest_ratio=round(rest_ratio, 4),
         rhythmic_repetition=round(rhythmic_repetition, 4),
+        channel_rhythm=channel_rhythm,
+        role_rhythm=role_rhythm,
+        lead_channel=lead_channel,
+        intro_melody=intro_melody,
     )
 
     # -------------------------------------------------------------------------

@@ -273,8 +273,9 @@ def _run_quality_passes(
     from atari_music.ai.critique import MusicalCritique
 
     passes = max(0, int(getattr(request, "quality_passes", 0) or 0))
+    rhythmic_density = getattr(request, "rhythmic_density", None)
     best_doc = initial_doc
-    best_critique = MusicalCritique.from_doc(best_doc)
+    best_critique = MusicalCritique.from_doc(best_doc, rhythmic_density=rhythmic_density)
     if history:
         history[-1].critique_score = best_critique.score
         history[-1].critique_findings = list(best_critique.findings)
@@ -324,7 +325,7 @@ def _run_quality_passes(
             continue
 
         cand_doc = validate_composition(cand_parsed if is_dsl_mode else cand_dict)
-        cand_critique = MusicalCritique.from_doc(cand_doc)
+        cand_critique = MusicalCritique.from_doc(cand_doc, rhythmic_density=rhythmic_density)
         history.append(
             CompositionAttempt(
                 attempt_number=attempt_no,

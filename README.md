@@ -19,9 +19,10 @@ The system separates **musical composition** (notes, rhythm, form, harmony) from
 4. [Composition Formats](#composition-formats)
 5. [Instrument System](#instrument-system)
 6. [Arrangement Workflow](#arrangement-workflow)
-7. [Export and Atari Playback](#export-and-atari-playback)
-8. [Architecture and Development](#architecture-and-development)
-9. [Related Documentation](#related-documentation)
+7. [Atari Music Composer Studio (GUI)](#atari-music-composer-studio-gui)
+8. [Export and Atari Playback](#export-and-atari-playback)
+9. [Architecture and Development](#architecture-and-development)
+10. [Related Documentation](#related-documentation)
 
 ---
 
@@ -59,6 +60,7 @@ Atari Music Composer targets the 4-channel monophonic **POKEY** chip (`AUDF1..AU
 * **AI-Assisted Composition (`ai-compose`)**: Uses `OpenAICompositionProvider` (supporting OpenAI, DeepSeek, or compatible endpoints) or a local deterministic `mock` provider to output canonical `AICompositionDoc` JSON or compact **Music DSL**, backed by a 3-tier validator (schema, musical grammar, POKEY hardware rules) and an automatic repair loop.
 * **SSOT Instrument Catalog & `POKEYRuntime`**: Curated instrument definitions and time-varying behaviors stored in [data/instruments/catalog.json](data/instruments/catalog.json) with stateless hardware/channel conflict checking.
 * **Decoupled Arrangement (`arrange`)**: Re-assigns POKEY channel instruments on existing JSON compositions (`AICompositionDoc` or `IRSong`) and exports WAV, MADS ASM, and Atari XEX outputs without modifying musical content or calling AI again.
+* **Atari Music Composer Studio (`atari-music-studio`)**: Optional PySide6 desktop application ([src/atari_music/studio/](src/atari_music/studio/__init__.py)) for opening `.json` and `.dsl` compositions, inspecting/reassigning SSOT catalog instruments per channel, rendering on-demand WAV previews, reverting edits, and exporting validated Atari `.xex` (and optional `.asm`) builds.
 * **Hardware-Accurate Audio Preview & 6502 Playback**: Frame-accurate Python WAV renderer and a relocatable pure MOS 6502 player (`src/atari_music/asm/player.asm` / `player.asm`) supporting both legacy v1 and macro-enabled v2 song formats.
 
 > **Stability note:** The CORE production pipeline (`compose`, `ai-compose`, `arrange`, `list-instruments`, `inspect-instrument`, `validate-instruments`, `import-json`, `import-dsl`, `export-mads`, `build-xex`, `analyze`) is covered by offline regression tests (`-m "core and not live"`). Research stage commands (`prepare-listening-test-9c`, `analyze-stage15`..`analyze-stage25`, etc.) and external archaeology sound-profile benchmarks are experimental research tools and are kept separate from the production workflow.
@@ -88,6 +90,9 @@ source .venv/bin/activate
 
 # Install the package in editable mode
 pip install -e .
+
+# Optional: include PySide6 dependencies for Atari Music Composer Studio GUI
+pip install -e ".[studio]"
 ```
 
 If you plan to use live AI generation (`openai` or `deepseek` providers) or run 6502 CPU emulation tests, ensure those optional runtime tools are also installed in your environment:
@@ -107,11 +112,12 @@ Core package dependencies declared in [pyproject.toml](pyproject.toml) and [requ
 * `pytest >= 7.0.0` — automated test runner
 * `python-dotenv >= 1.0.0` — `.env` configuration loading
 
-Optional/developer packages in `pyproject.toml` (`[project.optional-dependencies].dev`) and runtime integrations:
+Optional/developer packages in `pyproject.toml` (`[project.optional-dependencies]`) and runtime integrations:
 
+* `PySide6 >= 6.6.0` (`[studio]`) — desktop UI for `atari-music-studio` (`src/atari_music/studio/ui/`)
 * `openai` — required at runtime only when calling live LLM endpoints (`AIProviderDependencyError` is raised if missing)
 * `py65` — required for 6502 CPU emulation parity tests
-* `build`, `python-semantic-release` — packaging/release extras
+* `build`, `python-semantic-release` (`[dev]`) — packaging/release extras
 
 ### AI Provider & `.env` Configuration
 
@@ -156,7 +162,7 @@ Run commands either via the installed entry point `atari-music` or via module in
 python -m atari_music [OPTIONS] COMMAND [ARGS]...
 ```
 
-* `-v, --version`: Show package version and exit (`0.8.0`).
+* `-v, --version`: Show package version and exit (see [pyproject.toml](pyproject.toml), currently `0.13.0`).
 * `--env-file FILE`: Path to custom `.env` file (default `.env`).
 * `--log-level [debug|info|warning|error|critical]`: Override log level.
 * `--help`: Show all available commands (legacy and research subcommands are kept for backward compatibility).
@@ -170,7 +176,7 @@ Generate procedural 4-channel POKEY music via the public Music Generation API (`
 * **Options:**
   * `-p, --profile TEXT`: Stylistic profile (`title`, `exploration`, `action`, `funny`, `dungeon`, `ending`).
   * `-s, --seed INTEGER`: Deterministic RNG seed.
-  * `-k, --key TEXT`: Root pitch class (`C`, `D`, `E`, `F`, `G`, `A`, `B`, including sharps/flats supported by `VALID_ROOT_KEYS`).
+  * `-k, --key TEXT`: Root key (`C`, `D`, `E`, `F`, `G`, `A`, `B`).
   * `-t, --tempo INTEGER`: Tempo in BPM (`50..240`).
   * `-l, --length [short|medium|long]`: Target song duration bucket.
   * `--intensity FLOAT`, `-v, --variation FLOAT`: Musical expression controls (`0.0..1.0`).
@@ -210,6 +216,7 @@ Generate a declarative composition (`AICompositionDoc` JSON or Music DSL) using 
   * `--tempo-grid [describe|exact]`: Timing grid guidance mode in `rich` profile (`describe` default, or `exact` suggesting exact PAL grid BPMs).
   * `--plan-first / --no-plan-first`: Opt-in pre-composition `MusicalBrief` planning stage before writing notes.
   * `--quality-passes INTEGER`: Opt-in post-validation musical critique and revision passes (`0` default; keeps highest-scoring valid composition).
+  * `--rhythmic-density [low|medium|high|extreme]`: Opt-in rhythmic density target independent of nominal BPM (`None` by default, keeping classic/existing behavior byte-identical; evaluates lead phrasing, INTRO entry timing, and per-role metrics across `lead`, `bass`, `arpeggio`, `echo`, `harmony`, and `percussion`).
   * `--provider [mock|openai|deepseek]`: Override `AI_PROVIDER`.
   * `--model TEXT`: Override AI model name.
   * `--env-file FILE`: Override `.env` file path.
@@ -227,13 +234,13 @@ python -m atari_music ai-compose --provider mock --style "dark dungeon explorati
 # Generate compact Music DSL with catalog awareness enabled
 python -m atari_music ai-compose --provider mock --format dsl --use-instrument-catalog -o composition.dsl
 
-# Generate richer Music DSL using the 'rich' prompt profile, pre-composition brief, and 1 musical critique pass
+# Generate richer Music DSL using the 'rich' prompt profile, high rhythmic density, pre-composition brief, and 1 musical critique pass
 python -m atari_music ai-compose --format dsl --prompt-profile rich --style "boss fight" \
-  --key E --mode phrygian --bpm 125 --duration 40 --use-16bit-bass \
-  --tempo-grid exact --plan-first --quality-passes 1 -o boss.dsl
+  --key E --mode phrygian --bpm 140 --duration 40 --use-16bit-bass \
+  --rhythmic-density high --plan-first --quality-passes 1 -o boss.dsl
 
 # Benchmark classic vs rich prompt profiles across melodic, rhythmic, and structural metrics
-python scripts/benchmark_prompts.py --provider mock --runs 3
+python scripts/benchmark_prompts.py --provider mock --runs 3 --rhythmic-density high
 ```
 
 ---
@@ -377,7 +384,7 @@ Atari Music Composer uses three distinct representations across its pipeline:
 
 * **Syntax & size:** Plain directives and whitespace-separated note tokens (`PITCH/DURATION[:VOL]`) instead of nested JSON objects per note.
 * **Lossless compiler:** `parse_music_dsl()` ([src/atari_music/ai/dsl.py](src/atari_music/ai/dsl.py)) compiles `.dsl` directly into `AICompositionDoc` (reporting exact line/column `DSLSyntaxError` messages) and runs the same 3-tier validator. `export_music_dsl()` serializes `AICompositionDoc` back to `.dsl`.
-* **Current DSL v1 scope limits:** DSL syntax supports header directives (`TITLE`, `AUTHOR`, `KEY`, `MODE`, `BPM`, `CHANNELS`, `BASS 16BIT`, `LOOP`, `SEQUENCE`), `INSTRUMENT <id> character=<role> [dist=$XX] [att=N] [dec=N] [sus=N] [rel=N] [name="..."]`, `[PATTERN <id> length=N role=...]`, `CH1..CH4 <inst> V<vol>`, `<pitch>/<dur>[:<vol>]`, and rests (`R/<dur>` or `-/<dur>`). Comments start with `#` (keeping `#` inside pitches such as `C#4/4`). DSL does not natively encode Stage C/D `catalog_id` fields or `PROGRAM_CHANGE` events.
+* **Current DSL scope limits:** DSL syntax (`v1` and default `v1.1`, where explicit `[PATTERN <id> length=N]` is optional) supports header directives (`TITLE`, `AUTHOR`, `KEY`, `MODE`, `BPM`, `CHANNELS`, `BASS 16BIT`, `LOOP`, `SEQUENCE`), `INSTRUMENT <id> character=<role> [dist=$XX] [att=N] [dec=N] [sus=N] [rel=N] [name="..."]`, `[PATTERN <id> length=N role=...]`, `CH1..CH4 <inst> V<vol>`, `<pitch>/<dur>[:<vol>]`, and rests (`R/<dur>` or `-/<dur>`). Supported semantic `character=` archetypes include `bright_lead`, `dark_lead`, `soft_pad`, `bass`, `percussion`/`perc`/`noise`/`drum`/`snare`/`hihat`, `kick`/`tom`, `bell`/`arp`/`ornament`, `harmony`/`counter`, and `echo`/`delay` (classified as accompaniment rather than `lead` so delayed echoes do not inflate lead metrics). Comments start with `#` (keeping `#` inside pitches such as `C#4/4`). DSL does not natively encode Stage C/D `catalog_id` fields or `PROGRAM_CHANGE` events.
 
 ### Generating, Loading, and Using DSL with `arrange`
 
@@ -563,6 +570,27 @@ python generate_arrangements.py -i examples/songs/wybierak-2.dsl -o output/wybie
 
 ---
 
+## Atari Music Composer Studio (GUI)
+
+`Atari Music Composer Studio — Instrument Explorer` provides a PySide6 desktop interface layered cleanly over headless services ([src/atari_music/studio/](src/atari_music/studio/__init__.py)) that reuse the core arrangement, WAV synthesis, and XEX compilation pipeline:
+
+```bash
+# Install optional Qt UI dependency (if not already installed)
+pip install -e ".[studio]"
+
+# Launch the desktop Studio (optionally opening a .json or .dsl composition)
+atari-music-studio examples/songs/Vaults-of-Nhyrmeth.dsl
+# or:
+python -m atari_music.studio.ui.app examples/songs/Vaults-of-Nhyrmeth.dsl --catalog data/instruments/catalog.json
+```
+
+* **Non-destructive Loading & Revert:** Opens `AICompositionDoc` JSON, `IRSong` JSON, or Music DSL (`.dsl`) files via `load_studio_composition()`, detects hardware/channel configuration (`CH1+CH2` 16-bit pairing, `PROGRAM_CHANGE` fidelity checks), and restores the original snapshot with **Revert Original**.
+* **Channel Instrument Explorer & Validation:** Dynamically filters compatible SSOT catalog instruments per channel (`CH1..CH4`), exposes `--program-change-policy` (`preserve`/`replace`/`remove`) and `--player-version` (`auto`/`v1`/`v2`), and surfaces blocking POKEY errors or hardware warnings before rendering or exporting.
+* **Explicit Background Preview (`Render Preview`):** Synthesizes WAV previews on demand on a worker thread (no automatic re-rendering on selection changes), caches renders by configuration key (`RenderCacheKey`), and provides Play/Stop transport controls.
+* **Validated Atari XEX Export (`Export XEX...`):** Compiles `.xex` binaries (with optional companion MADS `.asm` saving) off the UI thread using `ExportService`, validating `player_address`, `music_address`, `$80..$F2` Zero Page base, toolchain paths (`mads`, `player.asm`), and `xex_layout.validate_xex_layout()`, with same-volume staging and rollback so failed exports preserve existing files.
+
+---
+
 ## Export and Atari Playback
 
 ### WAV Synthesis (`pokey_synth.py` / `pokey_hw.py`)
@@ -581,8 +609,8 @@ python generate_arrangements.py -i examples/songs/wybierak-2.dsl -o output/wybie
 * Compiled via MADS into standalone executables featuring PAL 50 Hz `RTCLOK` (`$14`) sync, ANTIC Mode 2 real-time clock + 4-channel horizontal VU display, and keyboard mute/resume toggle (`CH` `$02FC`).
 * **Relocatability:** User addresses default to `--player-address 0x6000`, `--music-address 0x8000`, and `--zp-base 0x80`. The player reserves 10 Zero Page bytes (`PLAYER_ZP_BASE + 0..9`, `$80..$89` by default, keeping screen display pointers at `$8A..$8D` separate).
 * **CPU instruction set:** Official MOS 6502 opcodes only (no 65C02/65816 instructions).
-* **Hard size and layout enforcement ([src/atari_music/xex_layout.py](src/atari_music/xex_layout.py), [docs/xex_memory_layout.md](docs/xex_memory_layout.md)):**
-  * **Player budget limit (`< 2048 bytes`):** Measured via `atari_music.stage15.measure_player_size` (`src/atari_music/asm/player.asm`, code + BSS state) at **1785 bytes** (`263 bytes` headroom under `2048 B`). The complete `.xex` file itself has no 2 KB cap.
+* **Hard size and layout enforcement ([src/atari_music/xex_layout.py](src/atari_music/xex_layout.py), [src/atari_music/player_budget.py](src/atari_music/player_budget.py), [docs/xex_memory_layout.md](docs/xex_memory_layout.md)):**
+  * **Player budget limit (`< 2048 bytes`):** Measured via `atari_music.player_budget.measure_player_size` (`src/atari_music/asm/player.asm`, code + BSS state) at **1785 bytes** (`263 bytes` headroom under `2048 B`). The complete `.xex` file itself has no 2 KB cap.
   * **Memory segment bounds:** All user load segments must lie strictly within **`$0400–$BFFF`** (`$A000–$BFFF` allowed intentionally; OS kernel `$C000–$CFFF`, hardware I/O `$D000–$DFFF`, OS ROM `$E000–$FFFF`, Zero Page, stack, and OS vectors are forbidden).
   * **Disjoint segments:** Overlapping XEX segments are rejected immediately (`xex_layout.validate_xex_file`).
 
@@ -606,6 +634,7 @@ src/atari_music/
 ├── pokey_hw.py              # Hardware-exact POKEY LFSRs, clocks & envelope state machine
 ├── pokey_synth.py           # 44.1 kHz WAV renderer (LFSRs, HPF XOR, 16-bit joining, DAC)
 ├── mads_exporter.py         # Relocatable SoA MADS exporter (Format v1 & Format v2 + validator)
+├── player_budget.py         # MADS compilation check enforcing < 2048 B player budget
 ├── xex_layout.py            # XEX parser and $0400-$BFFF disjoint segment layout verifier
 ├── asm/player.asm           # Relocatable MOS 6502 player (v1 + v2 macro & pitch engines)
 ├── instruments/             # Stage A-E SSOT instrument architecture
@@ -613,13 +642,18 @@ src/atari_music/
 │   ├── catalog.py           # InstrumentCatalog loader & integrity validator (data/instruments/catalog.json)
 │   ├── runtime.py           # Stateless POKEYRuntime capability & AUDCTL conflict checker
 │   └── planner.py           # Channel assignment, PROGRAM_CHANGE policy, v1/v2 resolution, arrange_ir_song
+├── studio/                  # Atari Music Composer Studio (headless services + optional PySide6 UI)
+│   ├── models.py / loader.py / instruments.py / renderer.py / exporter.py
+│   └── ui/                  # Optional PySide6 desktop GUI (atari-music-studio)
 ├── ai/                      # AI composition & analysis layer
 │   ├── schema.py            # AICompositionDoc v1 schema & ValidationReport
 │   ├── dsl.py               # Lossless Music DSL parser & serializer
 │   ├── validation.py        # 3-tier validator (schema, musical rules, hardware constraints)
 │   ├── composition.py       # AICompositionDoc -> MusicSong / IRSong compiler
+│   ├── prompts.py / prompt_library.py  # Classic & rich prompts, timing grid, rhythmic density targets
+│   ├── critique.py          # MusicalCritique & rhythmic-density scoring for --quality-passes
 │   ├── client.py            # AI retry/repair loop, composition loaders & build_xex_from_result()
-│   ├── analysis.py          # Musical/hardware metrics & SHA-256 composition_fingerprint()
+│   ├── analysis.py          # Musical/hardware metrics, per-role rhythm & SHA-256 fingerprint()
 │   ├── structure_analysis.py# Repetition ratio, motif reuse & formal structure deduction
 │   └── providers/           # MockAICompositionProvider & OpenAICompositionProvider
 └── sound_profiles/          # Legacy/research Stage 9 SoundProfileBank & binding loader
@@ -662,8 +696,8 @@ pytest -m "core and not live" -q
 # Run fast POKEY / IR / MADS / player.asm / XEX regression subset
 pytest -m "audio and not live" -q
 
-# Stage C/D/E + test suite generator tests specifically
-pytest tests/test_stage_c_player_v2_parity.py tests/test_stage_d_integration.py tests/test_stage_e_arrangement.py tests/test_generate_instrument_test_suite.py -v
+# Stage C/D/E + Studio + rhythmic-density regression tests
+pytest tests/test_stage_c_player_v2_parity.py tests/test_stage_d_integration.py tests/test_stage_e_arrangement.py tests/test_studio_vertical_slice.py tests/test_studio_xex_export.py tests/test_rhythmic_density.py -v
 ```
 
 ---

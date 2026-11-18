@@ -60,7 +60,8 @@ Instruments map to POKEY sound generator roles and timbres. Choose instruments t
 - "kick" / "tom": Poly4-based low percussive hit (use a low pitch).
 - "bell" / "ornament": Bright, staccato pure-tone accents, rapid arpeggios, and ornamental flourishes.
 - "harmony" / "counter": Counterpoint or harmonic support voice that dialogues with the lead.
-Use exactly one of these `character` words per instrument: bright_lead, dark_lead, soft_pad, bass, percussion, noise, drum, snare, hihat, kick, tom, bell, ornament, harmony, counter.
+- "echo": Delayed echo or softer repetition of the melody on an accompaniment channel (never use "bright_lead" for an echo voice).
+Use exactly one of these `character` words per instrument: bright_lead, dark_lead, soft_pad, bass, percussion, noise, drum, snare, hihat, kick, tom, bell, ornament, harmony, counter, echo.
 
 COMPOSITION HIERARCHY & FORM:
 Follow this priority order:
@@ -367,8 +368,8 @@ def get_system_prompt(request: Optional[CompositionRequest] = None) -> str:
 def get_user_prompt(request: CompositionRequest) -> str:
     """Dispatch user prompt according to ``request.prompt_profile`` and ``request.format``.
 
-    When ``prompt_profile='classic'`` and ``musical_brief`` is None, output is byte-for-byte
-    identical to ``build_user_prompt`` / ``build_dsl_user_prompt``.
+    When ``prompt_profile='classic'``, ``musical_brief`` is None, and ``rhythmic_density``
+    is None, output is byte-for-byte identical to ``build_user_prompt`` / ``build_dsl_user_prompt``.
     """
     fmt = getattr(request, "format", "json") or "json"
     profile = (getattr(request, "prompt_profile", "classic") or "classic").lower()
@@ -377,12 +378,20 @@ def get_user_prompt(request: CompositionRequest) -> str:
 
         return build_rich_user_prompt(request)
     base = build_dsl_user_prompt(request) if fmt == "dsl" else build_user_prompt(request)
+    extras: list[str] = []
+    density = getattr(request, "rhythmic_density", None)
+    if density:
+        from atari_music.ai.prompt_library import build_rhythmic_density_section
+
+        extras.append(build_rhythmic_density_section(request.bpm, density))
     brief = getattr(request, "musical_brief", None)
     if brief:
         from atari_music.ai.prompt_library import format_musical_brief_section
 
+        extras.append(format_musical_brief_section(brief))
+    if extras:
         body, _, closing = base.rpartition("\n\n")
-        return body + "\n\n" + format_musical_brief_section(brief) + "\n\n" + closing
+        return body + "\n\n" + "\n\n".join(extras) + "\n\n" + closing
     return base
 
 
