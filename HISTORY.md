@@ -2,6 +2,70 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-18] - Refactor Studio MainWindow to Tab-Based Workspace Layout
+
+Reorganized `MainWindow` into four ergonomic regions so `Render Preview`, `PresetBarWidget`, and `TransportBar` remain permanently visible across compact desktop resolutions (`900x680`, `1366x768`, `1120x1026`) without changing backend audio, comparison, preset, render queue, or XEX export logic.
+
+- Moved `Render Preview` (`_render_btn`) from [src/atari_music/studio/ui/transport_bar.py](src/atari_music/studio/ui/transport_bar.py) to the top Global Action Bar in [src/atari_music/studio/ui/main_window.py](src/atari_music/studio/ui/main_window.py) (`_set_render_enabled()`), keeping `TransportBar` dedicated to audio playback and sync status.
+- Replaced vertical widget stacking in [src/atari_music/studio/ui/main_window.py](src/atari_music/studio/ui/main_window.py) with `QTabWidget` (`_tabs`) containing 4 tabs wrapped in independent `QScrollArea` containers (`_wrap_scroll_tab()`): `Instruments` (default: metadata banner + scrollable CH1-CH4 `ChannelStripWidget` strips + `InstrumentCatalogInspector`), `A/B Comparison` (`ABComparisonPanel`), `Arrangement` (`_pc_policy_combo`, `_player_ver_combo`, `_target_combo`, `_arr_summary_label`), and `Diagnostics` (read-only `_refresh_diagnostics_tab()` summary + `QTextEdit` view, preserving `_diag_banner` alerts).
+- Updated `_render_btn` / layout assertions in [tests/test_studio_ui.py](tests/test_studio_ui.py) and [tests/test_studio_ab_ui.py](tests/test_studio_ab_ui.py), added `test_tab_workspace_layout_geometry_and_state_continuity` verifying multi-size geometry (`1366x768`, `1120x1026`, `900x680`) and playback/A/B state persistence across tabs, and documented the layout in [README.md](README.md).
+
+## [2026-11-18] - Finalize Phase 3 Stage 4.4 Validation, Regression & Documentation
+
+Completed architecture audit, edge-case coverage, user documentation, and Windows manual GUI/audio verification guide for Phase 3 (A/B Comparison & PCM Transport).
+
+- Added `test_ab_preset_apply_live_composition_swap_and_render_failure_isolation` in [tests/test_studio_ab_ui.py](tests/test_studio_ab_ui.py) covering `PresetBarWidget` `Apply` synchronization, blocking error render refusal, failure isolation during `Listen B`, and live background worker invalidation across composition reloads without clearing global cache.
+- Created [docs/studio-ab-manual-test.md](docs/studio-ab-manual-test.md) with all 8 Windows GUI/WASAPI manual verification scenarios (`PASS`/`FAIL` checkboxes left unchecked for user sign-off).
+- Documented A/B Comparison, PCM Transport (`MM:SS / MM:SS`, Pause/Resume/Seek), shared cache, serialized queue, slot statuses (`Empty`, `Not rendered`, `Ready`, `Outdated`), position preservation, and stale Editor Preview behavior in [README.md](README.md).
+
+## [2026-11-18] - Integrate A/B Comparison, Shared Cache, and Serialized Render Queue in MainWindow (Phase 3 Stage 4.3)
+
+Connected `ABComparisonPanel`, `ComparisonSession`, `RenderService` cache, and state-preserving `TransportBar` inside `MainWindow` with strict separation between Editor preview and active A/B listening.
+
+- Updated [src/atari_music/studio/ui/main_window.py](src/atari_music/studio/ui/main_window.py) to mount `ABComparisonPanel` below `PresetBarWidget`, manage `ComparisonSession` lifecycle on composition load/close, separate `_last_rendered_entry` (Editor Preview) from `_active_listen_entry` and `_active_listen_slot`, route Editor / A / B renders through a single serialized `_RenderJob` FIFO queue (max 1 active `RenderWorker`), protect against stale composition generations and outdated slot keys (including `B1 -> B2 -> B1`), and roll back active listen slot if WAV switching fails.
+- Added [tests/test_studio_ab_ui.py](tests/test_studio_ab_ui.py) (`test_ab_panel_placement_save_load_validation_and_preset_sync`, `test_ab_unified_serialized_render_queue_cache_and_identical_variants`, `test_ab_stale_worker_results_generation_and_b1_b2_b1_recovery`, `test_ab_listen_switch_state_preservation_and_entry_separation`, `test_ab_composition_reload_and_window_close_worker_teardown`).
+
+## [2026-11-18] - Add Pause Preparation and State-Preserving WAV Switching (Phase 3 Stage 4.2)
+
+Implemented zero-click `prepare_paused_at()` on `StudioAudioPlayer` and state/position-preserving `switch_wav_preserving_state()` on `TransportBar` prior to A/B `MainWindow` wiring.
+
+- Updated [src/atari_music/studio/ui/audio_player.py](src/atari_music/studio/ui/audio_player.py) with `StudioAudioPlayer.prepare_paused_at(position_ms)` (aligns PCM stream cursor to full frame boundary, resets sink without calling `backend.start()`, sets `_pending_restart_from_pause=True` for clean `resume()`, works cleanly with `seek()`/`stop()`/`release()`), `has_output_device()`, and `(wave.Error, EOFError)` handling in `load_wav_pcm()` for short truncated/corrupt files.
+- Updated [src/atari_music/studio/ui/transport_bar.py](src/atari_music/studio/ui/transport_bar.py) with `switch_wav_preserving_state(wav_path, *, auto_play_if_stopped=True)` (preflight-validates candidate WAV and audio device before disturbing active playback; preserves Playing with clamped `min(prev_pos, max(0, dur - 100))`, preserves Paused via `prepare_paused_at()` without starting audio hardware, resets EOF to `0 ms` Stopped, resets Stopped to `0 ms` without carrying over stopped seek cursors, and avoids duplicate signal bounces via `_suppress_player_updates` and `QSignalBlocker`).
+- Added deterministic tests `test_prepare_paused_at_never_starts_sink_aligns_resumes_and_cleans_up` in [tests/test_studio_playback.py](tests/test_studio_playback.py) and `test_transport_bar_switch_wav_preserving_state_all_scenarios` in [tests/test_studio_ui.py](tests/test_studio_ui.py).
+
+## [2026-11-18] - Add Presentational ABComparisonPanel Widget (Phase 3 Stage 4.1)
+
+Implemented standalone presentational A/B Comparison UI widget isolated from session, render queue, and audio ownership prior to Stage 4.2/4.3 wiring.
+
+- Created [src/atari_music/studio/ui/ab_panel.py](src/atari_music/studio/ui/ab_panel.py) (`ABComparisonPanel`, `_ComparisonSlotCard`, `_format_variant_summary`, `_render_status_badge`) presenting independent Variant A/B status cards (`Empty`, `Not rendered`, `Ready`, `Outdated`, `Rendering...`, `Queued`), editor match indicators, blocking arrangement error banners, `LISTENING` highlight, `Switch A/B` control, and intent signals (`save_slot_requested`, `load_slot_requested`, `render_slot_requested`, `listen_slot_requested`, `switch_ab_requested`).
+- Registered `studio/ui/ab_panel` in `STUDIO_UI_MODULES` in [tests/test_architecture_boundaries.py](tests/test_architecture_boundaries.py).
+- Added pure UI state/signal tests (`test_ab_comparison_panel_presentation_states_and_signals`) in [tests/test_studio_ui.py](tests/test_studio_ui.py).
+
+## [2026-11-18] - Integrate StudioAudioPlayer into Studio TransportBar (Phase 3 Stage 3)
+
+Replaced `QMediaPlayer` / `QAudioOutput` in `TransportBar` with the Stage 2 `StudioAudioPlayer` PCM backend while preserving existing render sync/transport contracts and isolating UI tests from physical audio hardware.
+
+- Updated [src/atari_music/studio/ui/transport_bar.py](src/atari_music/studio/ui/transport_bar.py) with `format_time_ms()` (`MM:SS / MM:SS`, supporting tracks `> 59` min), Play / Pause-Resume / Stop controls, `QSlider` seek scrubbing (separating drag preview on `sliderMoved` from single commit on `sliderReleased` without fighting backend position updates), EOF end-of-track handling, readable error reporting, `audio_backend`/`audio_player` injection, and `shutdown()` / `closeEvent()` signal detachment & release.
+- Updated [src/atari_music/studio/ui/main_window.py](src/atari_music/studio/ui/main_window.py) to forward optional `audio_backend` to `TransportBar`, call `shutdown()` on `closeEvent()`, and order `_on_render_finished()` / `_on_render_failed()` so `_reevaluate_and_refresh_ui()` neither hides audio/render errors nor clobbers existing loaded playback buffers on failed re-renders.
+- Added hardware-free `_FakeUiAudioBackend` integration and UI tests in [tests/test_studio_ui.py](tests/test_studio_ui.py) covering Play/Pause/Resume/Stop/Seek, drag vs tick isolation, >59-min time formatting, EOF, error display, failed re-render preservation, re-render replacement, and close teardown.
+
+## [2026-11-18] - Implement Studio Phase 3 Stage 2 Standalone PCM Audio Playback Engine
+
+Implemented standalone in-memory PCM playback backend (`StudioAudioPlayer` built strictly on `QAudioSink`, `DualPcmStreamDevice(QIODevice)`, and stdlib `wave`, zero `QMediaPlayer` or external audio deps), isolated prior to UI integration.
+
+- Created [src/atari_music/studio/ui/audio_player.py](src/atari_music/studio/ui/audio_player.py) with `AudioPlaybackError`, `PcmFormatSpec`, `WavPcmData`, `load_wav_pcm()` (immediate file handle release + RIFF `data` chunk frame-alignment validation), `convert_pcm_data()` (stdlib 8/16/24/32-bit PCM & linear resampling fallback), `negotiate_device_format()` (zero-copy when `QAudioDevice.isFormatSupported()` succeeds), `DualPcmStreamDevice` (opened `ReadOnly | Unbuffered`, mutex-guarded frame-aligned seeks/reads), `QtAudioSinkBackend` (using `QtAudio` enums with PySide6 6.12 `QAudioSink.error()`/`state()` parity), and `StudioAudioPlayer` (`load`, `play`, `pause`, `resume`, `stop`, `seek`, `position()`, `processed_position()`, `read_position()`, confirmed `IdleState` EOF, `release`).
+- Registered `studio/ui/audio_player` under `STUDIO_UI_MODULES` in [tests/test_architecture_boundaries.py](tests/test_architecture_boundaries.py).
+- Added deterministic `FakeAudioSinkBackend` unit tests and real `QAudioSink` integration tests in [tests/test_studio_playback.py](tests/test_studio_playback.py) plus manual Windows WASAPI test checklist in [docs/studio-playback-manual-test.md](docs/studio-playback-manual-test.md).
+
+## [2026-11-18] - Implement Atari Music Composer Studio Phase 2 (Presets Service & Preset UI)
+
+Added persistent arrangement presets (`Save`, `Load`, `Apply`, `Rename`, `Delete`) using schema `atari-music/arrangement-preset/1` stored atomically under `~/.atari_music_studio/presets/` while preserving immutable baseline compositions, strict `Load` vs `Apply` separation, CH2 16-bit bass locking, and zero auto-rendering.
+
+- Added `PRESET_SCHEMA_ID`, `ArrangementPreset` (reusing `StudioArrangementConfig`), `PresetRecord`, `PresetScanIssue`, `PresetScanResult`, and `PresetApplyResult` in [src/atari_music/studio/models.py](src/atari_music/studio/models.py).
+- Created PySide6-free preset serialization, storage, and application service in [src/atari_music/studio/presets.py](src/atari_music/studio/presets.py) (`PresetError` error codes, `preset_slug`, `parse_preset_json`, `serialize_preset_json`, `PresetRepository` with atomic same-directory temp writes, path/symlink boundary guards, overwrite `created_at` preservation, rollback-protected rename, and `apply_preset_to_state`); re-exported in [src/atari_music/studio/__init__.py](src/atari_music/studio/__init__.py).
+- Added [src/atari_music/studio/ui/preset_bar.py](src/atari_music/studio/ui/preset_bar.py) (`PresetBarWidget`, `SavePresetDialog`) and integrated it into `MainWindow` in [src/atari_music/studio/ui/main_window.py](src/atari_music/studio/ui/main_window.py) with persistent invalid-file warnings, overwrite/delete confirmations, `OUTDATED PREVIEW` sync without auto-render, and zero changes to `renderer.py`, `loader.py`, `instruments.py`, or `exporter.py`.
+- Registered `studio/presets` in `CORE_MODULES` and `studio/ui/preset_bar` in `STUDIO_UI_MODULES` in [tests/test_architecture_boundaries.py](tests/test_architecture_boundaries.py), added comprehensive unit/integration/UI tests in [tests/test_studio_presets.py](tests/test_studio_presets.py) and [tests/test_studio_ui.py](tests/test_studio_ui.py), and documented Phase 2 presets in [README.md](README.md).
+
 ## [2026-11-18] - Add Opt-In Rhythmic Density Control (`--rhythmic-density`) to AI Composer
 
 Added opt-in `--rhythmic-density low|medium|high|extreme` control (independent of `--bpm`, without aliasing `--energy`) plus per-channel/per-role rhythmic and INTRO delay analytics while preserving byte-for-byte identical default behavior when unset.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -17,6 +18,9 @@ from atari_music.ir import IRSong
 from atari_music.music_ir import MusicSong
 
 StudioTargetName = Literal["xex_v2", "xex_v1", "wav"]
+VariantSlot = Literal["A", "B"]
+VariantRenderStatus = Literal["empty", "not_rendered", "ready", "outdated"]
+PRESET_SCHEMA_ID = "atari-music/arrangement-preset/1"
 
 
 def parse_atari_address(raw: str | int | bool, *, label: str = "address") -> int:
@@ -322,3 +326,110 @@ class XexExportResult:
     zp_base: int
     segments: Tuple[Tuple[int, int, str], ...]
     warnings: Tuple[str, ...] = ()
+
+
+class ArrangementPreset(BaseModel):
+    """Persistent Studio arrangement preset (schema ``atari-music/arrangement-preset/1``)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_id: Literal["atari-music/arrangement-preset/1"] = PRESET_SCHEMA_ID
+    name: str
+    description: Optional[str] = Field(default=None, max_length=500)
+    arrangement: StudioArrangementConfig = Field(default_factory=StudioArrangementConfig)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("Preset name must be a string.")
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Preset name cannot be empty.")
+        if len(cleaned) > 80:
+            raise ValueError("Preset name cannot exceed 80 characters.")
+        if any(ord(ch) < 32 or ord(ch) == 127 for ch in cleaned):
+            raise ValueError("Preset name cannot contain control characters.")
+        return cleaned
+
+    @field_validator("description")
+    @classmethod
+    def _normalize_description(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("Preset description must be a string.")
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if any((ord(ch) < 32 and ch not in ("\n", "\r", "\t")) or ord(ch) == 127 for ch in cleaned):
+            raise ValueError("Preset description cannot contain control characters.")
+        return cleaned
+
+
+@dataclass(frozen=True)
+class PresetRecord:
+    """Validated arrangement preset paired with its storage identity and file path."""
+
+    preset_id: str
+    path: Path
+    preset: ArrangementPreset
+
+
+@dataclass(frozen=True)
+class PresetScanIssue:
+    """Diagnostic record for a malformed or unsupported preset file in storage."""
+
+    path: Path
+    code: str
+    message: str
+
+
+@dataclass(frozen=True)
+class PresetScanResult:
+    """Result of scanning a presets directory without failing on individual bad files."""
+
+    presets: Tuple[PresetRecord, ...] = ()
+    errors: Tuple[PresetScanIssue, ...] = ()
+
+
+@dataclass(frozen=True)
+class PresetApplyResult:
+    """Result of explicitly applying an ``ArrangementPreset`` to Studio state."""
+
+    preset: ArrangementPreset
+    config: StudioArrangementConfig
+    evaluation: ArrangementEvaluation
+
+
+@dataclass(frozen=True)
+class ComparisonVariant:
+    """Immutable snapshot of one A/B comparison arrangement slot."""
+
+    slot: VariantSlot
+    config: StudioArrangementConfig
+    label: str = "Editor"
+    rendered_entry: Optional[CachedRenderEntry] = None
+
+
+@dataclass(frozen=True)
+class ComparisonSlotStatus:
+    """Resolved status summary for one A/B comparison slot."""
+
+    slot: VariantSlot
+    render_status: VariantRenderStatus
+    variant: Optional[ComparisonVariant] = None
+    active_listen: bool = False
+    matches_editor: bool = False
+    is_valid_arrangement: Optional[bool] = None
+    blocking_errors: Tuple[str, ...] = ()
+
+    @property
+    def can_listen(self) -> bool:
+        return self.render_status == "ready" and self.variant is not None and self.variant.rendered_entry is not None
+
+    @property
+    def can_render(self) -> bool:
+        return self.variant is not None and self.is_valid_arrangement is True

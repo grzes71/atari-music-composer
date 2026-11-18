@@ -75,6 +75,8 @@ CORE_MODULES: Set[str] = {
     "studio/instruments",
     "studio/renderer",
     "studio/exporter",
+    "studio/presets",
+    "studio/comparison",
 }
 
 #: Optional PySide6 UI modules: excluded from CORE_MODULES so headless CORE modules never
@@ -87,6 +89,9 @@ STUDIO_UI_MODULES: Set[str] = {
     "studio/ui/instrument_picker",
     "studio/ui/transport_bar",
     "studio/ui/main_window",
+    "studio/ui/preset_bar",
+    "studio/ui/ab_panel",
+    "studio/ui/audio_player",
     "studio/ui/xex_export_dialog",
 }
 
