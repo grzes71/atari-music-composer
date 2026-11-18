@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.15.0 (2026-11-18)
+
+### Features
+
+- **ai**: Add rhythmic density control and separate perc/echo role analysis
+  ([`5130a92`](https://github.com/grzes71/atari-music-composer/commit/5130a923f2778b1440e81b6c18c01ba43f363245))
+
+
 ## v0.14.0 (2026-11-18)
 
 ### Features
