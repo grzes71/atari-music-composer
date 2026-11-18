@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.13.0 (2026-11-18)
+
+### Features
+
+- **studio**: Implement Phase 1 instrument explorer GUI and headless backend
+  ([`7f05e2f`](https://github.com/grzes71/atari-music-composer/commit/7f05e2f2279b3a49c6b43b29d8fefeeafd0d6101))
+
+
 ## v0.12.0 (2026-11-17)
 
 ### Bug Fixes
