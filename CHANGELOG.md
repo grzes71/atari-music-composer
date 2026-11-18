@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.16.0 (2026-11-18)
+
+### Features
+
+- **studio**: Add presets, A/B comparison, PCM playback, and tabbed UI
+  ([`812923e`](https://github.com/grzes71/atari-music-composer/commit/812923e094e36019757f50fa2d16ddec75b4a9e5))
+
+
 ## v0.15.0 (2026-11-18)
 
 ### Features
