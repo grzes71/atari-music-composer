@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.17.0 (2026-11-19)
+
+### Features
+
+- **xex-v2**: Promote runtime contracts, fix harness VU meter, and add py65/Altirra XEX verification
+  ([`6fe935c`](https://github.com/grzes71/atari-music-composer/commit/6fe935cf8d5a4f3c6b2e6b7b27d40abd24a6dcef))
+
+
 ## v0.16.0 (2026-11-18)
 
 ### Features
