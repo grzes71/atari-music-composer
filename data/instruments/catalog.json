@@ -216,7 +216,7 @@
       "version": "1.0",
       "family": "lead",
       "intended_roles": ["melody"],
-      "base_distortion": 64,
+      "base_distortion": 160,
       "envelope": {
         "attack_frames": 0,
         "decay_frames": 4,
@@ -224,7 +224,7 @@
         "release_frames": 2,
         "peak_vol": 15
       },
-      "waveform_family": "poly5_4",
+      "waveform_family": "pure",
       "hardware_constraints": {
         "divider_mode": "8bit",
         "preferred_clock_hz": "64khz",
@@ -237,7 +237,7 @@
       "behavior_id": "beh_octave_pulse_v1",
       "provenance": {
         "source_kind": "curated_preset",
-        "notes": "Derived from Lead Library v0.1 c1_octave_pulse experiment ($40 + MOD_OCTAVE_PULSE)."
+        "notes": "Derived from Lead Library v0.1 c1_octave_pulse experiment ($A0 pure tone + MOD_OCTAVE_PULSE; corrected from $40 poly5-gated poly4 which produces unpitched 465-tick LFSR noise and stalls on real POKEY hardware at 64 kHz)."
       }
     },
     {

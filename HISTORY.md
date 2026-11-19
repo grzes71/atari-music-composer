@@ -2,6 +2,13 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-19] - Fix `lead_c1_octave_pulse` Catalog Distortion & Add Spectral/Hardware Regression Suite
+
+Resolved noise/crackling/random-tone playback on `lead_c1_octave_pulse` caused by real POKEY `$40` (`POLY5_GATED_POLY4`) LFSR subharmonic collapse and stalls at standard 64 kHz 8-bit dividers.
+
+- Updated `lead_c1_octave_pulse` in [data/instruments/catalog.json](data/instruments/catalog.json) from `base_distortion: 64` (`$40`, `waveform_family: "poly5_4"`) to `base_distortion: 160` (`$A0`, `waveform_family: "pure"`) while preserving `beh_octave_pulse_v1` (`MOD_OCTAVE_PULSE` 25 Hz `N`/`N//2` alternation), `core_v1` compatibility, 8-bit `AUDCTL=$00` constraints, envelope parameters, and all unrelated instruments.
+- Added [tests/test_lead_c1_octave_pulse_regression.py](tests/test_lead_c1_octave_pulse_regression.py) (`core`, `audio`) verifying the catalog contract, bit-exact `$D200–$D208` parity across `compile_ir_to_pokey_frames`, `frame_simulator`, and real MADS XEX v2 `py65` execution on independent CH1/CH2 (including rests and 16-bit pairing refusal), WAV preview melodic pitch/octave harmonicity (`pokey_synth`), and real POKEY silicon emulation via `ASAP 8.0.0`.
+
 ## [2026-11-19] - XEX v2 Stage 2: Real XEX py65 Execution, Harness VU Fix, AltirraSDL Verification & Hardware Audit
 
 Implemented end-to-end verification of production-generated Atari `.xex` files (v1 and v2), fixed the standalone harness VU meter for v2 macro volume overrides, added optional full-system AltirraSDL PAL 800XL verification, and documented the Atari XL/XE hardware and memory safety audit.
