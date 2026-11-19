@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
 
@@ -31,9 +32,14 @@ from atari_music.ir import (
     IRNote,
     IRPattern,
     IRSong,
+    resolve_audctl_mode,
     resolve_initial_channel_instruments,
     song_requires_v2,
 )
+
+logger = logging.getLogger(__name__)
+
+LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION = "LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION"
 
 PlayerVersionChoice = Literal["auto", "v1", "v2"]
 ProgramChangePolicy = Literal["preserve", "replace", "remove"]
@@ -551,6 +557,94 @@ def composition_musical_fingerprint(song: IRSong) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _format_legacy_vibrato_diagnostic(
+    channel: Optional[int],
+    inst: IRInstrument,
+) -> RuntimeDiagnostic:
+    """Build a structured warning explaining why legacy v1 vibrato was cleared on v2 promotion."""
+    params: List[str] = []
+    if inst.vibrato_depth != 0:
+        params.append(f"vibrato_depth={inst.vibrato_depth}")
+    if inst.vibrato_speed != 0:
+        params.append(f"vibrato_speed={inst.vibrato_speed}")
+    param_str = ", ".join(params) or "vibrato"
+    ch_label = f"channel {channel}" if channel is not None else "unassigned channel"
+    return RuntimeDiagnostic(
+        severity="WARNING",
+        code=LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION,
+        message=(
+            f"{ch_label} instrument {inst.name!r} had legacy vibrato ({param_str}) cleared during "
+            "v1-to-v2 promotion: delayed vibrato is not supported by v2 Iter 1 player/exporter "
+            "(deferred to v2 Iter 2)"
+        ),
+        channel=channel,
+        instrument_id=inst.profile_id or inst.name,
+    )
+
+
+def detect_v2_vibrato_promotion_diagnostics(
+    base_song: IRSong,
+    arranged_song: IRSong,
+    *,
+    assigned_channels: Optional[Mapping[int, str]] = None,
+    effective_format_version: Optional[int] = None,
+) -> Tuple[RuntimeDiagnostic, ...]:
+    """Return promotion warnings for untouched v1 channels whose legacy vibrato was cleared for v2."""
+    is_v2 = (
+        effective_format_version == 2
+        if effective_format_version is not None
+        else bool(song_requires_v2(arranged_song))
+    )
+    if not is_v2:
+        return ()
+
+    assigned_set = set(assigned_channels.keys()) if assigned_channels else set()
+    base_by_id = {inst.id: inst for inst in base_song.instruments}
+    arr_by_id = {inst.id: inst for inst in arranged_song.instruments}
+    base_init = resolve_initial_channel_instruments(base_song)
+    arr_init = resolve_initial_channel_instruments(arranged_song)
+
+    diags: List[RuntimeDiagnostic] = []
+    seen_keys: set[Tuple[int, str]] = set()
+    for ch in range(1, 5):
+        if ch in assigned_set:
+            continue
+        base_ch_insts: List[IRInstrument] = []
+        arr_ch_insts: List[IRInstrument] = []
+        for pat_b, pat_a in zip(base_song.patterns, arranged_song.patterns):
+            notes_b = pat_b.tracks.get(ch, ())
+            notes_a = pat_a.tracks.get(ch, ())
+            for nb, na in zip(notes_b, notes_a):
+                if nb.is_rest:
+                    continue
+                ib = base_by_id.get(nb.instrument_id)
+                ia = arr_by_id.get(na.instrument_id)
+                if ib is not None and ia is not None:
+                    base_ch_insts.append(ib)
+                    arr_ch_insts.append(ia)
+        if not base_ch_insts:
+            b_idx = base_init.get(ch)
+            a_idx = arr_init.get(ch)
+            if (
+                b_idx is not None
+                and a_idx is not None
+                and 0 <= b_idx < len(base_song.instruments)
+                and 0 <= a_idx < len(arranged_song.instruments)
+            ):
+                base_ch_insts.append(base_song.instruments[b_idx])
+                arr_ch_insts.append(arranged_song.instruments[a_idx])
+
+        for ib, ia in zip(base_ch_insts, arr_ch_insts):
+            if (ib.vibrato_depth != 0 or ib.vibrato_speed != 0) and (
+                ia.vibrato_depth == 0 and ia.vibrato_speed == 0
+            ):
+                key = (ch, ib.name)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    diags.append(_format_legacy_vibrato_diagnostic(ch, ib))
+    return tuple(diags)
+
+
 def arrange_ir_song(
     song: IRSong,
     *,
@@ -559,14 +653,23 @@ def arrange_ir_song(
     catalog: Optional[InstrumentCatalog] = None,
     catalog_path: Optional[Path] = None,
     player_version: str = "auto",
+    target: Optional[TargetCapability] = None,
 ) -> Tuple[IRSong, Optional[RuntimeResolutionReport]]:
     """Return a deep-copied *song* with channel instrument overrides applied without mutating input.
 
     Unassigned channels keep their original instruments and ``PROGRAM_CHANGE`` events.
     Assigned channels follow ``program_change_policy`` (``preserve``, ``replace``, ``remove``).
+    When an arrangement is promoted to format v2 Iter 1 and untouched v1 channels carry legacy
+    vibrato fields unsupported by v2 Iter 1, those fields are cleared with an explicit
+    ``LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION`` warning diagnostic rather than silently discarded.
     """
     ver_choice = normalize_player_version(player_version)
     policy = normalize_program_change_policy(program_change_policy)
+    if target is not None and target.song_format_version == 1 and ver_choice == "v2":
+        raise InstrumentPlanError(
+            f"target backend {target.backend!r} supports only format v1 and cannot be combined with player_version='v2'",
+            code="TARGET_FORMAT_CONFLICT",
+        )
     base = song.model_copy(deep=True)
 
     assigned: Dict[int, str] = {}
@@ -733,7 +836,14 @@ def arrange_ir_song(
     )
     est_requires_v2 = has_v2_beh or has_any_pc or has_multi_inst_ch or (len(used_tokens) > 4)
 
-    runtime_target = TARGET_V1_XEX if (ver_choice == "v1" or (ver_choice == "auto" and not est_requires_v2)) else TARGET_V2_ITER1_XEX
+    if target is not None:
+        runtime_target = target
+    else:
+        runtime_target = (
+            TARGET_V1_XEX
+            if (ver_choice == "v1" or (ver_choice == "auto" and not est_requires_v2))
+            else TARGET_V2_ITER1_XEX
+        )
     requests = [
         ChannelAssignmentRequest(channel=ch, instrument_ids=tuple(cids))
         for ch, cids in ch_catalog_profiles.items()
@@ -752,7 +862,26 @@ def arrange_ir_song(
             diagnostics=rt_report.diagnostics,
         )
 
-    # Materialize compact IRInstrument list (0..K-1)
+    # Track which channels reference each untouched original token for accurate diagnostics
+    orig_token_channels: Dict[Tuple[str, Any], List[int]] = {}
+    for ch in range(1, 5):
+        for pat in base.patterns:
+            for orig_n, tok, pc_toks in pattern_token_tracks[pat.id].get(ch, ()):
+                if not orig_n.is_rest and tok[0] == "orig":
+                    ch_list = orig_token_channels.setdefault(tok, [])
+                    if ch not in ch_list:
+                        ch_list.append(ch)
+                for p_t in pc_toks:
+                    if p_t[0] == "orig":
+                        ch_list = orig_token_channels.setdefault(p_t, [])
+                        if ch not in ch_list:
+                            ch_list.append(ch)
+    for ch in range(1, 5):
+        init_tok = ch_init_token[ch]
+        if init_tok[0] == "orig" and init_tok not in orig_token_channels:
+            orig_token_channels.setdefault(init_tok, []).append(ch)
+
+    # Materialize compact IRInstrument list (0..K-1), preserving vibrato until final format is known
     token_to_new_id: Dict[Tuple[str, Any], int] = {}
     final_instruments: List[IRInstrument] = []
     for new_id, tok in enumerate(used_tokens):
@@ -762,12 +891,7 @@ def arrange_ir_song(
             final_instruments.append(IRInstrument.from_catalog_profile(new_id, prof, beh))
         else:
             oi = orig_inst_by_idx[tok[1]].model_copy(deep=True)
-            updates: Dict[str, Any] = {"id": new_id}
-            # v2 Iter 1 exporter refuses legacy vibrato on untouched v1 channels when promoted to v2
-            if est_requires_v2 and (oi.vibrato_depth != 0 or oi.vibrato_speed != 0):
-                updates["vibrato_depth"] = 0
-                updates["vibrato_speed"] = 0
-            final_instruments.append(oi.model_copy(update=updates))
+            final_instruments.append(oi.model_copy(update={"id": new_id}))
 
     for pat in base.patterns:
         new_tracks: Dict[int, List[IRNote]] = {}
@@ -814,11 +938,48 @@ def arrange_ir_song(
         candidate = candidate_no_init
 
     final_reasons = song_requires_v2(candidate)
-    if ver_choice == "v1" and final_reasons:
+    if (ver_choice == "v1" or (target is not None and target.song_format_version == 1)) and final_reasons:
         raise InstrumentPlanError(
             "selected arrangement requires format v2 (" + "; ".join(final_reasons) + ")",
             code="FORMAT_VERSION_CONFLICT",
         )
+
+    # Only when promoted to format v2 Iter 1: clear unsupported legacy v1 vibrato WITH explicit diagnostic
+    promoted_to_v2 = bool(final_reasons) or (ver_choice == "v2")
+    if promoted_to_v2:
+        promotion_diags: List[RuntimeDiagnostic] = []
+        updated_instruments: List[IRInstrument] = []
+        changed_any = False
+        for new_id, (tok, inst) in enumerate(zip(used_tokens, candidate.instruments)):
+            if tok[0] == "orig" and (inst.vibrato_depth != 0 or inst.vibrato_speed != 0):
+                changed_any = True
+                affected_channels = sorted(orig_token_channels.get(tok, [])) or [None]
+                for aff_ch in affected_channels:
+                    diag = _format_legacy_vibrato_diagnostic(aff_ch, inst)
+                    promotion_diags.append(diag)
+                    logger.warning("%s", diag.message)
+                updated_instruments.append(
+                    inst.model_copy(update={"vibrato_depth": 0, "vibrato_speed": 0})
+                )
+            else:
+                updated_instruments.append(inst)
+        if changed_any:
+            candidate = candidate.model_copy(update={"instruments": updated_instruments})
+        if promotion_diags:
+            if rt_report is not None:
+                rt_report = replace(
+                    rt_report,
+                    diagnostics=rt_report.diagnostics + tuple(promotion_diags),
+                )
+            else:
+                rt_report = RuntimeResolutionReport(
+                    status="FULL_HARDWARE_V2_ITER1",
+                    is_compatible=True,
+                    effective_audctl=resolve_audctl_mode(candidate),
+                    unique_instrument_ids=(),
+                    diagnostics=tuple(promotion_diags),
+                    target_implemented=runtime_target.is_implemented,
+                )
 
     return candidate, rt_report
 

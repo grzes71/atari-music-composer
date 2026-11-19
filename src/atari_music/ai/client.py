@@ -1102,7 +1102,7 @@ def build_xex_from_result(
         "    jmp @vu_draw_bars",
         "",
         "@vu_ch_active:",
-        "    lda ch_cur_vol,x    ; Volume 0..15",
+        "    lda ch_out_vol,x    ; Effective output volume 0..15 (includes v2 macro vol overrides)",
         "    sta ui_temp_vol",
         "    ldy #26",
         "    lda #$2F            ; 'O'",

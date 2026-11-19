@@ -86,3 +86,16 @@ Measured with MADS (`tools/mads/mads.exe`) and `py65`:
   - Format v2 steady active (4-channel active macros + pitch envelopes): `1117..2572`
   - Format v2 simultaneous 4-channel `PROGRAM_CHANGE` + macro + pitch: `5577`
 
+## 7. Runtime Capability Contracts & Deferred Features
+
+- **Implemented targets (`src/atari_music/instruments/runtime.py`)**:
+  - `TARGET_V1_XEX` (`xex_v1`, v1, `{core_v1}`, `is_implemented=True`)
+  - `TARGET_V2_ITER1_XEX` (`xex_v2`, v2, `{core_v1, core_v2_iter1}`, `is_implemented=True`)
+  - `TARGET_WAV_V1_PREVIEW` (`wav`, v1, `{core_v1, wav_only}`, `is_implemented=True`)
+  - `TARGET_WAV_PREVIEW` (`wav`, v2, `{core_v1, core_v2_iter1, wav_only}`, `is_implemented=True`; preview-only features remain blocked for XEX export)
+- **Planned / Unimplemented targets**:
+  - `TARGET_SAP_V1_PLANNED` and `TARGET_SAP_V2_ITER1_PLANNED` (`asap`, `is_implemented=False`) — emit `TARGET_NOT_IMPLEMENTED` warnings because CORE has no built-in SAP exporter.
+- **Deferred features (blocked on v2 Iter 1)**:
+  - `core_v2_iter2` (delayed vibrato, arpeggios, pitch slides), `experimental_deferred` (HPF XOR PWM `$02/$04`), 16-bit `CH3+CH4` (`$08`), and `wav_only` per-frame `volume_contour` during XEX export.
+  - When `arrange_ir_song()` promotes a legacy v1 song to v2 because another channel uses v2 features, legacy `vibrato_depth`/`vibrato_speed` on untouched v1 channels is cleared with an explicit `LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION` warning diagnostic naming the affected channel, parameters, and reason (legacy vibrato is preserved untouched whenever the arrangement stays in v1).
+

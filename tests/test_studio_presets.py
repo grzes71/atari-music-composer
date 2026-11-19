@@ -650,15 +650,15 @@ def test_apply_preset_propagates_policy_player_version_and_target_into_evaluatio
     assert res_pc_fail.evaluation.is_valid is False
     assert res_pc_fail.evaluation.blocking_errors
 
-    # v2 macro instrument with target='xex_v1' or 'wav' (v1 tier capability) -> invalid BEHAVIOR_NOT_IN_TARGET_TIER!
+    # v2 macro instrument with target='xex_v1' or ('wav' + player_version='v1') -> invalid BEHAVIOR_NOT_IN_TARGET_TIER!
     state_simple = load_studio_composition(REPO_ROOT / "examples" / "ai" / "action_fast.json")
-    for limited_target in ("xex_v1", "wav"):
+    for limited_target, limited_pv in (("xex_v1", "auto"), ("wav", "v1")):
         p_v2_on_limited = ArrangementPreset(
-            name=f"V2 Macro On {limited_target}",
+            name=f"V2 Macro On {limited_target} {limited_pv}",
             arrangement=StudioArrangementConfig(
                 channel_instruments={1: None, 2: None, 3: "lead_attack_bite", 4: None},
                 program_change_policy="replace",
-                player_version="auto",
+                player_version=limited_pv,  # type: ignore[arg-type]
                 target_backend=limited_target,  # type: ignore[arg-type]
             ),
         )
@@ -670,17 +670,19 @@ def test_apply_preset_propagates_policy_player_version_and_target_into_evaluatio
             for d in res_bad_target.evaluation.diagnostics
         )
 
-    # Same v2 macro instrument with target='xex_v2' and player_version='auto' -> valid Format v2!
-    p_v2_on_xex_v2 = ArrangementPreset(
-        name="V2 Macro On XEX V2",
-        arrangement=StudioArrangementConfig(
-            channel_instruments={1: None, 2: None, 3: "lead_attack_bite", 4: None},
-            program_change_policy="replace",
-            player_version="auto",
-            target_backend="xex_v2",
-        ),
-    )
-    res_xex_v2 = apply_preset_to_state(state_simple, p_v2_on_xex_v2, instrument_service=svc)
-    assert res_xex_v2.config.target_backend == "xex_v2"
-    assert res_xex_v2.evaluation.is_valid is True
-    assert res_xex_v2.evaluation.effective_format_version == 2
+    # Same v2 macro instrument with target='xex_v2' or target='wav' and player_version='auto' -> valid Format v2!
+    for v2_target in ("xex_v2", "wav"):
+        p_v2_ok = ArrangementPreset(
+            name=f"V2 Macro On {v2_target}",
+            arrangement=StudioArrangementConfig(
+                channel_instruments={1: None, 2: None, 3: "lead_attack_bite", 4: None},
+                program_change_policy="replace",
+                player_version="auto",
+                target_backend=v2_target,  # type: ignore[arg-type]
+            ),
+        )
+        res_v2_ok = apply_preset_to_state(state_simple, p_v2_ok, instrument_service=svc)
+        assert res_v2_ok.config.target_backend == v2_target
+        assert res_v2_ok.evaluation.is_valid is True
+        assert res_v2_ok.evaluation.effective_format_version == 2
+        assert not any(d.code == "TARGET_NOT_IMPLEMENTED" for d in res_v2_ok.evaluation.diagnostics)

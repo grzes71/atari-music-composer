@@ -13,7 +13,10 @@ from atari_music.api import MusicGenerationResult, arrange_song
 from atari_music.instruments.planner import InstrumentPlanError
 from atari_music.instruments.runtime import RuntimeDiagnostic
 from atari_music.ir import resolve_audctl_mode
-from atari_music.studio.instruments import InstrumentService
+from atari_music.studio.instruments import (
+    InstrumentService,
+    resolve_xex_export_player_version,
+)
 from atari_music.studio.models import (
     LoadedCompositionState,
     StudioArrangementConfig,
@@ -189,14 +192,18 @@ class ExportService:
     ) -> PreparedXexArrangement:
         """Produce ONE arranged ``MusicGenerationResult`` and validate it for XEX export."""
         try:
+            eff_player_version = resolve_xex_export_player_version(config)
             arranged_result = arrange_song(
                 state.base_pokey_ir,
                 channel_instruments=config.assigned_map() or None,
                 program_change_policy=config.program_change_policy,
                 instrument_catalog_path=self._instrument_service.catalog_path,
-                player_version=config.player_version,
+                player_version=eff_player_version,
             )
         except InstrumentPlanError as exc:
+            err_diags = exc.diagnostics or (
+                RuntimeDiagnostic(severity="ERROR", code=exc.code, message=str(exc)),
+            )
             return PreparedXexArrangement(
                 config=config,
                 arranged_result=None,
@@ -204,7 +211,7 @@ class ExportService:
                 effective_uses_16bit_bass=state.base_uses_16bit_bass,
                 effective_audctl=resolve_audctl_mode(state.base_pokey_ir),
                 resolved_target_backend=None,
-                diagnostics=exc.diagnostics,
+                diagnostics=err_diags,
                 blocking_errors=(str(exc),),
                 warnings=(),
             )

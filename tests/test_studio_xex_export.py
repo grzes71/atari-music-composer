@@ -13,23 +13,29 @@ import pytest
 
 from atari_music import xex_layout
 from atari_music.api import generate_music
+from atari_music.instruments.planner import LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION
 from atari_music.instruments.runtime import (
     TARGET_SAP_V1_PLANNED,
+    TARGET_SAP_V2_ITER1_PLANNED,
     TARGET_V1_XEX,
     TARGET_V2_ITER1_XEX,
+    TARGET_WAV_PREVIEW,
+    POKEYRuntime,
+    ChannelAssignmentRequest,
     RuntimeDiagnostic,
 )
 from atari_music.ir import IRInstrument, IRNote, IRPattern, IRSong
 from atari_music.studio import (
     ExportService,
     InstrumentService,
+    RenderService,
     StudioArrangementConfig,
     XexExportOptions,
     load_studio_composition,
     parse_atari_address,
 )
 from atari_music.studio.exporter import _commit_staged_pairs
-from atari_music.studio.instruments import _is_stale_stage_a_xex_v2_notice
+import atari_music.studio.instruments as studio_instruments_mod
 from atari_music.xex_layout import XexLayoutError
 from conftest import require_local_artifact
 
@@ -283,40 +289,193 @@ def test_volume_contour_validated_after_arrangement(tmp_path: Path) -> None:
     assert prep_clean.is_exportable is True
 
 
-def test_narrow_target_not_implemented_handling_preserves_other_warnings(tmp_path: Path) -> None:
-    # 1. Helper strictly matches ONLY STAGE-A xex_v2 notice when effective_ver == 2
-    stale_v2_diag = RuntimeDiagnostic(
-        severity="WARNING",
-        code="TARGET_NOT_IMPLEMENTED",
-        message="target backend 'xex_v2' (v2) is not yet implemented for export/execution in Stage A",
-    )
-    midi_warn = RuntimeDiagnostic(
-        severity="WARNING",
-        code="MIDI_RANGE_EXCEEDED",
-        message="requested MIDI span exceeds recommended range",
-        channel=2,
-        instrument_id="bass_15khz_pure",
-    )
-    assert _is_stale_stage_a_xex_v2_notice(stale_v2_diag, TARGET_V2_ITER1_XEX, 2) is True
-    assert _is_stale_stage_a_xex_v2_notice(stale_v2_diag, TARGET_SAP_V1_PLANNED, 1) is False
-    assert _is_stale_stage_a_xex_v2_notice(midi_warn, TARGET_V2_ITER1_XEX, 2) is False
+def test_xex_v2_implemented_no_false_stage_a_warning_and_genuine_warnings_preserved(
+    tmp_path: Path,
+) -> None:
+    # 1. Stale Stage-A workaround helper is removed; TARGET_V2_ITER1_XEX is genuinely implemented
+    assert not hasattr(studio_instruments_mod, "_is_stale_stage_a_xex_v2_notice")
+    assert TARGET_V2_ITER1_XEX.is_implemented is True
+    assert TARGET_SAP_V1_PLANNED.is_implemented is False
+    assert TARGET_SAP_V2_ITER1_PLANNED.is_implemented is False
 
-    # 2. On real arrangement triggering both xex_v2 + MIDI_RANGE_EXCEEDED:
-    # 'TARGET_NOT_IMPLEMENTED' is suppressed while MIDI_RANGE_EXCEEDED remains visible!
     svc = InstrumentService()
     exporter = ExportService(svc)
-    state = load_studio_composition(REPO_ROOT / "examples" / "ai" / "action_fast.json")
-    # bass_15khz_pure recommends 24..55? Let's use lead_attack_bite on CH2 bass notes (MIDI 36..43 < 48..96)
+
+    # 2. Opening a v1 composition with target_backend='xex_v2' emits zero TARGET_NOT_IMPLEMENTED warnings
+    v1_state = load_studio_composition(REPO_ROOT / "examples" / "ai" / "action_fast.json")
+    v1_eval = svc.evaluate_arrangement(v1_state, v1_state.baseline_config)
+    assert v1_eval.is_valid is True
+    assert not any(d.code == "TARGET_NOT_IMPLEMENTED" for d in v1_eval.diagnostics)
+    assert not any("not yet implemented" in w.lower() for w in v1_eval.warnings)
+
+    # 3. Opening a v2 composition with target_backend='xex_v2' emits zero TARGET_NOT_IMPLEMENTED warnings
+    v2_state = load_studio_composition(_make_ir_json_with_pc(tmp_path))
+    v2_eval = svc.evaluate_arrangement(v2_state, v2_state.baseline_config)
+    assert v2_eval.is_valid is True
+    assert v2_eval.effective_format_version == 2
+    assert not any(d.code == "TARGET_NOT_IMPLEMENTED" for d in v2_eval.diagnostics)
+    assert not any("not yet implemented" in w.lower() for w in v2_eval.warnings)
+
+    # 4. On an arrangement triggering xex_v2 + MIDI_RANGE_EXCEEDED:
+    # evaluate_arrangement() and prepare_xex_export() agree — zero TARGET_NOT_IMPLEMENTED,
+    # while genuine MIDI_RANGE_EXCEEDED warning remains visible in both!
     cfg = StudioArrangementConfig(
         channel_instruments={1: None, 2: "lead_attack_bite", 3: None, 4: None},
         player_version="auto",
+        target_backend="xex_v2",
     )
-    prep = exporter.prepare_xex_export(state, cfg)
-    assert prep.is_exportable is True
-    assert prep.effective_format_version == 2
+    ev = svc.evaluate_arrangement(v1_state, cfg, include_catalog_options=False)
+    prep = exporter.prepare_xex_export(v1_state, cfg)
+    assert ev.is_valid is True and prep.is_exportable is True
+    assert ev.effective_format_version == 2 and prep.effective_format_version == 2
+    assert not any(d.code == "TARGET_NOT_IMPLEMENTED" for d in ev.diagnostics)
     assert not any(d.code == "TARGET_NOT_IMPLEMENTED" for d in prep.diagnostics)
+    assert any(d.code == "MIDI_RANGE_EXCEEDED" for d in ev.diagnostics)
     assert any(d.code == "MIDI_RANGE_EXCEEDED" for d in prep.diagnostics)
+    assert any("MIDI span" in w for w in ev.warnings)
     assert any("MIDI span" in w for w in prep.warnings)
+
+    # 5. Genuine unimplemented SAP targets still emit TARGET_NOT_IMPLEMENTED
+    rep_sap = POKEYRuntime.resolve(
+        [ChannelAssignmentRequest(channel=3, instrument_ids=("lead_pure_sustain",))],
+        svc.catalog,
+        TARGET_SAP_V2_ITER1_PLANNED,
+    )
+    assert any(d.code == "TARGET_NOT_IMPLEMENTED" and d.severity == "WARNING" for d in rep_sap.diagnostics)
+
+
+def test_selector_consistency_target_backend_vs_player_version_and_wav_separation(
+    tmp_path: Path,
+) -> None:
+    svc = InstrumentService()
+    exporter = ExportService(svc)
+    v2_state = load_studio_composition(_make_ir_json_with_pc(tmp_path))
+
+    # 1. target_backend='xex_v1' + player_version='auto' narrows strictly to v1 in BOTH
+    # evaluate_arrangement() and ExportService.prepare_xex_export() (rejects v2 PC song!)
+    cfg_xex_v1_auto = StudioArrangementConfig(
+        channel_instruments={1: None, 2: None, 3: None, 4: None},
+        program_change_policy="preserve",
+        player_version="auto",
+        target_backend="xex_v1",
+    )
+    ev_v1_auto = svc.evaluate_arrangement(v2_state, cfg_xex_v1_auto, include_catalog_options=False)
+    prep_v1_auto = exporter.prepare_xex_export(v2_state, cfg_xex_v1_auto)
+    assert ev_v1_auto.is_valid is False
+    assert prep_v1_auto.is_exportable is False
+    assert ev_v1_auto.blocking_errors and prep_v1_auto.blocking_errors
+
+    # 2. Contradictory target_backend='xex_v1' + player_version='v2' is rejected with TARGET_FORMAT_CONFLICT
+    # in BOTH evaluate_arrangement() and prepare_xex_export()
+    v1_state = load_studio_composition(REPO_ROOT / "examples" / "ai" / "action_fast.json")
+    cfg_conflict = StudioArrangementConfig(
+        channel_instruments={1: None, 2: None, 3: None, 4: None},
+        player_version="v2",
+        target_backend="xex_v1",
+    )
+    ev_conflict = svc.evaluate_arrangement(v1_state, cfg_conflict, include_catalog_options=False)
+    prep_conflict = exporter.prepare_xex_export(v1_state, cfg_conflict)
+    assert ev_conflict.is_valid is False
+    assert prep_conflict.is_exportable is False
+    assert any(d.code == "TARGET_FORMAT_CONFLICT" for d in ev_conflict.diagnostics)
+    assert any(d.code == "TARGET_FORMAT_CONFLICT" for d in prep_conflict.diagnostics)
+
+    # 3. target_backend='xex_v2' + player_version='v1' narrows to xex_v1 consistently
+    cfg_v2_force_v1 = StudioArrangementConfig(
+        channel_instruments={1: None, 2: None, 3: "lead_attack_bite", 4: None},
+        player_version="v1",
+        target_backend="xex_v2",
+    )
+    ev_v2_v1 = svc.evaluate_arrangement(v1_state, cfg_v2_force_v1, include_catalog_options=False)
+    prep_v2_v1 = exporter.prepare_xex_export(v1_state, cfg_v2_force_v1)
+    assert ev_v2_v1.is_valid is False
+    assert prep_v2_v1.is_exportable is False
+
+    # 4. Contoured IR song: under target_backend='xex_v2', evaluate_arrangement() AGREES with
+    # prepare_xex_export() and blocks; under target_backend='wav', WAV preview stays valid (with warning)
+    # while prepare_xex_export() still rejects XEX export!
+    contoured_state = load_studio_composition(_make_contoured_ir_json(tmp_path))
+    cfg_xex_contour = contoured_state.baseline_config.model_copy(update={"target_backend": "xex_v2"})
+    ev_xex_c = svc.evaluate_arrangement(contoured_state, cfg_xex_contour, include_catalog_options=False)
+    prep_xex_c = exporter.prepare_xex_export(contoured_state, cfg_xex_contour)
+    assert ev_xex_c.is_valid is False
+    assert prep_xex_c.is_exportable is False
+    assert any("contour" in e.lower() for e in ev_xex_c.blocking_errors)
+
+    cfg_wav_contour = contoured_state.baseline_config.model_copy(update={"target_backend": "wav"})
+    ev_wav_c = svc.evaluate_arrangement(contoured_state, cfg_wav_contour, include_catalog_options=False)
+    prep_wav_c = exporter.prepare_xex_export(contoured_state, cfg_wav_contour)
+    assert ev_wav_c.is_valid is True
+    assert any(d.code == "WAV_PREVIEW_ONLY_NOT_XEX_EXPORTABLE" for d in ev_wav_c.diagnostics)
+    assert prep_wav_c.is_exportable is False
+
+    # 5. wav_only catalog profile under target_backend='wav': valid for Studio evaluation & WAV preview,
+    # strictly blocked for XEX export!
+    cat_path = _write_wav_only_catalog(tmp_path)
+    wav_svc = InstrumentService(catalog_path=cat_path)
+    wav_exporter = ExportService(wav_svc)
+    wav_renderer = RenderService(wav_svc)
+    try:
+        cfg_wav_only = StudioArrangementConfig(
+            channel_instruments={1: "lead_wav_contour_test", 2: "bass_15khz_pure", 3: None, 4: None},
+            target_backend="wav",
+            player_version="auto",
+        )
+        ev_wo = wav_svc.evaluate_arrangement(v1_state, cfg_wav_only, include_catalog_options=False)
+        assert ev_wo.is_valid is True
+        assert any(d.code == "WAV_PREVIEW_ONLY_NOT_XEX_EXPORTABLE" for d in ev_wo.diagnostics)
+        entry = wav_renderer.render_preview(v1_state, cfg_wav_only)
+        assert entry.wav_path.is_file() and entry.wav_path.stat().st_size > 44
+        prep_wo = wav_exporter.prepare_xex_export(v1_state, cfg_wav_only)
+        assert prep_wo.is_exportable is False
+    finally:
+        wav_renderer.cleanup()
+
+
+def test_studio_vibrato_promotion_emits_explicit_warning_in_eval_and_export(
+    tmp_path: Path,
+) -> None:
+    # Legacy v1 song from generate_music carries vibrato_depth/vibrato_speed on CH3 lead
+    legacy_res = generate_music(profile="action", seed=42)
+    ir_path = tmp_path / "legacy_vib.json"
+    legacy_res.save_json(ir_path)
+    state = load_studio_composition(ir_path)
+
+    svc = InstrumentService()
+    exporter = ExportService(svc)
+
+    # Promoting to v2 via CH4 percussion triggers explicit LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION warning
+    cfg_promote = StudioArrangementConfig(
+        channel_instruments={1: None, 2: None, 3: None, 4: "perc_kick_tight"},
+        player_version="auto",
+        target_backend="xex_v2",
+    )
+    ev = svc.evaluate_arrangement(state, cfg_promote, include_catalog_options=False)
+    prep = exporter.prepare_xex_export(state, cfg_promote)
+    assert ev.is_valid is True and prep.is_exportable is True
+    assert ev.effective_format_version == 2 and prep.effective_format_version == 2
+    for diags, warns in ((ev.diagnostics, ev.warnings), (prep.diagnostics, prep.warnings)):
+        vib_diags = [d for d in diags if d.code == LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION]
+        assert len(vib_diags) == 1
+        assert vib_diags[0].severity == "WARNING"
+        assert vib_diags[0].channel == 3
+        assert "vibrato_depth" in vib_diags[0].message
+        assert "vibrato_speed" in vib_diags[0].message
+        assert "v2 Iter 1" in vib_diags[0].message
+        assert any("vibrato" in w.lower() for w in warns)
+
+    # Staying in v1 (core_v1 override on CH4) preserves vibrato with zero vibrato warning
+    cfg_stay_v1 = StudioArrangementConfig(
+        channel_instruments={1: None, 2: None, 3: None, 4: "lead_pure_pluck"},
+        player_version="auto",
+        target_backend="xex_v2",
+    )
+    ev_v1 = svc.evaluate_arrangement(state, cfg_stay_v1, include_catalog_options=False)
+    prep_v1 = exporter.prepare_xex_export(state, cfg_stay_v1)
+    assert ev_v1.is_valid is True and prep_v1.is_exportable is True
+    assert ev_v1.effective_format_version == 1 and prep_v1.effective_format_version == 1
+    assert not any(d.code == LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION for d in ev_v1.diagnostics)
+    assert not any(d.code == LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION for d in prep_v1.diagnostics)
 
 
 def test_single_arranged_ir_preserves_pc_and_source_immutability(

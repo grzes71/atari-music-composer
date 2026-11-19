@@ -8,7 +8,11 @@ import tempfile
 from typing import Dict, Optional
 
 from atari_music.api import arrange_song
-from atari_music.studio.instruments import InstrumentService
+from atari_music.instruments.planner import InstrumentPlanError
+from atari_music.studio.instruments import (
+    InstrumentService,
+    resolve_studio_target_and_player_version,
+)
 from atari_music.studio.loader import canonical_ir_sha256
 from atari_music.studio.models import (
     CachedRenderEntry,
@@ -43,11 +47,15 @@ class RenderService:
     ) -> RenderCacheKey:
         """Compute deterministic multi-parameter cache key for *state* and *config*."""
         assigned = tuple(sorted(config.assigned_map().items()))
+        try:
+            _eff_target, eff_player_version = resolve_studio_target_and_player_version(config)
+        except InstrumentPlanError:
+            eff_player_version = config.player_version
         return RenderCacheKey(
             base_ir_sha256=state.base_ir_sha256,
             assigned_channels=assigned,
             program_change_policy=config.program_change_policy,
-            player_version=config.player_version,
+            player_version=eff_player_version,
             sample_rate=self._sample_rate,
             catalog_digest=self._instrument_service.catalog_digest,
         )
@@ -98,12 +106,14 @@ class RenderService:
         target_wav = self.cache_dir / f"{digest}.wav"
         tmp_wav = self.cache_dir / f"{digest}.tmp.wav"
 
+        eff_target, eff_player_version = resolve_studio_target_and_player_version(config)
         arranged = arrange_song(
             state.base_pokey_ir,
             channel_instruments=config.assigned_map() or None,
             program_change_policy=config.program_change_policy,
             instrument_catalog_path=self._instrument_service.catalog_path,
-            player_version=config.player_version,
+            player_version=eff_player_version,
+            target=eff_target,
         )
         arranged.render_wav(tmp_wav, sample_rate=self._sample_rate)
         os.replace(tmp_wav, target_wav)

@@ -427,3 +427,54 @@ def test_arrange_validation_errors_api_and_cli(tmp_path: Path) -> None:
     )
     assert bad_cli.exit_code != 0
     assert not (tmp_path / "fail.wav").exists()
+
+
+def test_v1_to_v2_promotion_emits_explicit_vibrato_warning_without_silent_loss() -> None:
+    """Promoting a v1 song with legacy vibrato to v2 must warn with channel, parameters, and reason."""
+    from atari_music.instruments import (
+        LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION,
+        arrange_ir_song,
+    )
+
+    base_song = generate_music(profile="action", seed=42).pokey_ir
+    # Verify baseline carries legacy vibrato on CH3 lead
+    lead_orig = next(i for i in base_song.instruments if i.vibrato_depth or i.vibrato_speed)
+    orig_depth, orig_speed = lead_orig.vibrato_depth, lead_orig.vibrato_speed
+    assert orig_depth > 0 and orig_speed > 0
+
+    # 1. Staying in v1 (core_v1 override on CH4, auto): vibrato is preserved untouched with no warning
+    stay_v1_song, stay_report = arrange_ir_song(
+        base_song,
+        channel_instruments={4: "lead_pure_pluck"},
+        player_version="auto",
+    )
+    assert song_requires_v2(stay_v1_song) == []
+    kept_lead = next(i for i in stay_v1_song.instruments if i.name == lead_orig.name)
+    assert kept_lead.vibrato_depth == orig_depth
+    assert kept_lead.vibrato_speed == orig_speed
+    assert stay_report is not None
+    assert not any(d.code == LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION for d in stay_report.diagnostics)
+
+    # 2. Promoting to v2 via another channel (CH4 -> perc_kick_tight):
+    # untouched CH3 vibrato is cleared for v2 Iter 1 WITH explicit diagnostic (channel, params, reason)
+    promoted_song, promo_report = arrange_ir_song(
+        base_song,
+        channel_instruments={4: "perc_kick_tight"},
+        player_version="auto",
+    )
+    assert song_requires_v2(promoted_song)
+    assert promo_report is not None
+    vib_diags = [d for d in promo_report.diagnostics if d.code == LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION]
+    assert len(vib_diags) == 1
+    d = vib_diags[0]
+    assert d.severity == "WARNING"
+    assert d.channel == 3
+    assert f"vibrato_depth={orig_depth}" in d.message
+    assert f"vibrato_speed={orig_speed}" in d.message
+    assert "v2 Iter 1" in d.message
+
+    # Promoted song exports cleanly to v2 without mutating the original base_song
+    promo_lead = next(i for i in promoted_song.instruments if i.name == lead_orig.name)
+    assert promo_lead.vibrato_depth == 0 and promo_lead.vibrato_speed == 0
+    assert lead_orig.vibrato_depth == orig_depth and lead_orig.vibrato_speed == orig_speed
+    assert "format version 2" in export_mads_asm(promoted_song, format_version=2)

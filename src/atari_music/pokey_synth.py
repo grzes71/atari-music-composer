@@ -512,7 +512,7 @@ def compile_core_v1_profiles_to_frames(
     which case hard ``HardwareConstraints`` like HPF XOR or 16-bit CH3+4 are still enforced).
     """
     from atari_music.instruments import (
-        TARGET_WAV_PREVIEW,
+        TARGET_WAV_V1_PREVIEW,
         ChannelAssignmentRequest,
         POKEYRuntime,
         load_instrument_catalog,
@@ -526,7 +526,7 @@ def compile_core_v1_profiles_to_frames(
                 f"channel {ch} has notes but no assigned instrument profile"
             )
 
-    resolved_target = TARGET_WAV_PREVIEW if target is None else target
+    resolved_target = TARGET_WAV_V1_PREVIEW if target is None else target
     base_catalog = catalog if catalog is not None else load_instrument_catalog()
     eval_catalog = (
         _static_catalog_subset(profile_assignments, base_catalog)
@@ -554,6 +554,17 @@ def compile_core_v1_profiles_to_frames(
             f"cannot compile profile assignments for {resolved_target.backend!r}: {msgs}",
             diagnostics=report.diagnostics,
         )
+
+    if not allow_static_only:
+        for ch, inst_id in sorted(profile_assignments.items()):
+            _prof, beh = eval_catalog.resolve_profile_behavior(inst_id)
+            if beh is not None and beh.required_runtime_tier not in ("core_v1", "wav_only"):
+                raise InstrumentRenderError(
+                    f"compile_core_v1_profiles_to_frames supports only static core_v1/wav_only profiles; "
+                    f"channel {ch} profile {inst_id!r} requires {beh.required_runtime_tier!r} "
+                    f"(use frame_simulator.simulate_ir_song_frames for v2 behaviors)",
+                    diagnostics=report.diagnostics,
+                )
 
     audctl = report.effective_audctl
     ch_frame_lengths = {

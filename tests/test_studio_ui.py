@@ -1245,3 +1245,61 @@ def test_transport_bar_switch_wav_preserving_state_all_scenarios(
         assert bar.audio_player.is_loaded() is True
     finally:
         bar.shutdown()
+
+
+def test_main_window_xex_v2_hides_stale_stage_a_warning_and_keeps_genuine_warnings(
+    qapp: QApplication,
+    tmp_path: Path,
+) -> None:
+    """Opening v1 or v2 songs with target_backend='xex_v2' produces no false Stage-A banner."""
+    from atari_music.api import generate_music
+
+    win = MainWindow(audio_backend=_FakeUiAudioBackend())
+    try:
+        # 1. Load v1 composition (action_fast.json) with default target_backend='xex_v2'
+        win.load_composition_file(REPO_ROOT / "examples" / "ai" / "action_fast.json")
+        qapp.processEvents()
+        assert win._working_config.target_backend == "xex_v2"
+        assert win._diag_banner.isHidden() is True
+        assert "not yet implemented" not in win._diag_details.toPlainText().lower()
+
+        # 2. Assigning a v2 instrument (lead_attack_bite on CH3) keeps banner hidden (zero false warning)
+        win._channel_strips[3].assignment_changed.emit(3, "lead_attack_bite")
+        qapp.processEvents()
+        assert win._evaluation is not None and win._evaluation.is_valid is True
+        assert win._evaluation.effective_format_version == 2
+        assert win._diag_banner.isHidden() is True
+
+        # 3. Genuine MIDI_RANGE_EXCEEDED warning (lead_attack_bite on low CH2 bass) DOES show banner!
+        win._channel_strips[2].assignment_changed.emit(2, "lead_attack_bite")
+        qapp.processEvents()
+        assert win._diag_banner.isHidden() is False
+        assert "Hardware Warnings:" in win._diag_banner.text()
+        assert "MIDI span" in win._diag_banner.text()
+        assert "not yet implemented" not in win._diag_banner.text().lower()
+
+        # 4. Load v2 composition with PROGRAM_CHANGE -> no false Stage-A warning
+        v2_res = generate_music(
+            profile="action",
+            seed=9,
+            uses_16bit_bass=False,
+            channel_instruments={
+                1: "bass_15khz_pure",
+                2: "harmony_soft_square",
+                3: "lead_pure_sustain",
+                4: "perc_snare_crisp",
+            },
+            program_changes=[
+                {"channel": 3, "pattern_index": 0, "note_index": 1, "instrument_id": "lead_pure_pluck"}
+            ],
+            player_version="v2",
+        )
+        v2_path = tmp_path / "studio_v2_ui.json"
+        v2_res.save_json(v2_path)
+        win.load_composition_file(v2_path)
+        qapp.processEvents()
+        assert win._evaluation is not None and win._evaluation.is_valid is True
+        assert win._evaluation.effective_format_version == 2
+        assert win._diag_banner.isHidden() is True
+    finally:
+        win.close()
