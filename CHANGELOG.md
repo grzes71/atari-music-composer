@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.17.1 (2026-11-19)
+
+### Bug Fixes
+
+- **instruments**: Switch lead_c1_octave_pulse from $40 to $A0 pure tone
+  ([`7a39b33`](https://github.com/grzes71/atari-music-composer/commit/7a39b332b89ae886214bf21327e64da6e257c7b5))
+
+
 ## v0.17.0 (2026-11-19)
 
 ### Features
