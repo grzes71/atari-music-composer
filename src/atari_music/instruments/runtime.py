@@ -1,4 +1,4 @@
-"""Stateless POKEY capability validator and AUDCTL conflict resolver (Stage A)."""
+"""Stateless POKEY capability validator and AUDCTL conflict resolver."""
 
 from __future__ import annotations
 
@@ -77,10 +77,6 @@ def _validate_target_capability(target: TargetCapability) -> None:
                 f"backend 'xex_v1' allows only 'core_v1', got {sorted(target.enabled_tiers)!r}"
             )
     elif target.backend == "xex_v2":
-        if target.is_implemented:
-            raise InvalidTargetCapabilityError(
-                "backend 'xex_v2' is not implemented in Stage A and must declare is_implemented=False"
-            )
         if target.song_format_version != 2:
             raise InvalidTargetCapabilityError("backend 'xex_v2' requires song_format_version == 2")
         if not (target.enabled_tiers <= {"core_v1", "core_v2_iter1"}):
@@ -90,7 +86,7 @@ def _validate_target_capability(target: TargetCapability) -> None:
     elif target.backend == "asap":
         if target.is_implemented:
             raise InvalidTargetCapabilityError(
-                "CORE pipeline has no built-in SAP exporter in Stage A; backend 'asap' requires is_implemented=False"
+                "CORE pipeline has no built-in SAP exporter; backend 'asap' requires is_implemented=False"
             )
         allowed = {"core_v1"} if target.song_format_version == 1 else {"core_v1", "core_v2_iter1"}
         if not (target.enabled_tiers <= allowed):
@@ -99,25 +95,16 @@ def _validate_target_capability(target: TargetCapability) -> None:
                 f"{sorted(allowed)!r}, got {sorted(target.enabled_tiers)!r}"
             )
     elif target.backend == "wav":
-        if target.is_implemented:
-            if target.song_format_version != 1:
-                raise InvalidTargetCapabilityError(
-                    "implemented 'wav' renderer supports only song_format_version == 1 in Stage A"
-                )
-            if not (target.enabled_tiers <= {"core_v1", "wav_only"}):
-                raise InvalidTargetCapabilityError(
-                    f"implemented 'wav' renderer allows only core_v1/wav_only, got {sorted(target.enabled_tiers)!r}"
-                )
-        else:
-            allowed_wav = {"core_v1", "wav_only"} if target.song_format_version == 1 else {
-                "core_v1",
-                "core_v2_iter1",
-                "wav_only",
-            }
-            if not (target.enabled_tiers <= allowed_wav):
-                raise InvalidTargetCapabilityError(
-                    f"planned 'wav' target allows only {sorted(allowed_wav)!r}, got {sorted(target.enabled_tiers)!r}"
-                )
+        allowed_wav = (
+            {"core_v1", "wav_only"}
+            if target.song_format_version == 1
+            else {"core_v1", "core_v2_iter1", "wav_only"}
+        )
+        if not (target.enabled_tiers <= allowed_wav):
+            raise InvalidTargetCapabilityError(
+                f"backend 'wav' with song_format_version={target.song_format_version} allows only "
+                f"{sorted(allowed_wav)!r}, got {sorted(target.enabled_tiers)!r}"
+            )
     else:
         raise InvalidTargetCapabilityError(f"unknown backend {target.backend!r}")
 
@@ -128,19 +115,24 @@ TARGET_V1_XEX = TargetCapability(
     enabled_tiers=frozenset({"core_v1"}),
     is_implemented=True,
 )
-TARGET_WAV_PREVIEW = TargetCapability(
+TARGET_V2_ITER1_XEX = TargetCapability(
+    backend="xex_v2",
+    song_format_version=2,
+    enabled_tiers=frozenset({"core_v1", "core_v2_iter1"}),
+    is_implemented=True,
+)
+TARGET_WAV_V1_PREVIEW = TargetCapability(
     backend="wav",
     song_format_version=1,
     enabled_tiers=frozenset({"core_v1", "wav_only"}),
     is_implemented=True,
 )
-TARGET_V2_ITER1_PLANNED = TargetCapability(
-    backend="xex_v2",
+TARGET_WAV_PREVIEW = TargetCapability(
+    backend="wav",
     song_format_version=2,
-    enabled_tiers=frozenset({"core_v1", "core_v2_iter1"}),
-    is_implemented=False,
+    enabled_tiers=frozenset({"core_v1", "core_v2_iter1", "wav_only"}),
+    is_implemented=True,
 )
-TARGET_V2_ITER1_XEX = TARGET_V2_ITER1_PLANNED
 TARGET_SAP_V1_PLANNED = TargetCapability(
     backend="asap",
     song_format_version=1,
@@ -440,7 +432,7 @@ class POKEYRuntime:
                     code="TARGET_NOT_IMPLEMENTED",
                     message=(
                         f"target backend {target.backend!r} (v{target.song_format_version}) is not yet "
-                        "implemented for export/execution in Stage A"
+                        "implemented for export/execution"
                     ),
                 )
             )

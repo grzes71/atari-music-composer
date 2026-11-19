@@ -12,6 +12,7 @@ from atari_music.instruments import (
     TARGET_V1_XEX,
     TARGET_V2_ITER1_XEX,
     TARGET_WAV_PREVIEW,
+    TARGET_WAV_V1_PREVIEW,
     ChannelAssignmentRequest,
     InstrumentBehavior,
     InstrumentCatalog,
@@ -49,35 +50,57 @@ def test_target_capability_rejects_inconsistent_or_unimplemented_configs() -> No
             enabled_tiers=frozenset({"core_v1", "wav_only"}),
         )
 
-    # xex_v2 cannot pretend to be implemented in Stage A, nor claim v1 or deferred/iter2
+    # xex_v2 Iteration 1 is implemented for song_format_version=2 + {core_v1, core_v2_iter1},
+    # and still rejects v1, wav_only, core_v2_iter2, and experimental_deferred.
+    v2_ok = TargetCapability(
+        backend="xex_v2",
+        song_format_version=2,
+        enabled_tiers=frozenset({"core_v1", "core_v2_iter1"}),
+        is_implemented=True,
+    )
+    assert v2_ok == TARGET_V2_ITER1_XEX
     with pytest.raises(InvalidTargetCapabilityError):
         TargetCapability(
             backend="xex_v2",
-            song_format_version=2,
+            song_format_version=1,
             enabled_tiers=frozenset({"core_v1", "core_v2_iter1"}),
             is_implemented=True,
         )
     with pytest.raises(InvalidTargetCapabilityError):
         TargetCapability(
             backend="xex_v2",
-            song_format_version=1,
-            enabled_tiers=frozenset({"core_v1", "core_v2_iter1"}),
-            is_implemented=False,
+            song_format_version=2,
+            enabled_tiers=frozenset({"core_v1", "core_v2_iter1", "experimental_deferred"}),
+            is_implemented=True,
         )
     with pytest.raises(InvalidTargetCapabilityError):
         TargetCapability(
             backend="xex_v2",
             song_format_version=2,
-            enabled_tiers=frozenset({"core_v1", "core_v2_iter1", "experimental_deferred"}),
-            is_implemented=False,
+            enabled_tiers=frozenset({"core_v1", "core_v2_iter1", "core_v2_iter2"}),
+            is_implemented=True,
+        )
+    with pytest.raises(InvalidTargetCapabilityError):
+        TargetCapability(
+            backend="xex_v2",
+            song_format_version=2,
+            enabled_tiers=frozenset({"core_v1", "core_v2_iter1", "wav_only"}),
+            is_implemented=True,
         )
 
-    # asap cannot be auto-equated with implemented XEX or wav_only in Stage A
+    # asap remains unimplemented (no built-in SAP exporter) and rejects wav_only / mismatched tiers
     with pytest.raises(InvalidTargetCapabilityError):
         TargetCapability(
             backend="asap",
             song_format_version=1,
             enabled_tiers=frozenset({"core_v1"}),
+            is_implemented=True,
+        )
+    with pytest.raises(InvalidTargetCapabilityError):
+        TargetCapability(
+            backend="asap",
+            song_format_version=2,
+            enabled_tiers=frozenset({"core_v1", "core_v2_iter1"}),
             is_implemented=True,
         )
     with pytest.raises(InvalidTargetCapabilityError):
@@ -95,12 +118,27 @@ def test_target_capability_rejects_inconsistent_or_unimplemented_configs() -> No
             is_implemented=False,
         )
 
-    # wav implemented supports only v1 + {core_v1, wav_only}; not v2_iter1 or deferred
+    # wav supports v1 {core_v1, wav_only} and v2 {core_v1, core_v2_iter1, wav_only},
+    # but still rejects core_v2_iter1 on v1 as well as core_v2_iter2 / experimental_deferred.
+    wav_v2_ok = TargetCapability(
+        backend="wav",
+        song_format_version=2,
+        enabled_tiers=frozenset({"core_v1", "core_v2_iter1", "wav_only"}),
+        is_implemented=True,
+    )
+    assert wav_v2_ok == TARGET_WAV_PREVIEW
+    with pytest.raises(InvalidTargetCapabilityError):
+        TargetCapability(
+            backend="wav",
+            song_format_version=1,
+            enabled_tiers=frozenset({"core_v1", "core_v2_iter1"}),
+            is_implemented=True,
+        )
     with pytest.raises(InvalidTargetCapabilityError):
         TargetCapability(
             backend="wav",
             song_format_version=2,
-            enabled_tiers=frozenset({"core_v1", "core_v2_iter1"}),
+            enabled_tiers=frozenset({"core_v1", "core_v2_iter1", "core_v2_iter2"}),
             is_implemented=True,
         )
     with pytest.raises(InvalidTargetCapabilityError):
@@ -110,11 +148,20 @@ def test_target_capability_rejects_inconsistent_or_unimplemented_configs() -> No
             enabled_tiers=frozenset({"core_v1", "experimental_deferred"}),
             is_implemented=True,
         )
+    with pytest.raises(InvalidTargetCapabilityError):
+        TargetCapability(
+            backend="wav",
+            song_format_version=2,
+            enabled_tiers=frozenset({"core_v1", "core_v2_iter1", "experimental_deferred"}),
+            is_implemented=True,
+        )
 
-    # Planned presets carry explicit is_implemented=False
+    # Implemented vs genuinely planned presets
     assert TARGET_V1_XEX.is_implemented is True
+    assert TARGET_V2_ITER1_XEX.is_implemented is True
+    assert TARGET_WAV_V1_PREVIEW.is_implemented is True
     assert TARGET_WAV_PREVIEW.is_implemented is True
-    assert TARGET_V2_ITER1_XEX.is_implemented is False
+    assert TARGET_WAV_PREVIEW.song_format_version == 2
     assert TARGET_SAP_V1_PLANNED.is_implemented is False
     assert TARGET_SAP_V2_ITER1_PLANNED.is_implemented is False
 
@@ -275,7 +322,7 @@ def test_multi_instrument_channel_and_v2_iter1_planning_rules(catalog: Instrumen
     assert "MULTI_INSTRUMENT_REQUIRES_V2" in codes_v1
     assert "BEHAVIOR_NOT_IN_TARGET_TIER" in codes_v1
 
-    # Allowed under planned v2_iter1 contract (with explicit target_implemented=False notice)
+    # Allowed under implemented xex_v2 Iteration 1 contract (no TARGET_NOT_IMPLEMENTED notice)
     rep_v2 = POKEYRuntime.resolve(
         [
             ChannelAssignmentRequest(channel=1, instrument_ids=("bass_16bit_pure",)),
@@ -288,8 +335,74 @@ def test_multi_instrument_channel_and_v2_iter1_planning_rules(catalog: Instrumen
     assert rep_v2.is_compatible is True
     assert rep_v2.status == "FULL_HARDWARE_V2_ITER1"
     assert rep_v2.effective_audctl == (AUDCTL_JOIN_1_2_16BIT | AUDCTL_CH1_179MHZ)
-    assert rep_v2.target_implemented is False
-    assert any(d.code == "TARGET_NOT_IMPLEMENTED" and d.severity == "WARNING" for d in rep_v2.diagnostics)
+    assert rep_v2.target_implemented is True
+    assert not any(d.code == "TARGET_NOT_IMPLEMENTED" for d in rep_v2.diagnostics)
+
+    # SAP targets remain unimplemented and emit genuine TARGET_NOT_IMPLEMENTED warnings
+    for sap_target in (TARGET_SAP_V1_PLANNED, TARGET_SAP_V2_ITER1_PLANNED):
+        rep_sap = POKEYRuntime.resolve(
+            [ChannelAssignmentRequest(channel=3, instrument_ids=("lead_pure_sustain",))],
+            catalog,
+            sap_target,
+        )
+        assert rep_sap.is_compatible is True
+        assert rep_sap.target_implemented is False
+        assert any(d.code == "TARGET_NOT_IMPLEMENTED" and d.severity == "WARNING" for d in rep_sap.diagnostics)
+
+
+def test_wav_preview_accepts_all_six_core_v2_iter1_instruments_and_blocks_deferred(
+    catalog: InstrumentCatalog,
+) -> None:
+    core_v2_iter1_cases = (
+        (3, "lead_attack_bite"),
+        (1, "bass_poly4_punch"),
+        (4, "perc_kick_tight"),
+        (4, "perc_snare_crisp"),
+        (4, "perc_hihat_closed"),
+        (4, "perc_tom_pitched"),
+    )
+    for ch, inst_id in core_v2_iter1_cases:
+        rep_wav = POKEYRuntime.resolve(
+            [ChannelAssignmentRequest(channel=ch, instrument_ids=(inst_id,))],
+            catalog,
+            TARGET_WAV_PREVIEW,
+        )
+        assert rep_wav.is_compatible is True, inst_id
+        assert rep_wav.status == "FULL_HARDWARE_V2_ITER1", inst_id
+        assert rep_wav.target_implemented is True
+        assert not any(d.code == "TARGET_NOT_IMPLEMENTED" for d in rep_wav.diagnostics)
+
+        # v1-only WAV preview still rejects core_v2_iter1
+        rep_wav_v1 = POKEYRuntime.resolve(
+            [ChannelAssignmentRequest(channel=ch, instrument_ids=(inst_id,))],
+            catalog,
+            TARGET_WAV_V1_PREVIEW,
+        )
+        assert rep_wav_v1.is_compatible is False, inst_id
+        assert any(d.code == "BEHAVIOR_NOT_IN_TARGET_TIER" for d in rep_wav_v1.diagnostics)
+
+    # experimental_deferred remains blocked on TARGET_WAV_PREVIEW
+    rep_def_wav = POKEYRuntime.resolve(
+        [
+            ChannelAssignmentRequest(channel=1, instrument_ids=("lead_hpf_pwm",)),
+            ChannelAssignmentRequest(channel=3, instrument_ids=("ornament_bell_arp",)),
+        ],
+        catalog,
+        TARGET_WAV_PREVIEW,
+    )
+    assert rep_def_wav.is_compatible is False
+    assert rep_def_wav.effective_audctl == 0
+
+    # core_v2_iter2 remains blocked on both TARGET_V2_ITER1_XEX and TARGET_WAV_PREVIEW
+    iter2_beh = InstrumentBehavior(
+        behavior_id="beh_vibrato_iter2_test",
+        required_runtime_tier="core_v2_iter2",
+    )
+    lead_prof = catalog.get_profile("lead_pure_sustain")
+    for tgt in (TARGET_V1_XEX, TARGET_V2_ITER1_XEX, TARGET_WAV_PREVIEW):
+        st_iter2, diags_iter2 = POKEYRuntime.check_profile(lead_prof, iter2_beh, tgt, channel=3)
+        assert st_iter2 == "DEFERRED_FEATURE"
+        assert any(d.code == "BEHAVIOR_NOT_IN_TARGET_TIER" and d.severity == "ERROR" for d in diags_iter2)
 
 
 def test_profile_vs_behavior_separation_and_deferred_or_wav_only_gates(catalog: InstrumentCatalog) -> None:
@@ -332,9 +445,10 @@ def test_profile_vs_behavior_separation_and_deferred_or_wav_only_gates(catalog: 
     assert st_wav == "WAV_PREVIEW_ONLY"
     assert not any(d.severity == "ERROR" for d in diags_wav)
 
-    st_xex, diags_xex = POKEYRuntime.check_profile(lead_prof, wav_only_beh, TARGET_V1_XEX, channel=3)
-    assert st_xex == "WAV_PREVIEW_ONLY"
-    assert any(d.code == "WAV_ONLY_NOT_EXPORTABLE" and d.severity == "ERROR" for d in diags_xex)
+    for xex_target in (TARGET_V1_XEX, TARGET_V2_ITER1_XEX):
+        st_xex, diags_xex = POKEYRuntime.check_profile(lead_prof, wav_only_beh, xex_target, channel=3)
+        assert st_xex == "WAV_PREVIEW_ONLY"
+        assert any(d.code == "WAV_ONLY_NOT_EXPORTABLE" and d.severity == "ERROR" for d in diags_xex)
 
 
 def test_resolver_is_stateless_and_order_independent(catalog: InstrumentCatalog) -> None:

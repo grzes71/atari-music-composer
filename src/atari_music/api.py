@@ -382,6 +382,7 @@ def arrange_song(
     program_change_policy: str = "preserve",
     instrument_catalog_path: Optional[Path | str] = None,
     player_version: str = "auto",
+    target: Optional[Any] = None,
 ) -> MusicGenerationResult:
     """Arrange an existing composition with new POKEY catalog instruments without calling AI.
 
@@ -406,6 +407,7 @@ def arrange_song(
         program_change_policy=program_change_policy,
         catalog_path=cat_path,
         player_version=player_version,
+        target=target,
     )
 
     export_ver = resolve_export_format_version(arranged_ir, player_version)

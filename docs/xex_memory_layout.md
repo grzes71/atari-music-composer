@@ -73,12 +73,20 @@ Two further rules:
   overlap, so overlap is what is checked; a descending but **disjoint** layout causes no
   overwrite and is accepted.
 * **The player must be strictly smaller than 2048 bytes** — the project's one hard byte limit,
-  unchanged, enforced through `stage15.check_player_size` in the same validation step.
+  unchanged, enforced through `player_budget.check_player_size` in the same validation step.
 
-The model is OS-enabled: the generated harness reads RTCLOK `$14` and the SDLSTL shadow `$59`
-and writes the COLOR2/COLOR4 shadows and `CH`, and the executable is loaded by DOS and entered
-through RUNAD. There is no banked or self-modifying loader in this pipeline, so no exceptional
-region is claimed.
+The model is OS-enabled: the generated harness reads RTCLOK `$14` and the SAVMSC shadow `$58/$59`
+and writes the COLOR1/COLOR2/COLOR4 shadows (`$02C5`/`$02C6`/`$02C8`), GTIA immediate registers
+(`$D017`/`$D018`/`$D01A`), `NMIEN` (`$D40E`), and `CH` (`$02FC`), and the executable is loaded by
+DOS and entered through `RUNAD` (`$02E0/$02E1`). There is no banked or self-modifying loader in
+this pipeline, so no exceptional region is claimed.
+
+> **Stock XL/XE BASIC ROM Note (`$A000-$BFFF`):** Permitting `$A000-$BFFF` in `xex_layout.py` does
+> not mean BASIC ROM is automatically disabled on a real Atari XL/XE. Default builds load player +
+> harness at `$6000` and song data at `$8000` (staying safely below `$A000` for songs under 8 KB).
+> Whenever a build places segments inside `$A000-$BFFF`, the Atari must be booted with BASIC
+> disabled (hold `OPTION` on cold boot, or run under a DOS/loader that disables BASIC via `PORTB`
+> bit 1). See [xex_verification.md](xex_verification.md) for the full hardware safety audit.
 
 ## 4. What a bad layout looks like
 
@@ -114,9 +122,11 @@ Stated so the gap is visible rather than assumed closed:
 * **The RUN vector is not required to be present.** A container without it would load but not
   start; the pipeline always emits `run`, and this validator does not add a rule the assembler
   already guarantees.
-* **No runtime check.** This is a static judgement about a file. Whether the loaded program
-  behaves is what the register-trace tests (`tests/test_c1_modulation.py`,
-  `tests/test_pokey_semantics.py`) are for.
+* **No runtime check inside `xex_layout.py`.** This module is a static judgement about a file.
+  Runtime execution of production-generated `.xex` files is covered separately by
+  `tests/test_xex_e2e_py65.py` (CPU + POKEY `$D200-$D208` parity, `INITAD`/`RUNAD`, `SAVMSC` VU
+  meters, keyboard `$02FC`, and OS ROM write guards) and optional full-system emulator tests in
+  `tests/test_xex_altirra.py` (see [xex_verification.md](xex_verification.md)).
 
 ## 6. Where it lives
 
@@ -125,5 +135,7 @@ Stated so the gap is visible rather than assumed closed:
 | `src/atari_music/xex_layout.py` | the parser, the policy constants and the validator |
 | `src/atari_music/ai/client.py` | calls it on every build (`_validate_built_xex`) |
 | `src/atari_music/cli.py` | turns the error into a clean CLI message |
-| `src/atari_music/stage15.py` | owns the player-size limit the same step enforces |
+| `src/atari_music/player_budget.py` | owns the `< 2048 B` player-size limit enforced in the same step |
 | `tests/test_xex_layout.py` | container, policy, overlap, size and CLI coverage |
+| `tests/test_xex_e2e_py65.py` | end-to-end production XEX execution and `$D200-$D208` parity in `py65` |
+| `tests/test_xex_altirra.py` | optional full-system AltirraSDL PAL 800XL verification (`-m emulator`) |

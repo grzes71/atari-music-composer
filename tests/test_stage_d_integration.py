@@ -370,3 +370,43 @@ def test_cli_instruments_workflow_and_backward_compatibility(tmp_path: Path) -> 
         res_xex = runner.invoke(cli, ["build-xex", str(ai_json), "-o", str(xex_out)])
         assert res_xex.exit_code == 0, res_xex.output
         assert xex_out.is_file() and xex_out.stat().st_size > 1800
+
+
+def test_cli_list_and_inspect_instruments_reflect_implemented_xex_v2_and_wav_v2() -> None:
+    """CLI list-instruments and inspect-instrument report consistent v2 XEX & WAV capabilities."""
+    runner = CliRunner()
+    core_v2_iter1_ids = {
+        "lead_attack_bite",
+        "bass_poly4_punch",
+        "perc_kick_tight",
+        "perc_snare_crisp",
+        "perc_hihat_closed",
+        "perc_tom_pitched",
+    }
+
+    # list-instruments --target wav accepts all 6 core_v2_iter1 instruments and still blocks deferred
+    res_wav = runner.invoke(cli, ["list-instruments", "--target", "wav", "--json"])
+    assert res_wav.exit_code == 0, res_wav.output
+    wav_rows = {row["instrument_id"]: row for row in json.loads(res_wav.stdout)["instruments"]}
+    for iid in core_v2_iter1_ids:
+        assert wav_rows[iid]["compatible"] is True, iid
+        assert wav_rows[iid]["status"] == "FULL_HARDWARE_V2_ITER1", iid
+    assert wav_rows["lead_hpf_pwm"]["compatible"] is False
+    assert wav_rows["ornament_bell_arp"]["compatible"] is False
+
+    # list-instruments --target xex_v1 keeps rejecting all 6 core_v2_iter1 instruments
+    res_v1 = runner.invoke(cli, ["list-instruments", "--target", "xex_v1", "--json"])
+    assert res_v1.exit_code == 0, res_v1.output
+    v1_rows = {row["instrument_id"]: row for row in json.loads(res_v1.stdout)["instruments"]}
+    for iid in core_v2_iter1_ids:
+        assert v1_rows[iid]["compatible"] is False, iid
+
+    # inspect-instrument reports zero false TARGET_NOT_IMPLEMENTED diagnostics for xex_v2 & wav
+    res_insp = runner.invoke(cli, ["inspect-instrument", "lead_attack_bite", "--json"])
+    assert res_insp.exit_code == 0, res_insp.output
+    compat = json.loads(res_insp.stdout)["compatibility"]
+    assert compat["xex_v1"]["compatible"] is False
+    assert compat["xex_v2"]["compatible"] is True
+    assert compat["xex_v2"]["diagnostics"] == []
+    assert compat["wav"]["compatible"] is True
+    assert compat["wav"]["diagnostics"] == []
