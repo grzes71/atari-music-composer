@@ -684,9 +684,14 @@ class MainWindow(QMainWindow):
         self._last_exported_result = result
         seg_txt = ", ".join(f"${start:04X}-${end:04X}" for start, end, _role in result.segments)
         asm_note = f" | ASM: {result.asm_path.name}" if result.asm_path is not None else ""
+        json_note = (
+            f" | JSON: {result.arrangement_json_path.name}"
+            if result.arrangement_json_path is not None
+            else ""
+        )
         msg = (
             f"Exported XEX -> {result.xex_path} ({result.size_bytes} bytes, Format v{result.format_version}"
-            f"{asm_note}) | Segments: {seg_txt}"
+            f"{asm_note}{json_note}) | Segments: {seg_txt}"
         )
         self.statusBar().showMessage(msg)
         self._show_info_banner(msg)

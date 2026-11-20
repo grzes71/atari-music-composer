@@ -1,0 +1,74 @@
+name: Docs
+
+# Builds the MkDocs Material documentation site and publishes it to GitHub
+# Pages via the official artifact-based Actions deployment mechanism.
+#
+# Pipeline: checkout -> install docs dependencies -> strict build ->
+#           configure-pages -> upload-pages-artifact -> deploy-pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # Re-deploy only when documentation or its build inputs change.
+      - "mkdocs.yml"
+      - "docs/**"
+      - "CHANGELOG.md" # embedded into the Changelog page
+      - "pyproject.toml" # docs dependencies are declared here
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+# Minimal default permissions; the deploy job widens to pages/id-token only.
+permissions:
+  contents: read
+
+# Avoid conflicting Pages deployments: a newer push cancels the stale run.
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install package with docs dependencies
+        run: python -m pip install -e ".[docs]"
+
+      # --strict turns any warning (broken link, missing page in nav,
+      # config problem) into a build failure, so deployment only happens
+      # from a clean build.
+      - name: Build site (strict)
+        run: python -m mkdocs build --strict
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

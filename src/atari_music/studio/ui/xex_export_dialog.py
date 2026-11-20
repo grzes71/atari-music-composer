@@ -19,7 +19,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from atari_music.studio.exporter import ExportService, PreparedXexArrangement
+from atari_music.studio.exporter import (
+    ExportService,
+    PreparedXexArrangement,
+    companion_arrangement_json_path,
+)
 from atari_music.studio.models import LoadedCompositionState, ToolchainPaths, XexExportOptions
 
 
@@ -111,6 +115,12 @@ class XexExportDialog(QDialog):
         self._keep_asm_check = QCheckBox("Keep companion .asm file beside .xex (recommended)")
         self._keep_asm_check.setChecked(True)
         out_form.addRow("", self._keep_asm_check)
+
+        self._keep_json_check = QCheckBox(
+            "Keep companion .arrangement.json file with arrangement details (recommended)"
+        )
+        self._keep_json_check.setChecked(True)
+        out_form.addRow("", self._keep_json_check)
         root.addWidget(out_group)
 
         # Memory & toolchain settings
@@ -245,6 +255,7 @@ class XexExportDialog(QDialog):
                     music_address=self._music_addr_edit.text().strip() or None,
                     zp_base=self._zp_base_edit.text().strip(),
                     keep_asm=self._keep_asm_check.isChecked(),
+                    keep_arrangement_json=self._keep_json_check.isChecked(),
                     mads_bin=toolchain.mads_bin,
                     player_asm=toolchain.player_asm,
                 )
@@ -281,7 +292,9 @@ class XexExportDialog(QDialog):
         xex_exists = options.output_path.exists()
         asm_target = options.output_path.with_suffix(".asm")
         asm_will_overwrite = options.keep_asm and asm_target.exists()
-        if not xex_exists and not asm_will_overwrite:
+        json_target = companion_arrangement_json_path(options.output_path)
+        json_will_overwrite = options.keep_arrangement_json and json_target.exists()
+        if not xex_exists and not asm_will_overwrite and not json_will_overwrite:
             return True
 
         targets = []
@@ -289,9 +302,15 @@ class XexExportDialog(QDialog):
             targets.append(str(options.output_path))
         if asm_will_overwrite:
             targets.append(str(asm_target))
+        if json_will_overwrite:
+            targets.append(str(json_target))
         msg = "The following existing file(s) will be overwritten:\n\n" + "\n".join(targets)
         if not options.keep_asm and asm_target.exists():
             msg += f"\n\nExisting companion ASM ({asm_target.name}) will NOT be modified or deleted."
+        if not options.keep_arrangement_json and json_target.exists():
+            msg += (
+                f"\n\nExisting companion JSON ({json_target.name}) will NOT be modified or deleted."
+            )
         msg += "\n\nContinue with XEX export?"
 
         reply = QMessageBox.question(

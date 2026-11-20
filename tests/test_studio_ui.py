@@ -349,6 +349,7 @@ def test_ui_xex_export_dialog_validation_overwrite_and_background_worker(
         assert dlg._music_addr_edit.text() == "$8000"
         assert dlg._zp_base_edit.text() == "$80"
         assert dlg._keep_asm_check.isChecked() is True
+        assert dlg._keep_json_check.isChecked() is True
         assert dlg._export_btn.isEnabled() is True
 
         # Invalid ZP address disables Export button with clear diagnostic
@@ -417,9 +418,12 @@ def test_ui_xex_export_dialog_validation_overwrite_and_background_worker(
 
         assert win.last_exported_result is not None
         assert win.last_exported_result.xex_path == target_xex
+        assert win.last_exported_result.arrangement_json_path == target_xex.with_suffix(".arrangement.json")
         assert "Exported XEX" in win._diag_banner.text()
+        assert "JSON: ui_out.arrangement.json" in win._diag_banner.text()
         assert target_xex.read_bytes() == _stub_xex_bytes()
         assert target_xex.with_suffix(".asm").is_file()
+        assert target_xex.with_suffix(".arrangement.json").is_file()
         assert win.last_rendered_entry is wav_entry
         assert win._transport._loaded_wav == wav_entry.wav_path
 

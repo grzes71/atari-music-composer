@@ -678,14 +678,85 @@ def test_safe_multi_file_commit_overwrite_and_rollback(
 
     # 3. keep_asm=False MUST update .xex while leaving pre-existing .asm untouched!
     monkeypatch.setattr("atari_music.studio.exporter.os.replace", real_replace)
-    res_no_asm = exporter.export_xex(
+    out_json = tmp_path / "song.arrangement.json"
+    orig_json_text = '{"preexisting": true}\n'
+    out_json.write_text(orig_json_text, encoding="utf-8")
+
+    # 3a. Simulate failure during commit of .arrangement.json AFTER .xex and .asm were committed
+    def _fail_commit_json(src, dst):
+        if Path(dst) == out_json and ".bak_" not in str(src):
+            raise OSError("Simulated replace failure on song.arrangement.json")
+        return real_replace(src, dst)
+
+    out_xex.write_bytes(orig_xex_bytes)
+    monkeypatch.setattr("atari_music.studio.exporter.os.replace", _fail_commit_json)
+    with pytest.raises(OSError, match="song.arrangement.json"):
+        exporter.export_xex(
+            state,
+            state.baseline_config,
+            XexExportOptions(
+                output_path=out_xex,
+                keep_asm=True,
+                keep_arrangement_json=True,
+                mads_bin=fake_mads,
+                player_asm=PLAYER_ASM,
+            ),
+        )
+    assert out_xex.read_bytes() == orig_xex_bytes
+    assert out_asm.read_text(encoding="utf-8") == orig_asm_text
+    assert out_json.read_text(encoding="utf-8") == orig_json_text
+
+    # 3b. keep_asm=False and keep_arrangement_json=False leaves pre-existing .asm and .arrangement.json untouched
+    monkeypatch.setattr("atari_music.studio.exporter.os.replace", real_replace)
+    res_no_companions = exporter.export_xex(
         state,
         state.baseline_config,
-        XexExportOptions(output_path=out_xex, keep_asm=False, mads_bin=fake_mads, player_asm=PLAYER_ASM),
+        XexExportOptions(
+            output_path=out_xex,
+            keep_asm=False,
+            keep_arrangement_json=False,
+            mads_bin=fake_mads,
+            player_asm=PLAYER_ASM,
+        ),
     )
-    assert res_no_asm.asm_path is None
+    assert res_no_companions.asm_path is None
+    assert res_no_companions.arrangement_json_path is None
     assert out_xex.read_bytes() == new_xex_bytes
     assert out_asm.read_text(encoding="utf-8") == orig_asm_text
+    assert out_json.read_text(encoding="utf-8") == orig_json_text
+
+    # 4. Exporting into same directory as source <stem>.json writes <stem>.arrangement.json and never clobbers source
+    src_song_json = tmp_path / "same_stem.json"
+    src_raw = (REPO_ROOT / "examples" / "ai" / "action_fast.json").read_text(encoding="utf-8")
+    src_song_json.write_text(src_raw, encoding="utf-8")
+    same_state = load_studio_composition(src_song_json)
+    same_cfg = same_state.baseline_config.with_channel(1, "lead_attack_bite")
+    res_same = exporter.export_xex(
+        same_state,
+        same_cfg,
+        XexExportOptions(
+            output_path=tmp_path / "same_stem.xex",
+            keep_asm=True,
+            keep_arrangement_json=True,
+            mads_bin=fake_mads,
+            player_asm=PLAYER_ASM,
+        ),
+    )
+    assert src_song_json.read_text(encoding="utf-8") == src_raw
+    assert res_same.arrangement_json_path == tmp_path / "same_stem.arrangement.json"
+    assert res_same.arrangement_json_path.is_file()
+    manifest = json.loads(res_same.arrangement_json_path.read_text(encoding="utf-8"))
+    assert manifest["schema_id"] == "atari-music/xex-arrangement-manifest/1"
+    assert manifest["composition"]["title"] == same_state.title
+    assert manifest["arrangement"]["channel_assignments"]["1"] == "lead_attack_bite"
+    assert manifest["arrangement"]["channels"]["1"]["assignment_mode"] == "catalog_override"
+    assert manifest["arrangement"]["channels"]["1"]["catalog_profile"]["instrument_id"] == "lead_attack_bite"
+    assert manifest["export"]["xex_file"] == "same_stem.xex"
+    assert manifest["export"]["asm_file"] == "same_stem.asm"
+    assert manifest["export"]["arrangement_json_file"] == "same_stem.arrangement.json"
+    assert manifest["export"]["player_address_hex"] == "$6000"
+    assert manifest["export"]["music_address_hex"] == "$8000"
+    assert len(manifest["export"]["segments"]) == 3
 
 
 def test_exporter_module_has_no_pyside6_imports() -> None:
@@ -719,23 +790,38 @@ def test_real_mads_integration_dsl_and_json_export(tmp_path: Path) -> None:
     )
     assert res_dsl.xex_path.is_file()
     assert res_dsl.asm_path is not None and res_dsl.asm_path.is_file()
+    assert res_dsl.arrangement_json_path is not None and res_dsl.arrangement_json_path.is_file()
+    dsl_manifest = json.loads(res_dsl.arrangement_json_path.read_text(encoding="utf-8"))
+    assert dsl_manifest["schema_id"] == "atari-music/xex-arrangement-manifest/1"
+    assert dsl_manifest["arrangement"]["effective_format_version"] == 2
+    assert dsl_manifest["arrangement"]["effective_uses_16bit_bass"] is True
+    assert dsl_manifest["arrangement"]["channels"]["2"]["assignment_mode"] == "locked_16bit_slave"
+    assert dsl_manifest["arrangement"]["channels"]["3"]["assigned_instrument_id"] == "lead_attack_bite"
     assert res_dsl.format_version == 2
     assert res_dsl.uses_16bit_bass is True
     assert xex_layout.validate_xex_file(
         res_dsl.xex_path, player_address=0x6000, music_address=0x8000
     )
 
-    # 2. Real v1-compatible AI JSON -> keep_asm=False
+    # 2. Real v1-compatible AI JSON -> keep_asm=False, keep_arrangement_json=False
     ai_state = load_studio_composition(REPO_ROOT / "examples" / "ai" / "action_fast.json")
     ai_xex = tmp_path / "action_studio.xex"
     res_ai = exporter.export_xex(
         ai_state,
         ai_state.baseline_config,
-        XexExportOptions(output_path=ai_xex, keep_asm=False, mads_bin=MADS_EXE, player_asm=PLAYER_ASM),
+        XexExportOptions(
+            output_path=ai_xex,
+            keep_asm=False,
+            keep_arrangement_json=False,
+            mads_bin=MADS_EXE,
+            player_asm=PLAYER_ASM,
+        ),
     )
     assert res_ai.xex_path.is_file()
     assert res_ai.asm_path is None
+    assert res_ai.arrangement_json_path is None
     assert not ai_xex.with_suffix(".asm").exists()
+    assert not ai_xex.with_suffix(".arrangement.json").exists()
     assert res_ai.format_version == 1
     assert xex_layout.validate_xex_file(
         res_ai.xex_path, player_address=0x6000, music_address=0x8000

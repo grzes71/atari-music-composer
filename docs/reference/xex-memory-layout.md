@@ -86,7 +86,7 @@ this pipeline, so no exceptional region is claimed.
 > harness at `$6000` and song data at `$8000` (staying safely below `$A000` for songs under 8 KB).
 > Whenever a build places segments inside `$A000-$BFFF`, the Atari must be booted with BASIC
 > disabled (hold `OPTION` on cold boot, or run under a DOS/loader that disables BASIC via `PORTB`
-> bit 1). See [xex_verification.md](xex_verification.md) for the full hardware safety audit.
+> bit 1). See [xex-verification.md](xex-verification.md) for the full hardware safety audit.
 
 ## 4. What a bad layout looks like
 
@@ -126,7 +126,7 @@ Stated so the gap is visible rather than assumed closed:
   Runtime execution of production-generated `.xex` files is covered separately by
   `tests/test_xex_e2e_py65.py` (CPU + POKEY `$D200-$D208` parity, `INITAD`/`RUNAD`, `SAVMSC` VU
   meters, keyboard `$02FC`, and OS ROM write guards) and optional full-system emulator tests in
-  `tests/test_xex_altirra.py` (see [xex_verification.md](xex_verification.md)).
+  `tests/test_xex_altirra.py` (see [xex-verification.md](xex-verification.md)).
 
 ## 6. Where it lives
 

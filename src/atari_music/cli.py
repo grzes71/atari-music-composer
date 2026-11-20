@@ -103,7 +103,7 @@ def _echo_binding_report(report: dict) -> None:
 
 
 # =============================================================================
-# Instrument selection (docs/instrument_selection_cli.md)
+# Instrument selection (docs/reference/instrument-selection-cli.md)
 # =============================================================================
 #: The Lead Library schema this consumer reads.
 INSTRUMENT_LIBRARY_SCHEMA = "atari-music/instrument-library/1"

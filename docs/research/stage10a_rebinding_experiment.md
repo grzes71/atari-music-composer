@@ -82,7 +82,7 @@ makes a re-run comparable — and nothing more.
 ## 3. The old binding
 
 **Observed.** The strategy the old bindings followed is documented in
-[profile_integration.md](profile_integration.md) §13.1: a pool per *generator family* — noise
+[profile_integration.md](../reference/profile-integration.md) §13.1: a pool per *generator family* — noise
 for percussion, poly4 for bass, pure tone for melody — and within a pool, a stable rotation
 over the song list. The table below reads each old assignment through that strategy. The rating
 columns are the Stage 9C/9D listener's own words and numbers, not a re-rating.
@@ -213,7 +213,7 @@ ratings the decision was made on. A candidate marked **ok** satisfies the three 
 
 (At most five are listed per channel, best first by the rule's own order — usefulness, then
 Atari character, then distinctiveness. The full pool, including every refusal and its code, is
-in [rebinding.json](../reports/stage10a/rebinding.json).)
+in `reports/stage10a/rebinding.json`, a local gitignored research artifact.)
 
 ## 5. The final experimental rebinding
 

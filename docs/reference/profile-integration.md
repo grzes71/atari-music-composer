@@ -245,8 +245,8 @@ is not told which samples those are.
 ### 3.4 What the listening actually found (Stage 9D)
 
 The listening was performed by a human and analysed by `analyze-listening-test-9d`
-([stage9d.py](../src/atari_music/stage9d.py)); the full result is
-[stage9d_human_listening_results.md](stage9d_human_listening_results.md). Four findings bear
+([stage9d.py](https://github.com/grzes71/atari-music-composer/blob/main/src/atari_music/stage9d.py)); the full result is
+[stage9d_human_listening_results.md](../research/stage9d_human_listening_results.md). Four findings bear
 directly on the integration contract above, and one of them is negative:
 
 1. **The library is audibly smaller than its profile count.** The 61 renderable profiles produce
@@ -277,8 +277,8 @@ a song better, not yet.
 ### 3.5 Why that happened (Stage 9E)
 
 Stage 9E diagnoses the two results above instead of acting on them
-([stage9e.py](../src/atari_music/stage9e.py), `analyze-listening-test-9e`; full report
-[stage9e_perceptual_renderer_gap.md](stage9e_perceptual_renderer_gap.md), machine-readable
+([stage9e.py](https://github.com/grzes71/atari-music-composer/blob/main/src/atari_music/stage9e.py), `analyze-listening-test-9e`; full report
+[stage9e_perceptual_renderer_gap.md](../research/stage9e_perceptual_renderer_gap.md), machine-readable
 results in `reports/stage9e/`). It is read-only, and it measures the pipeline rather than reading
 it: the profile document is wrapped in a mapping that records every path the real binding touches,
 each IR field is perturbed to see which frames it changes, each frame column is zeroed to see

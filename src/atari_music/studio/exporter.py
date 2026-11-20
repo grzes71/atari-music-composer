@@ -3,20 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import shutil
 import tempfile
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from atari_music.api import MusicGenerationResult, arrange_song
 from atari_music.instruments.planner import InstrumentPlanError
 from atari_music.instruments.runtime import RuntimeDiagnostic
-from atari_music.ir import resolve_audctl_mode
+from atari_music.ir import IRSong, resolve_audctl_mode, resolve_initial_channel_instruments
 from atari_music.studio.instruments import (
     InstrumentService,
     resolve_xex_export_player_version,
 )
+from atari_music.studio.loader import canonical_ir_sha256
 from atari_music.studio.models import (
     LoadedCompositionState,
     StudioArrangementConfig,
@@ -28,6 +30,13 @@ from atari_music.xex_layout import assign_roles, parse_xex
 
 _SRC_PKG = Path(__file__).resolve().parents[1]
 _REPO_ROOT = _SRC_PKG.parents[1]
+ARRANGEMENT_MANIFEST_SCHEMA_ID = "atari-music/xex-arrangement-manifest/1"
+
+
+def companion_arrangement_json_path(output_path: Path) -> Path:
+    """Return the companion ``<stem>.arrangement.json`` path for an exported ``.xex`` path."""
+    p = Path(output_path)
+    return p.with_suffix(".arrangement.json") if p.suffix else Path(f"{p}.arrangement.json")
 
 
 def resolve_default_mads_path() -> Optional[Path]:
@@ -77,6 +86,7 @@ class PreparedXexArrangement:
     diagnostics: Tuple[RuntimeDiagnostic, ...]
     blocking_errors: Tuple[str, ...]
     warnings: Tuple[str, ...]
+    source_state: Optional[LoadedCompositionState] = None
 
     @property
     def is_exportable(self) -> bool:
@@ -214,6 +224,7 @@ class ExportService:
                 diagnostics=err_diags,
                 blocking_errors=(str(exc),),
                 warnings=(),
+                source_state=state,
             )
 
         (
@@ -236,7 +247,230 @@ class ExportService:
             diagnostics=diagnostics,
             blocking_errors=blocking_errors,
             warnings=warnings,
+            source_state=state,
         )
+
+    def _build_arrangement_manifest(
+        self,
+        prepared: PreparedXexArrangement,
+        options: XexExportOptions,
+        *,
+        output_path: Path,
+        asm_target: Optional[Path],
+        json_target: Path,
+        xex_size_bytes: int,
+        segments: Tuple[Tuple[int, int, str], ...],
+    ) -> Dict[str, Any]:
+        """Construct a deterministic JSON manifest describing the exported XEX arrangement."""
+        assert prepared.arranged_result is not None
+        assert prepared.effective_format_version is not None
+
+        arranged_res = prepared.arranged_result
+        arranged_ir: IRSong = arranged_res.pokey_ir
+        state = prepared.source_state
+        config = prepared.config
+        catalog = self._instrument_service.catalog
+
+        init_idx_map = resolve_initial_channel_instruments(arranged_ir)
+        idx_to_ir_inst = {idx: inst for idx, inst in enumerate(arranged_ir.instruments)}
+        id_to_ir_inst = {inst.id: inst for inst in arranged_ir.instruments}
+
+        channels_manifest: Dict[str, Any] = {}
+        for ch in (1, 2, 3, 4):
+            assigned_id = config.channel_instruments.get(ch)
+            is_16bit_slave = ch == 2 and prepared.effective_uses_16bit_bass
+            is_16bit_ch = ch in (1, 2) and prepared.effective_uses_16bit_bass
+            ch_analysis = state.channels.get(ch) if state is not None else None
+
+            active_notes = [
+                n for pat in arranged_ir.patterns for n in pat.tracks.get(ch, ()) if not n.is_rest
+            ]
+            init_ir_inst = idx_to_ir_inst.get(init_idx_map.get(ch, 0))
+            if active_notes:
+                first_note_inst = id_to_ir_inst.get(active_notes[0].instrument_id)
+                if first_note_inst is not None:
+                    init_ir_inst = first_note_inst
+
+            profile_id = assigned_id or (init_ir_inst.profile_id if init_ir_inst is not None else None)
+            catalog_profile_info: Optional[Dict[str, Any]] = None
+            if not is_16bit_slave and profile_id and catalog.has_profile(profile_id):
+                prof, beh = catalog.resolve_profile_behavior(profile_id)
+                catalog_profile_info = {
+                    "instrument_id": prof.instrument_id,
+                    "display_name": prof.display_name,
+                    "family": prof.family,
+                    "intended_roles": list(prof.intended_roles),
+                    "base_distortion": int(prof.base_distortion),
+                    "base_distortion_hex": f"${int(prof.base_distortion):02X}",
+                    "waveform_family": prof.waveform_family,
+                    "divider_mode": prof.hardware_constraints.divider_mode,
+                    "preferred_clock_hz": prof.hardware_constraints.preferred_clock_hz,
+                    "required_audctl_bits": int(prof.hardware_constraints.required_audctl_bits),
+                    "poly4_safe_tuning": bool(prof.hardware_constraints.poly4_safe_tuning),
+                    "midi_range": list(prof.hardware_constraints.midi_range),
+                    "behavior_id": prof.behavior_id,
+                    "runtime_tier": beh.required_runtime_tier if beh is not None else "core_v1",
+                    "modulation_mode": beh.modulation_mode if beh is not None else "none",
+                    "envelope": {
+                        "attack_frames": int(prof.envelope.attack_frames),
+                        "decay_frames": int(prof.envelope.decay_frames),
+                        "sustain_vol": int(prof.envelope.sustain_vol),
+                        "release_frames": int(prof.envelope.release_frames),
+                        "peak_vol": int(prof.envelope.peak_vol),
+                    },
+                }
+
+            if is_16bit_slave:
+                assignment_mode = "locked_16bit_slave"
+                eff_name = "Locked (CH1+CH2 16-bit slave)"
+            elif assigned_id is not None and catalog_profile_info is not None:
+                assignment_mode = "catalog_override"
+                eff_name = f"{catalog_profile_info['display_name']} ({assigned_id})"
+            elif init_ir_inst is not None:
+                assignment_mode = "original"
+                eff_name = init_ir_inst.name
+            elif ch_analysis is not None:
+                assignment_mode = "original"
+                eff_name = ch_analysis.initial_instrument_name
+            else:
+                assignment_mode = "original"
+                eff_name = "Default"
+
+            channels_manifest[str(ch)] = {
+                "channel": ch,
+                "assigned_instrument_id": assigned_id,
+                "assignment_mode": assignment_mode,
+                "effective_instrument_name": eff_name,
+                "role": (
+                    ch_analysis.role
+                    if ch_analysis is not None
+                    else (init_ir_inst.role if init_ir_inst is not None else "melody")
+                ),
+                "active": ch_analysis.active if ch_analysis is not None else (len(active_notes) > 0),
+                "note_count": ch_analysis.note_count if ch_analysis is not None else len(active_notes),
+                "midi_min": ch_analysis.midi_min if ch_analysis is not None else None,
+                "midi_max": ch_analysis.midi_max if ch_analysis is not None else None,
+                "has_program_changes": (
+                    ch_analysis.has_program_changes if ch_analysis is not None else False
+                ),
+                "program_change_count": (
+                    ch_analysis.program_change_count if ch_analysis is not None else 0
+                ),
+                "is_16bit": is_16bit_ch,
+                "catalog_profile": catalog_profile_info,
+            }
+
+        arranged_instruments_list: List[Dict[str, Any]] = []
+        for inst in arranged_ir.instruments:
+            arranged_instruments_list.append(
+                {
+                    "id": int(inst.id),
+                    "name": inst.name,
+                    "profile_id": inst.profile_id,
+                    "behavior_id": inst.behavior_id,
+                    "role": inst.role,
+                    "distortion": int(inst.distortion),
+                    "distortion_hex": f"${int(inst.distortion):02X}",
+                    "is_16bit": bool(inst.is_16bit),
+                    "audctl": int(inst.audctl) if inst.audctl is not None else None,
+                    "audctl_hex": f"${int(inst.audctl):02X}" if inst.audctl is not None else None,
+                    "modulation": int(inst.modulation),
+                    "envelope": {
+                        "attack_frames": int(inst.envelope.attack_frames),
+                        "decay_frames": int(inst.envelope.decay_frames),
+                        "sustain_vol": int(inst.envelope.sustain_vol),
+                        "release_frames": int(inst.envelope.release_frames),
+                    },
+                }
+            )
+
+        return {
+            "schema_id": ARRANGEMENT_MANIFEST_SCHEMA_ID,
+            "composition": {
+                "title": state.title if state is not None else arranged_ir.title,
+                "author": state.author if state is not None else arranged_ir.author,
+                "source_path": (
+                    str(state.source_path)
+                    if (state is not None and state.source_path is not None)
+                    else None
+                ),
+                "source_kind": state.source_kind if state is not None else None,
+                "key": state.key if state is not None else arranged_ir.key,
+                "mode": state.mode if state is not None else arranged_ir.mode,
+                "tempo_bpm": int(state.tempo_bpm if state is not None else arranged_ir.tempo_bpm),
+                "frames_per_tick": int(arranged_ir.frames_per_tick),
+                "pattern_count": len(arranged_ir.patterns),
+                "sequence_length": len(arranged_ir.sequence),
+                "duration_seconds": round(float(arranged_res.metadata.duration), 4),
+                "base_uses_16bit_bass": (
+                    bool(state.base_uses_16bit_bass)
+                    if state is not None
+                    else bool(arranged_ir.uses_16bit_bass)
+                ),
+                "base_ir_sha256": state.base_ir_sha256 if state is not None else None,
+                "musical_fingerprint": state.musical_fingerprint if state is not None else None,
+                "arranged_ir_sha256": canonical_ir_sha256(arranged_ir),
+            },
+            "arrangement": {
+                "target_backend": config.target_backend,
+                "resolved_target_backend": prepared.resolved_target_backend,
+                "requested_player_version": config.player_version,
+                "effective_format_version": int(prepared.effective_format_version),
+                "program_change_policy": config.program_change_policy,
+                "effective_uses_16bit_bass": bool(prepared.effective_uses_16bit_bass),
+                "effective_audctl": int(prepared.effective_audctl),
+                "effective_audctl_hex": f"${int(prepared.effective_audctl):02X}",
+                "channel_assignments": {
+                    str(ch): config.channel_instruments.get(ch) for ch in (1, 2, 3, 4)
+                },
+                "channels": channels_manifest,
+                "arranged_instruments": arranged_instruments_list,
+            },
+            "export": {
+                "xex_file": output_path.name,
+                "asm_file": asm_target.name if asm_target is not None else None,
+                "arrangement_json_file": json_target.name,
+                "xex_size_bytes": int(xex_size_bytes),
+                "music_data_size_bytes": int(arranged_res.metadata.memory_size_bytes),
+                "format_version": int(prepared.effective_format_version),
+                "player_address": int(options.player_address),
+                "player_address_hex": f"${int(options.player_address):04X}",
+                "music_address": (
+                    int(options.music_address) if options.music_address is not None else None
+                ),
+                "music_address_hex": (
+                    f"${int(options.music_address):04X}"
+                    if options.music_address is not None
+                    else None
+                ),
+                "zp_base": int(options.zp_base),
+                "zp_base_hex": f"${int(options.zp_base):02X}",
+                "segments": [
+                    {
+                        "start": int(start),
+                        "end": int(end),
+                        "start_hex": f"${int(start):04X}",
+                        "end_hex": f"${int(end):04X}",
+                        "size_bytes": int(end - start + 1),
+                        "role": role,
+                    }
+                    for start, end, role in segments
+                ],
+            },
+            "diagnostics": {
+                "warnings": list(prepared.warnings),
+                "items": [
+                    {
+                        "severity": d.severity,
+                        "code": d.code,
+                        "message": d.message,
+                        "channel": d.channel,
+                        "instrument_id": d.instrument_id,
+                    }
+                    for d in prepared.diagnostics
+                ],
+            },
+        }
 
     def export_prepared_xex(
         self,
@@ -300,6 +534,25 @@ class ExportService:
                 asm_target = output_path.with_suffix(".asm")
                 commit_pairs.append((staged_asm, asm_target))
 
+            json_target: Optional[Path] = None
+            if options.keep_arrangement_json:
+                staged_json = companion_arrangement_json_path(built_path)
+                json_target = companion_arrangement_json_path(output_path)
+                manifest = self._build_arrangement_manifest(
+                    prepared,
+                    options,
+                    output_path=output_path,
+                    asm_target=asm_target,
+                    json_target=json_target,
+                    xex_size_bytes=len(xex_bytes),
+                    segments=seg_summary,
+                )
+                staged_json.write_text(
+                    json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
+                commit_pairs.append((staged_json, json_target))
+
             _commit_staged_pairs(commit_pairs, stage_dir)
 
         return XexExportResult(
@@ -314,6 +567,7 @@ class ExportService:
             zp_base=options.zp_base,
             segments=seg_summary,
             warnings=prepared.warnings,
+            arrangement_json_path=json_target,
         )
 
     def export_xex(

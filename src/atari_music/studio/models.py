@@ -257,6 +257,7 @@ class XexExportOptions(BaseModel):
     music_address: Optional[int] = Field(default=0x8000, ge=0x0000, le=0xFFFF)
     zp_base: int = Field(default=0x80, ge=0x80, le=0xF2)
     keep_asm: bool = True
+    keep_arrangement_json: bool = True
     mads_bin: Optional[Path] = None
     player_asm: Optional[Path] = None
 
@@ -326,6 +327,7 @@ class XexExportResult:
     zp_base: int
     segments: Tuple[Tuple[int, int, str], ...]
     warnings: Tuple[str, ...] = ()
+    arrangement_json_path: Optional[Path] = None
 
 
 class ArrangementPreset(BaseModel):

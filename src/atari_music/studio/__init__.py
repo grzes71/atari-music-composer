@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from atari_music.studio.comparison import ComparisonError, ComparisonSession
 from atari_music.studio.exporter import (
+    ARRANGEMENT_MANIFEST_SCHEMA_ID,
     ExportService,
     PreparedXexArrangement,
+    companion_arrangement_json_path,
     resolve_default_mads_path,
     resolve_default_player_asm,
 )
@@ -56,6 +58,7 @@ from atari_music.studio.presets import (
 from atari_music.studio.renderer import RenderService
 
 __all__ = [
+    "ARRANGEMENT_MANIFEST_SCHEMA_ID",
     "ArrangementEvaluation",
     "ArrangementPreset",
     "CachedRenderEntry",
@@ -96,6 +99,7 @@ __all__ = [
     "XexExportOptions",
     "XexExportResult",
     "apply_preset_to_state",
+    "companion_arrangement_json_path",
     "load_studio_composition",
     "parse_atari_address",
     "parse_preset_json",

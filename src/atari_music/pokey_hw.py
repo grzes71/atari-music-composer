@@ -163,7 +163,7 @@ def octave_pulse_divider(nominal: int, frame_offset: int) -> int:
     ``N // 2`` of a value in ``0..254`` is in ``0..127``, so nothing here can fall out of range.
     The octave is exact when ``N`` is odd; for even ``N`` it is flat by up to ~12 cents at the
     bottom of the range, which is the behaviour Experiment 26/27 established and not a rounding
-    bug (see ``docs/c1_player_extension_design.md`` §2.4).
+    bug (see ``docs/reference/c1-player-extension-design.md`` §2.4).
     """
     value = int(nominal)
     return value if int(frame_offset) % 2 == 0 else value // 2

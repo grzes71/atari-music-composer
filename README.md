@@ -4,8 +4,11 @@
 [![Platform: Atari 8-bit](https://img.shields.io/badge/platform-Atari%20800%20XL%20%2F%2065%20XE-red.svg)](https://en.wikipedia.org/wiki/Atari_8-bit_family)
 [![Assembler: MADS](https://img.shields.io/badge/assembler-MADS-green.svg)](http://mads.atari8.info/)
 [![CPU: MOS 6502](https://img.shields.io/badge/cpu-MOS%206502-orange.svg)](https://en.wikipedia.org/wiki/MOS_Technology_6502)
+[![Documentation](https://img.shields.io/badge/docs-mkdocs--material-blue.svg)](https://grzes71.github.io/atari-music-composer/)
 
 A Python toolchain and relocatable MOS 6502 audio driver for composing, validating, arranging, synthesizing, and compiling multi-channel music for **Atari 8-bit computers (Atari 800 XL / 65 XE, PAL 50 Hz)** equipped with the **POKEY** sound chip.
+
+**[Documentation website](https://grzes71.github.io/atari-music-composer/)** — the full documentation set (user guide, architecture, CLI reference, research record) is published to GitHub Pages from the [`docs/`](docs/) directory and [`mkdocs.yml`](mkdocs.yml); see the [Documentation](#documentation) section below for local preview instructions.
 
 The system separates **musical composition** (notes, rhythm, form, harmony) from **hardware instrument realization** (waveforms, envelopes, transient macros, pitch envelopes, and `AUDCTL` clock/filter routing), allowing a single composition to be synthesized to WAV and compiled into standalone Atari `.xex` executables across multiple instrumentation arrangements without re-invoking AI.
 
@@ -22,7 +25,8 @@ The system separates **musical composition** (notes, rhythm, form, harmony) from
 7. [Atari Music Composer Studio (GUI)](#atari-music-composer-studio-gui)
 8. [Export and Atari Playback](#export-and-atari-playback)
 9. [Architecture and Development](#architecture-and-development)
-10. [Related Documentation](#related-documentation)
+10. [Documentation](#documentation)
+11. [Related Documentation](#related-documentation)
 
 ---
 
@@ -118,6 +122,7 @@ Optional/developer packages in `pyproject.toml` (`[project.optional-dependencies
 * `openai` — required at runtime only when calling live LLM endpoints (`AIProviderDependencyError` is raised if missing)
 * `py65` — required for 6502 CPU emulation parity tests
 * `build`, `python-semantic-release` (`[dev]`) — packaging/release extras
+* `mkdocs >= 1.6`, `mkdocs-material >= 9.6` (`[docs]`) — documentation site build and local preview
 
 ### AI Provider & `.env` Configuration
 
@@ -378,7 +383,7 @@ Atari Music Composer uses three distinct representations across its pipeline:
 2. **POKEY IR JSON (`IRSong`)**:
    - Hardware-compiled intermediate representation (`src/atari_music/ir.py`) emitted by `compose --output-json`, `import-json --output-ir`, `import-dsl --output-ir`, `ai-compose --output-ir`, and `arrange --output-json`. Stores hardware divider parameters, resolved `IRInstrument` tables (v1 envelopes/modulation or v2 transient macros & pitch envelopes), `initial_channel_instruments`, and per-note `pending_program_changes`.
 3. **Music DSL (`.dsl`)**:
-   - Compact, line-oriented plain-text representation designed to minimize LLM token usage while mapping losslessly into `AICompositionDoc`. Measured at **49.4% fewer LLM tokens** than JSON in empirical 100-trial runs (`benchmark_results/run_1790692314/report.md`, and ~83% fewer raw tokenizer tokens on static examples in [docs/music_dsl.md](docs/music_dsl.md)).
+   - Compact, line-oriented plain-text representation designed to minimize LLM token usage while mapping losslessly into `AICompositionDoc`. Measured at **49.4% fewer LLM tokens** than JSON in empirical 100-trial runs (`benchmark_results/run_1790692314/report.md`, and ~83% fewer raw tokenizer tokens on static examples in [docs/reference/music-dsl.md](docs/reference/music-dsl.md)).
 
 ### How Music DSL Differs from JSON
 
@@ -467,7 +472,7 @@ python -m atari_music validate-instruments
 
 ### Backward Compatibility
 
-Existing songs without `--channel-instrument` or `--use-instrument-catalog` behave identically to pre-Stage-A releases and continue exporting `SONG_FORMAT_VERSION = 1`. Legacy sound profile banks (`--sound-bank` / `--profile-bindings` documented in [docs/profile_integration.md](docs/profile_integration.md)) and Lead Library v0.1 (`--instrument PART=ID` on `import-json`, `import-dsl`, `build-xex`) remain functional.
+Existing songs without `--channel-instrument` or `--use-instrument-catalog` behave identically to pre-Stage-A releases and continue exporting `SONG_FORMAT_VERSION = 1`. Legacy sound profile banks (`--sound-bank` / `--profile-bindings` documented in [docs/reference/profile-integration.md](docs/reference/profile-integration.md)) and Lead Library v0.1 (`--instrument PART=ID` on `import-json`, `import-dsl`, `build-xex`) remain functional.
 
 ---
 
@@ -589,7 +594,7 @@ python -m atari_music.studio.ui.app examples/songs/Vaults-of-Nhyrmeth.dsl --cata
 * **Channel Instrument Explorer, Arrangement Policies & Diagnostics:** Dynamically filters compatible SSOT catalog instruments per channel (`CH1..CH4`) in the **Instruments** tab, exposes `PROGRAM_CHANGE` policy (`preserve`/`replace`/`remove`), player version (`auto`/`v1`/`v2`), and target backend (`xex_v2`/`xex_v1`/`wav`) in the **Arrangement** tab, and surfaces blocking POKEY errors, hardware warnings (including explicit `LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION` notices when v1-to-v2 promotion clears unsupported legacy vibrato), channel compatibility notes, render diagnostics, and preset scan errors in both alert banners and the dedicated **Diagnostics** tab. `target_backend` selects the active capability target (`xex_v2` Iteration 1, strict `xex_v1`, or `wav` preview), while `player_version` selects format resolution (`auto`/`v1`/`v2`): `xex_v1` constrains `auto` to `v1` and rejects `v2` (`TARGET_FORMAT_CONFLICT`), and `wav` preview allows `core_v2_iter1` + `wav_only` previews while XEX export always validates strictly against XEX v1/v2 hardware capabilities.
 * **Explicit Background Preview & PCM Transport (`Render Preview`, `TransportBar`, `StudioAudioPlayer`):** Synthesizes WAV previews on demand on a worker thread (no automatic re-rendering on selection, preset apply, or A/B save/load changes), caches renders by deterministic configuration key (`RenderCacheKey`), and plays audio directly from memory via `QAudioSink` + `DualPcmStreamDevice` (`MM:SS / MM:SS` clock including tracks over 59 minutes, Play / Pause / Resume / Stop / Seek scrubbing, immediate OS file handle release after load).
   * **Stale Editor Preview semantics:** If you edit channel/policy settings *while* a previously started **Render Preview** is still synthesizing configuration `X`, that render still completes into the transport as `Last rendered (prior): X` with an explicit **OUTDATED PREVIEW** notice alongside your newer `Selected: Y` arrangement; clicking **Render Preview** again renders `Y` (or hits shared cache) and restores **Preview UP TO DATE**.
-* **A/B Comparison (`ABComparisonPanel` & `ComparisonSession`):** Compare two independent arrangement snapshots (**Variant A** and **Variant B**) of the same composition over the shared `RenderService` cache ([docs/studio-ab-manual-test.md](docs/studio-ab-manual-test.md)):
+* **A/B Comparison (`ABComparisonPanel` & `ComparisonSession`):** Compare two independent arrangement snapshots (**Variant A** and **Variant B**) of the same composition over the shared `RenderService` cache ([docs/development/studio-ab-manual-test.md](docs/development/studio-ab-manual-test.md)):
   * **Save to A / Save to B:** Snapshots deep copies of the current working configuration into Variant A or B without auto-rendering and without mutating the other slot; subsequent editor or preset edits leave saved A/B configurations intact and update the `Matches editor` / `Differs from editor` indicator.
   * **Load A / Load B:** Copies the saved variant configuration back into the editor controls without triggering synthesis or interrupting current playback.
   * **Render A / Render B (Serialized Shared Queue):** Queues variant synthesis through the same single-worker queue shared with **Render Preview** (preventing concurrent temp-file collisions on shared cache keys); identical A/B/Editor configurations share one cached WAV automatically. Rendering A or B updates slot readiness without interrupting or switching active transport playback.
@@ -614,14 +619,14 @@ python -m atari_music.studio.ui.app examples/songs/Vaults-of-Nhyrmeth.dsl --cata
 
 * Exports Structure-of-Arrays (SoA) data tables for MOS 6502 indexing (`LDA table,X`).
 * **Format v1 (`SONG_FORMAT_VERSION = 1`)**: Default format; 6-byte static channel instrument records supporting ADSR envelopes and `MOD_OCTAVE_PULSE`.
-* **Format v2 (`SONG_FORMAT_VERSION_V2 = 2`)**: Supports up to `32` instruments (`MAX_V2_INSTRUMENTS = 32`), deduplicated shared macro directory (`1..8` steps of 4 bytes per step), signed 8-bit pitch envelopes, `CH1..CH4` initial assignment, and 4-byte `OPCODE_PROGRAM_CHANGE` (`$00, $00, $01, inst_idx`) events. See full binary specification in [docs/SONG_FORMAT_V2.md](docs/SONG_FORMAT_V2.md).
+* **Format v2 (`SONG_FORMAT_VERSION_V2 = 2`)**: Supports up to `32` instruments (`MAX_V2_INSTRUMENTS = 32`), deduplicated shared macro directory (`1..8` steps of 4 bytes per step), signed 8-bit pitch envelopes, `CH1..CH4` initial assignment, and 4-byte `OPCODE_PROGRAM_CHANGE` (`$00, $00, $01, inst_idx`) events. See full binary specification in [docs/reference/song-format-v2.md](docs/reference/song-format-v2.md).
 
 ### Atari XEX Binaries & Enforced Hardware Constraints
 
 * Compiled via MADS into standalone executables featuring PAL 50 Hz `RTCLOK` (`$14`) sync, ANTIC Mode 2 real-time clock + 4-channel horizontal VU display, and keyboard mute/resume toggle (`CH` `$02FC`).
 * **Relocatability:** User addresses default to `--player-address 0x6000`, `--music-address 0x8000`, and `--zp-base 0x80`. The player reserves 10 Zero Page bytes (`PLAYER_ZP_BASE + 0..9`, `$80..$89` by default, keeping screen display pointers at `$8A..$8D` separate).
 * **CPU instruction set:** Official MOS 6502 opcodes only (no 65C02/65816 instructions).
-* **Hard size and layout enforcement ([src/atari_music/xex_layout.py](src/atari_music/xex_layout.py), [src/atari_music/player_budget.py](src/atari_music/player_budget.py), [docs/xex_memory_layout.md](docs/xex_memory_layout.md)):**
+* **Hard size and layout enforcement ([src/atari_music/xex_layout.py](src/atari_music/xex_layout.py), [src/atari_music/player_budget.py](src/atari_music/player_budget.py), [docs/reference/xex-memory-layout.md](docs/reference/xex-memory-layout.md)):**
   * **Player budget limit (`< 2048 bytes`):** Measured via `atari_music.player_budget.measure_player_size` (`src/atari_music/asm/player.asm`, code + BSS state) at **1785 bytes** (`263 bytes` headroom under `2048 B`). The complete `.xex` file itself has no 2 KB cap.
   * **Memory segment bounds:** All user load segments must lie strictly within **`$0400–$BFFF`** (`$A000–$BFFF` allowed intentionally; OS kernel `$C000–$CFFF`, hardware I/O `$D000–$DFFF`, OS ROM `$E000–$FFFF`, Zero Page, stack, and OS vectors are forbidden).
   * **Disjoint segments:** Overlapping XEX segments are rejected immediately (`xex_layout.validate_xex_file`).
@@ -714,13 +719,31 @@ pytest tests/test_stage_c_player_v2_parity.py tests/test_stage_d_integration.py 
 
 ---
 
+## Documentation
+
+The full documentation set (user guide, architecture, CLI reference, and the preserved research record) is maintained in [`docs/`](docs/) (MkDocs Material sources) with configuration in [`mkdocs.yml`](mkdocs.yml) and is published at **https://grzes71.github.io/atari-music-composer/**.
+
+```bash
+# Install documentation build dependencies
+pip install -e ".[docs]"
+
+# Live-preview the site locally (http://127.0.0.1:8000/)
+python -m mkdocs serve
+
+# Strict snapshot build — warnings fail the build (same check CI enforces)
+python -m mkdocs build --strict
+```
+
+Deployment is automatic: [`.github/workflows/docs.yml`](.github/workflows/docs.yml) builds the site and publishes it to GitHub Pages on every push to `main` that changes documentation inputs.
+
 ## Related Documentation
 
-* [docs/SONG_FORMAT_V2.md](docs/SONG_FORMAT_V2.md) — Stage C binary & MADS `SONG_FORMAT_VERSION = 2` specification and measured 6502 player resource/cycle profile
-* [docs/music_dsl.md](docs/music_dsl.md) — Formal EBNF grammar, semantics, and benchmarks for Music DSL
-* [docs/xex_memory_layout.md](docs/xex_memory_layout.md) — XEX container parsing, `$0400–$BFFF` memory bounds, and `< 2048 B` player rule
-* [docs/profile_integration.md](docs/profile_integration.md) — External POKEY Sound Archaeology profile binding (`--sound-bank` / `--profile-bindings`)
-* [docs/instrument_selection_cli.md](docs/instrument_selection_cli.md) — Legacy Lead Library v0.1 (`--instrument PART=ID`) specification
-* [docs/stage14_final_synthesis.md](docs/stage14_final_synthesis.md) — Research synthesis motivating curated instrument catalogs and macros
-* [STAGE3_INSTRUMENT_DESIGN.md](STAGE3_INSTRUMENT_DESIGN.md) — Architecture design specification for the Stage A–E Instrument System
+* [Documentation website](https://grzes71.github.io/atari-music-composer/) — user guide, architecture, CLI reference, and research programme record
+* [docs/reference/song-format-v2.md](docs/reference/song-format-v2.md) — Stage C binary & MADS `SONG_FORMAT_VERSION = 2` specification and measured 6502 player resource/cycle profile
+* [docs/reference/music-dsl.md](docs/reference/music-dsl.md) — Formal EBNF grammar, semantics, and benchmarks for Music DSL
+* [docs/reference/xex-memory-layout.md](docs/reference/xex-memory-layout.md) — XEX container parsing, `$0400–$BFFF` memory bounds, and `< 2048 B` player rule
+* [docs/reference/profile-integration.md](docs/reference/profile-integration.md) — External POKEY Sound Archaeology profile binding (`--sound-bank` / `--profile-bindings`)
+* [docs/reference/instrument-selection-cli.md](docs/reference/instrument-selection-cli.md) — Legacy Lead Library v0.1 (`--instrument PART=ID`) specification
+* [docs/research/stage14_final_synthesis.md](docs/research/stage14_final_synthesis.md) — Research synthesis motivating curated instrument catalogs and macros
+* [docs/architecture/instrument-system.md](docs/architecture/instrument-system.md) — Stage A–E Instrument System architecture
 * [HISTORY.md](HISTORY.md) — Detailed technical changelog across stages

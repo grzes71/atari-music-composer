@@ -64,6 +64,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+site/
 
 # --- Pytest & Coverage ---
 .pytest_cache/

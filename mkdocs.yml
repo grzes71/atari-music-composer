@@ -1,0 +1,141 @@
+# Atari Music Composer — documentation site configuration.
+#
+# Preview locally:   python -m mkdocs serve
+# Strict build:      python -m mkdocs build --strict
+# CI deployment:     .github/workflows/docs.yml (official GitHub Pages Actions mechanism)
+
+site_name: Atari Music Composer
+site_description: >-
+  Python toolchain and relocatable MOS 6502 audio driver for composing,
+  validating, arranging, synthesizing, and compiling multi-channel music for
+  Atari 8-bit computers with the POKEY sound chip.
+site_url: https://grzes71.github.io/atari-music-composer/
+repo_url: https://github.com/grzes71/atari-music-composer
+repo_name: grzes71/atari-music-composer
+edit_uri: edit/main/docs/
+use_directory_urls: true
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.top
+    - navigation.sections
+    - navigation.path
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.action.edit
+    - content.action.view
+  palette:
+    # Light mode (follows system preference, user can toggle)
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      # Resolve snippet includes from the repository root first, then docs/.
+      base_path: [".", "docs"]
+  - pymdownx.superfences:
+      custom_fences:
+        # Mermaid diagrams are rendered client-side by Material for MkDocs
+        # (no extra plugins, no Node.js toolchain required).
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Your First Composition: getting-started/first-composition.md
+  - User Guide:
+      - Composition Workflow: user-guide/workflow.md
+      - Procedural Composition: user-guide/procedural-composition.md
+      - AI-Assisted Composition: user-guide/ai-composition.md
+      - Composition Formats: user-guide/composition-formats.md
+      - Instruments: user-guide/instruments.md
+      - Arrangement: user-guide/arrangement.md
+      - Export & Atari Playback: user-guide/export.md
+      - Atari Music Composer Studio: user-guide/studio.md
+  - Architecture:
+      - System Overview: architecture/overview.md
+      - Music Generation Pipeline: architecture/pipeline.md
+      - Instrument System: architecture/instrument-system.md
+      - Audio Engine & POKEY Synthesis: architecture/audio-engine.md
+      - 6502 Player & XEX Export: architecture/player-xex.md
+      - AI Composition Layer: architecture/ai-layer.md
+  - Development:
+      - Environment & Project Structure: development/environment.md
+      - Testing Strategy: development/testing.md
+      - Adding New Instruments: development/adding-instruments.md
+      - Studio A/B Manual Test: development/studio-ab-manual-test.md
+      - Studio Playback Manual Test: development/studio-playback-manual-test.md
+  - Reference:
+      - CLI Reference: reference/cli.md
+      - Song Format v2: reference/song-format-v2.md
+      - Music DSL Specification: reference/music-dsl.md
+      - XEX Memory Layout: reference/xex-memory-layout.md
+      - XEX Verification: reference/xex-verification.md
+      - Sound Profile Integration: reference/profile-integration.md
+      - Legacy Lead Library CLI: reference/instrument-selection-cli.md
+      - C1 Player Extension Design: reference/c1-player-extension-design.md
+      - Technical Limitations: reference/limitations.md
+      - Glossary: reference/glossary.md
+  - Research:
+      - Research Programme Overview: research/index.md
+      - Perceptual Synthesis & Listening (Stage 9–14):
+          - Stage 9d Human Listening Results: research/stage9d_human_listening_results.md
+          - Stage 9e Perceptual Renderer Gap: research/stage9e_perceptual_renderer_gap.md
+          - Stage 10a Rebinding Experiment: research/stage10a_rebinding_experiment.md
+          - Stage 10b Volume-Contour Experiment: research/stage10b_volume_contour_experiment.md
+          - Stage 10b Volume-Contour Listening: research/stage10b_volume_contour_listening.md
+          - Stage 11 Spectral Experiment: research/stage11_spectral_experiment.md
+          - Stage 11 Perceptual Synthesis: research/stage11_perceptual_synthesis.md
+          - Stage 12a Decoration Experiment: research/stage12a_decoration_experiment.md
+          - Stage 13a Pitch-Trajectory Experiment: research/stage13a_pitch_trajectory_experiment.md
+          - Stage 14 Final Synthesis: research/stage14_final_synthesis.md
+      - Performance-Style & Detector Research (Stage 15–25):
+          - Stage 15 Performance Style: research/stage15_performance_style.md
+          - Stage 16 Cross-Song Generalization: research/stage16_cross_song_generalization.md
+          - Stage 17 Performance Event Language: research/stage17_performance_event_language.md
+          - Stage 18 Temporal Compression: research/stage18_temporal_compression.md
+          - Stage 19 Temporal Grammar: research/stage19_temporal_grammar.md
+          - Stage 20 Residual Performance: research/stage20_residual_performance.md
+          - Stage 21 Controlled Validation: research/stage21_controlled_validation.md
+          - Stage 22 Detector Error Decomposition: research/stage22_detector_error_decomposition.md
+          - Stage 23 Controlled Historical Residual Test: research/stage23_controlled_historical_residual_test.md
+          - Stage 24 Corpus Overlap & Confounding: research/stage24_corpus_overlap_and_confounding.md
+          - Stage 25 Matched Control Corpus Design: research/stage25_matched_control_corpus_design.md
+      - Timbre Prototyping (Experiments 26–30):
+          - Experiment 26 Pokey Timbre Prototype: research/experiment26_pokey_timbre_prototype.md
+          - Experiment 27 Octave-Pulse Characterisation: research/experiment27_octave_pulse_characterisation.md
+          - Experiment 28 C1 Musical Context: research/experiment28_c1_musical_context.md
+          - Experiment 29 Curated Timbre Candidates: research/experiment29_curated_timbre_candidates.md
+          - Experiment 30 Timbre A/B Evaluation: research/experiment30_timbre_ab_evaluation.md
+  - Changelog: about/changelog.md
+
