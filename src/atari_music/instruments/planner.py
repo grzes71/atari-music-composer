@@ -40,6 +40,7 @@ from atari_music.ir import (
 logger = logging.getLogger(__name__)
 
 LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION = "LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION"
+DEFAULT_V2_PERCUSSION_INSTRUMENT_ID = "rhytmizer_closed_hihat"
 
 PlayerVersionChoice = Literal["auto", "v1", "v2"]
 ProgramChangePolicy = Literal["preserve", "replace", "remove"]
@@ -448,18 +449,55 @@ def build_catalog_summary_for_ai(
     return tuple(rows)
 
 
+def default_percussion_instrument_id(
+    catalog: Optional[InstrumentCatalog] = None,
+    *,
+    player_version: str = "v2",
+    channel: int = 4,
+    required_audctl_bits: int = 0,
+) -> Optional[str]:
+    """Return the curated default percussion instrument ID for *player_version*.
+
+    New format v2 compositions default to ``rhytmizer_closed_hihat`` resolved
+    through *catalog* when compatible with *channel* and *required_audctl_bits*.
+    Format v1 compositions preserve legacy static percussion (returns ``None``)
+    and never silently strip or downgrade the v2 macro instrument.
+    """
+    ver = normalize_player_version(player_version)
+    if ver == "v1":
+        return None
+    cat = catalog if catalog is not None else load_instrument_catalog()
+    if not cat.has_profile(DEFAULT_V2_PERCUSSION_INSTRUMENT_ID):
+        return None
+    prof = cat.get_profile(DEFAULT_V2_PERCUSSION_INSTRUMENT_ID)
+    if prof.hardware_constraints.forbidden_audctl_bits & int(required_audctl_bits):
+        return None
+    report = POKEYRuntime().resolve(
+        [ChannelAssignmentRequest(channel=channel, instrument_ids=(DEFAULT_V2_PERCUSSION_INSTRUMENT_ID,))],
+        cat,
+        target=TARGET_V2_ITER1_XEX,
+    )
+    if not report.is_compatible:
+        return None
+    return DEFAULT_V2_PERCUSSION_INSTRUMENT_ID
+
+
 def select_ai_catalog_instrument_id(
     catalog: InstrumentCatalog,
     character_or_role: str,
     *,
     uses_16bit_bass: bool = False,
     channel: Optional[int] = None,
+    player_version: str = "v2",
+    required_audctl_bits: int = 0,
 ) -> Optional[str]:
     """Select an existing compatible SSOT catalog profile ID matching semantic AI role/character."""
     text = (character_or_role or "").strip().lower()
+    ver = normalize_player_version(player_version)
+    target = TARGET_V1_XEX if ver == "v1" else TARGET_V2_ITER1_XEX
     available = {
         row["instrument_id"]: row
-        for row in build_catalog_summary_for_ai(catalog, target=TARGET_V2_ITER1_XEX)
+        for row in build_catalog_summary_for_ai(catalog, target=target)
     }
     candidates: List[str]
     if "kick" in text or "thud" in text:
@@ -467,9 +505,9 @@ def select_ai_catalog_instrument_id(
     elif "tom" in text:
         candidates = ["perc_tom_pitched", "perc_kick_tight"]
     elif "snare" in text or "clap" in text:
-        candidates = ["perc_snare_crisp", "perc_hihat_closed"]
+        candidates = ["perc_snare_crisp", DEFAULT_V2_PERCUSSION_INSTRUMENT_ID, "perc_hihat_closed"]
     elif any(k in text for k in ("hihat", "hat", "cymbal", "shake", "percussion", "noise", "drum")):
-        candidates = ["perc_hihat_closed", "perc_snare_crisp", "perc_kick_tight"]
+        candidates = [DEFAULT_V2_PERCUSSION_INSTRUMENT_ID, "perc_hihat_closed", "perc_snare_crisp", "perc_kick_tight"]
     elif "bass" in text:
         candidates = (
             ["bass_16bit_pure", "bass_16bit_poly5_growl"]
@@ -487,17 +525,25 @@ def select_ai_catalog_instrument_id(
     else:
         candidates = ["lead_attack_bite", "lead_pure_sustain", "lead_pure_pluck"]
 
+    req_bits = int(required_audctl_bits)
     for cid in candidates:
         info = available.get(cid)
         if info is None:
             continue
         if channel is not None and channel not in info["channels_allowed"]:
             continue
+        prof = catalog.get_profile(cid)
+        if prof.hardware_constraints.forbidden_audctl_bits & req_bits:
+            continue
         return cid
 
     for cid, info in available.items():
-        if channel is None or channel in info["channels_allowed"]:
-            return cid
+        if channel is not None and channel not in info["channels_allowed"]:
+            continue
+        prof = catalog.get_profile(cid)
+        if prof.hardware_constraints.forbidden_audctl_bits & req_bits:
+            continue
+        return cid
     return None
 
 

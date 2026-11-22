@@ -205,12 +205,15 @@ class MockAICompositionProvider(AICompositionProvider):
         """Generate a valid SSOT-catalog composition with musically coherent channel timbres."""
         from pathlib import Path
         from atari_music.instruments import (
+            default_percussion_instrument_id,
             load_instrument_catalog,
+            normalize_player_version,
             resolve_channel_instrument_plan,
             select_ai_catalog_instrument_id,
         )
 
         style = (request.style or "action").strip().lower()
+        ver_choice = normalize_player_version(getattr(request, "player_version", "auto"))
         cat_path = Path(request.instrument_catalog_path) if getattr(request, "instrument_catalog_path", None) else None
         catalog = load_instrument_catalog(cat_path)
         ch_req = dict(getattr(request, "channel_instruments", None) or {})
@@ -219,31 +222,75 @@ class MockAICompositionProvider(AICompositionProvider):
                 ch_req,
                 catalog=catalog,
                 uses_16bit_bass=request.use_16bit_bass,
+                player_version=ver_choice,
             )
 
         ch1_id = ch_req.get(1) or select_ai_catalog_instrument_id(
-            catalog, "bass", uses_16bit_bass=request.use_16bit_bass, channel=1
+            catalog,
+            "bass",
+            uses_16bit_bass=request.use_16bit_bass,
+            channel=1,
+            player_version=ver_choice,
         )
         prof1 = catalog.get_profile(ch1_id)
         use_16 = bool(request.use_16bit_bass or prof1.hardware_constraints.divider_mode == "16bit_ch12")
+        ch1_req_audctl = int(prof1.hardware_constraints.required_audctl_bits)
 
         ch2_id = None if use_16 else (
-            ch_req.get(2) or select_ai_catalog_instrument_id(catalog, "harmony", channel=2)
+            ch_req.get(2) or select_ai_catalog_instrument_id(
+                catalog,
+                "harmony",
+                channel=2,
+                player_version=ver_choice,
+                required_audctl_bits=ch1_req_audctl,
+            )
         )
-        ch3_id = ch_req.get(3) or select_ai_catalog_instrument_id(catalog, "lead", channel=3)
-        ch4_id = ch_req.get(4) or select_ai_catalog_instrument_id(catalog, "kick", channel=4)
+        ch3_id = ch_req.get(3) or select_ai_catalog_instrument_id(
+            catalog,
+            "lead",
+            channel=3,
+            player_version=ver_choice,
+            required_audctl_bits=ch1_req_audctl,
+        )
+        if 4 in ch_req:
+            ch4_id = ch_req[4]
+        else:
+            ch4_id = default_percussion_instrument_id(
+                catalog,
+                player_version=ver_choice,
+                channel=4,
+                required_audctl_bits=ch1_req_audctl,
+            ) or select_ai_catalog_instrument_id(
+                catalog,
+                "percussion",
+                channel=4,
+                player_version=ver_choice,
+                required_audctl_bits=ch1_req_audctl,
+            )
 
-        # Contrasting lead or multi-drum kit only when user left those channels unpinned
+        # Contrasting lead or multi-drum kit only when v2 is allowed and user left those channels unpinned
         contrast_ch3_id = None
-        if 3 not in ch_req and catalog.has_profile("lead_attack_bite") and catalog.has_profile("lead_pure_sustain"):
+        if (
+            ver_choice != "v1"
+            and 3 not in ch_req
+            and catalog.has_profile("lead_attack_bite")
+            and catalog.has_profile("lead_pure_sustain")
+        ):
             ch3_id = "lead_pure_sustain"
             contrast_ch3_id = "lead_attack_bite"
 
+        hh_cid = default_percussion_instrument_id(
+            catalog,
+            player_version=ver_choice,
+            channel=4,
+            required_audctl_bits=ch1_req_audctl,
+        )
         use_drum_kit = (
-            4 not in ch_req
+            ver_choice != "v1"
+            and 4 not in ch_req
             and catalog.has_profile("perc_kick_tight")
             and catalog.has_profile("perc_snare_crisp")
-            and catalog.has_profile("perc_hihat_closed")
+            and hh_cid is not None
         )
 
         inst_specs: List[Dict[str, Any]] = []
@@ -269,10 +316,10 @@ class MockAICompositionProvider(AICompositionProvider):
         l_key = _add_inst("lead_ch3", ch3_id, "bright_lead")
         l_contrast_key = _add_inst("lead_bite_ch3", contrast_ch3_id, "bright_lead") if contrast_ch3_id else l_key
 
-        if use_drum_kit:
+        if use_drum_kit and hh_cid is not None:
             k_key = _add_inst("kick_ch4", "perc_kick_tight", "kick")
             s_key = _add_inst("snare_ch4", "perc_snare_crisp", "snare")
-            hh_key = _add_inst("hihat_ch4", "perc_hihat_closed", "hihat")
+            hh_key = _add_inst("hihat_ch4", hh_cid, "hihat")
         else:
             p_char = "percussion" if catalog.get_profile(ch4_id).family == "percussion" else "harmony"
             k_key = s_key = hh_key = _add_inst("voice_ch4", ch4_id, p_char)
@@ -381,7 +428,14 @@ class MockAICompositionProvider(AICompositionProvider):
         }
 
     def _generate_base_valid(self, request: CompositionRequest) -> Dict[str, Any]:
-        if getattr(request, "enable_catalog_instruments", False) or getattr(request, "channel_instruments", None):
+        from atari_music.instruments import normalize_player_version
+
+        ver_choice = normalize_player_version(getattr(request, "player_version", "auto"))
+        if (
+            getattr(request, "enable_catalog_instruments", False)
+            or getattr(request, "channel_instruments", None)
+            or ver_choice == "v2"
+        ):
             return self._generate_catalog_valid(request)
         if (getattr(request, "prompt_profile", "classic") or "classic").lower() == "rich":
             return self._generate_rich_valid(request)
