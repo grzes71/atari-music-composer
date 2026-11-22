@@ -1,6 +1,17 @@
 # CHANGELOG
 
 
+## v0.18.0 (2026-11-22)
+
+### Features
+
+- **percussion**: Integrate rhytmizer_closed_hihat and make it default for v2
+  ([`19f2d36`](https://github.com/grzes71/atari-music-composer/commit/19f2d36bbfb377ea746fd45416d585fb6abd5e11))
+
+- **studio**: Export companion .arrangement.json manifest with XEX
+  ([`f98f354`](https://github.com/grzes71/atari-music-composer/commit/f98f354ed7f6394f90a3616b24325705b069c9c1))
+
+
 ## v0.17.1 (2026-11-19)
 
 ### Bug Fixes
