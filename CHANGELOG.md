@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.19.0 (2026-11-22)
+
+### Features
+
+- **instruments**: Integrate cmc+ open hi-hat, kick stopa, and low tom
+  ([`4dc295d`](https://github.com/grzes71/atari-music-composer/commit/4dc295de8d7e0a30e78df8e77121baa40545ce9b))
+
+
 ## v0.18.0 (2026-11-22)
 
 ### Features
