@@ -11,12 +11,12 @@ Instruments are defined in
 [`data/instruments/catalog.json`](https://github.com/grzes71/atari-music-composer/blob/main/data/instruments/catalog.json)
 (schema `atari-music/instrument-catalog/1`, catalog version `0.1.0`), validated by
 [`src/atari_music/instruments/catalog.py`](https://github.com/grzes71/atari-music-composer/blob/main/src/atari_music/instruments/catalog.py).
-It currently holds **17 curated instrument profiles** and **11 behaviors**:
+It currently holds **20 curated instrument profiles** and **14 behaviors**:
 
 | Tier | Meaning | Instruments |
 | --- | --- | --- |
 | `core_v1` | Static ADSR or `octave_pulse` modulation — `[OK]` on `xex_v1`, `xex_v2`, and `wav` | `lead_pure_sustain`, `lead_pure_pluck`, `lead_c1_octave_pulse`, `lead_buzz_steady`, `bass_16bit_pure`, `bass_15khz_pure`, `bass_16bit_poly5_growl`, `harmony_soft_square` |
-| `core_v2_iter1` | Multi-step 50 Hz transient macros and pitch envelopes — `[OK]` on `xex_v2` and `wav` (WAV via v2 frame simulation) | `lead_attack_bite`, `bass_poly4_punch`, `perc_kick_tight`, `perc_snare_crisp`, `perc_hihat_closed`, `rhytmizer_closed_hihat`, `perc_tom_pitched` |
+| `core_v2_iter1` | Multi-step 50 Hz transient macros and pitch envelopes — `[OK]` on `xex_v2` and `wav` (WAV via v2 frame simulation) | `lead_attack_bite`, `bass_poly4_punch`, `perc_kick_tight`, `perc_snare_crisp`, `perc_hihat_closed`, `rhytmizer_closed_hihat`, `cmc_hihat_open`, `cmc_kick_stopa`, `cmc_tom_ltom`, `perc_tom_pitched` |
 | `experimental_deferred` | Explicitly blocked (`[DEFERRED_FEATURE]`) on all export targets | `lead_hpf_pwm` (HPF XOR PWM), `ornament_bell_arp` (arpeggio ornament) |
 
 Every profile declares a `family` (`lead`, `bass`, `pad`, `harmony`, `percussion`, `fx`), intended
@@ -35,6 +35,38 @@ structure is documented in [Adding New Instruments](../development/adding-instru
     (`F0`: `AUDF=$00`, `AUDC=$84` poly17 noise; `F1+`: volume `0`), can be assigned to any single
     channel `CH1..CH4`, and is **incompatible with the 15 kHz base clock** (`AUDCTL=$01`,
     `forbidden_audctl_bits = $01`).
+
+!!! note "CMC+ Open Hi-Hat (`cmc_hihat_open`)"
+    `cmc_hihat_open` is an additional, complementary Open Hi-Hat adapted from *Chaos Music Composer
+    Plus* (1993) preset **#59 `hihat op`** via a 5-step v2 transient macro (`F0..F4`: `AUDF=$3F`,
+    `AUDC=$86, $84, $82, $81, $81` poly17 noise; `F5+`: volume `0`). Like `rhytmizer_closed_hihat`, it
+    **requires player format v2** (`core_v2_iter1` / `xex_v2`), can be assigned to any single channel
+    `CH1..CH4`, and is **incompatible with the 15 kHz base clock** (`forbidden_audctl_bits = $01`),
+    while leaving `rhytmizer_closed_hihat` unchanged as the default v2 percussion instrument. It
+    achieves exact 50 Hz POKEY register-frame parity against original CMC+ `#59`; minor acoustic
+    differences can occur from poly17 LFSR phase variance across ASAP renders, and the internal
+    `pokey_synth` WAV preview exhibits a shorter `-20 dB` envelope span than ASAP 8.0.0 XEX playback.
+
+!!! note "CMC+ Kick Stopa (`cmc_kick_stopa`)"
+    `cmc_kick_stopa` is a punchy single-channel kick adapted from *Chaos Music Composer Plus* (1993)
+    preset **#46 `stopa`** via a 4-step v2 transient macro (`F0`: `AUDF=$5A, AUDC=$0D` poly5+17 attack;
+    `F1`: `AUDF=$2F, AUDC=$AE` pure thump; `F2`: `AUDF=$2F, AUDC=$A6`; `F3+`: volume `0`). It
+    **requires player format v2** (`core_v2_iter1` / `xex_v2`), works on any single channel
+    `CH1..CH4`, is **incompatible with the 15 kHz base clock** (`forbidden_audctl_bits = $01`), and
+    achieves exact `16/16` POKEY register-frame parity against original CMC+ `#46`. Internal
+    `pokey_synth` WAV previews normalize peak output to `0.90` and reflect `POKEY_DAC` + DC-blocking
+    filter behavior (`-20 dB` span `37 ms` vs. ASAP 8.0.0 `49–65 ms`).
+
+!!! note "CMC+ Low Tom (`cmc_tom_ltom`)"
+    `cmc_tom_ltom` is a single-channel click-attack low tom adapted from *Chaos Music Composer Plus*
+    (1993) preset **#45 `l_tom`** via a 6-step v2 transient macro (`F0`: `AUDF=$01, AUDC=$88` poly17
+    click; `F1..F4`: `AUDF=$80..$83`, `AUDC=$A4..$A1` downward pure-tone pitch sweep; `F5+`:
+    volume `0`). It **requires player format v2** (`core_v2_iter1` / `xex_v2`), works on any single
+    channel `CH1..CH4`, is **incompatible with the 15 kHz base clock** (`forbidden_audctl_bits = $01`),
+    and achieves exact `16/16` POKEY register-frame parity against original CMC+ `#45`. Internal
+    `pokey_synth` WAV previews match the `247.6 Hz` tom body fundamental (`F1..F4`) while
+    exhibiting higher spectral centroid and shorter `-20 dB` span (`60 ms` vs. ASAP `92–96 ms`) due
+    to `POKEY_DAC` weighting and DC-blocker behavior.
 
 ## CLI tools for the catalog
 

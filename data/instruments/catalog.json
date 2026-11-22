@@ -153,6 +153,147 @@
       "allow_per_note_switch": true
     },
     {
+      "behavior_id": "beh_cmc_hihat_open_v2",
+      "version": 1,
+      "required_runtime_tier": "core_v2_iter1",
+      "transient_macro": {
+        "loop": false,
+        "steps": [
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 128,
+            "audf_offset": 0,
+            "fixed_audf": 63,
+            "volume": 6
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 128,
+            "audf_offset": 0,
+            "fixed_audf": 63,
+            "volume": 4
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 128,
+            "audf_offset": 0,
+            "fixed_audf": 63,
+            "volume": 2
+          },
+          {
+            "duration_frames": 2,
+            "distortion_nibble": 128,
+            "audf_offset": 0,
+            "fixed_audf": 63,
+            "volume": 1
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 128,
+            "audf_offset": 0,
+            "fixed_audf": 63,
+            "volume": 0
+          }
+        ]
+      },
+      "modulation_mode": "none",
+      "allow_per_note_switch": true
+    },
+    {
+      "behavior_id": "beh_cmc_kick_stopa_v2",
+      "version": 1,
+      "required_runtime_tier": "core_v2_iter1",
+      "transient_macro": {
+        "loop": false,
+        "steps": [
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 0,
+            "audf_offset": 0,
+            "fixed_audf": 90,
+            "volume": 13
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 160,
+            "audf_offset": 0,
+            "fixed_audf": 47,
+            "volume": 14
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 160,
+            "audf_offset": 0,
+            "fixed_audf": 47,
+            "volume": 6
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 0,
+            "audf_offset": 0,
+            "fixed_audf": 90,
+            "volume": 0
+          }
+        ]
+      },
+      "modulation_mode": "none",
+      "allow_per_note_switch": true
+    },
+    {
+      "behavior_id": "beh_cmc_tom_ltom_v2",
+      "version": 1,
+      "required_runtime_tier": "core_v2_iter1",
+      "transient_macro": {
+        "loop": false,
+        "steps": [
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 128,
+            "audf_offset": 0,
+            "fixed_audf": 1,
+            "volume": 8
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 160,
+            "audf_offset": 0,
+            "fixed_audf": 128,
+            "volume": 4
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 160,
+            "audf_offset": 0,
+            "fixed_audf": 129,
+            "volume": 3
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 160,
+            "audf_offset": 0,
+            "fixed_audf": 130,
+            "volume": 2
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 160,
+            "audf_offset": 0,
+            "fixed_audf": 131,
+            "volume": 1
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 160,
+            "audf_offset": 0,
+            "fixed_audf": 132,
+            "volume": 0
+          }
+        ]
+      },
+      "modulation_mode": "none",
+      "allow_per_note_switch": true
+    },
+    {
       "behavior_id": "beh_arp_deferred",
       "version": 1,
       "required_runtime_tier": "experimental_deferred",
@@ -688,6 +829,99 @@
         "source_kind": "curated_preset",
         "validation_status": "PLAYABLE",
         "notes": "50 Hz PAL VBI single-channel adaptation of Rhytmizer (MUNSIE, 1986) Closed Hi-Hat via v2 transient macro (F0: AUDF=$00, AUDC=$84 [poly17 vol 4]; F1+: vol=0). Requires format v2; fixed transient volume 4; incompatible with AUDCTL 15 kHz ($01)."
+      }
+    },
+    {
+      "instrument_id": "cmc_hihat_open",
+      "display_name": "CMC+ Open Hi-Hat (V2 Macro)",
+      "version": "1.0",
+      "family": "percussion",
+      "intended_roles": ["percussion", "rhythm"],
+      "base_distortion": 128,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 0,
+        "sustain_vol": 0,
+        "release_frames": 0,
+        "peak_vol": 6
+      },
+      "waveform_family": "poly17_noise",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 1,
+        "poly4_safe_tuning": false,
+        "midi_range": [24, 96],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_cmc_hihat_open_v2",
+      "provenance": {
+        "source_kind": "curated_preset",
+        "validation_status": "PLAYABLE",
+        "notes": "50 Hz PAL VBI single-channel adaptation of Chaos Music Composer Plus (1993) preset #59 'hihat op' ($5290, SHA-256 f9a289ee3f5bdad8b1b3043b53e90e6dbae711a626b96943178ede9a550db788; ref experiments/chaos_music_composer_plus/CHAOS_INSTRUMENT_ANALYSIS.md) via 5-step v2 transient macro (F0..F4: AUDF=$3F, AUDC=$86,$84,$82,$81,$81 [poly17 noise]; F5+: vol=0). Requires format v2; complementary Open Hi-Hat to rhytmizer_closed_hihat; incompatible with AUDCTL 15 kHz ($01)."
+      }
+    },
+    {
+      "instrument_id": "cmc_kick_stopa",
+      "display_name": "CMC+ Kick Stopa (V2 Macro)",
+      "version": "1.0",
+      "family": "percussion",
+      "intended_roles": ["percussion", "rhythm"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 0,
+        "sustain_vol": 0,
+        "release_frames": 0,
+        "peak_vol": 14
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 1,
+        "poly4_safe_tuning": false,
+        "midi_range": [24, 96],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_cmc_kick_stopa_v2",
+      "provenance": {
+        "source_kind": "curated_preset",
+        "validation_status": "PLAYABLE",
+        "notes": "50 Hz PAL VBI single-channel adaptation of Chaos Music Composer Plus (1993) preset #46 'stopa' ($5172, SHA-256 f9a289ee3f5bdad8b1b3043b53e90e6dbae711a626b96943178ede9a550db788; ref experiments/chaos_music_composer_plus/CHAOS_INSTRUMENT_ANALYSIS.md) via 4-step v2 transient macro (F0: AUDF=$5A, AUDC=$0D [poly5+17 vol 13]; F1: AUDF=$2F, AUDC=$AE [pure vol 14]; F2: AUDF=$2F, AUDC=$A6 [pure vol 6]; F3+: vol=0). Requires format v2; incompatible with AUDCTL 15 kHz ($01)."
+      }
+    },
+    {
+      "instrument_id": "cmc_tom_ltom",
+      "display_name": "CMC+ Low Tom l_tom (V2 Macro)",
+      "version": "1.0",
+      "family": "percussion",
+      "intended_roles": ["percussion", "rhythm"],
+      "base_distortion": 160,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 0,
+        "sustain_vol": 0,
+        "release_frames": 0,
+        "peak_vol": 8
+      },
+      "waveform_family": "pure",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 1,
+        "poly4_safe_tuning": false,
+        "midi_range": [24, 96],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_cmc_tom_ltom_v2",
+      "provenance": {
+        "source_kind": "curated_preset",
+        "validation_status": "PLAYABLE",
+        "notes": "50 Hz PAL VBI single-channel adaptation of Chaos Music Composer Plus (1993) preset #45 'l_tom' ($515C, SHA-256 f9a289ee3f5bdad8b1b3043b53e90e6dbae711a626b96943178ede9a550db788; ref experiments/chaos_music_composer_plus/CHAOS_INSTRUMENT_ANALYSIS.md) via 6-step v2 transient macro (F0: AUDF=$01, AUDC=$88 [poly17 click vol 8]; F1..F4: AUDF=$80..$83, AUDC=$A4..$A1 [pure downward sweep]; F5+: vol=0). Requires format v2; incompatible with AUDCTL 15 kHz ($01)."
       }
     }
   ]
