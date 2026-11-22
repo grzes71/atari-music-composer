@@ -16,6 +16,7 @@ from atari_music.instruments.catalog import (
     validate_instrument_catalog,
 )
 from atari_music.instruments.planner import (
+    DEFAULT_V2_PERCUSSION_INSTRUMENT_ID,
     LEGACY_VIBRATO_STRIPPED_ON_V2_PROMOTION,
     InstrumentPlanError,
     ProgramChangePolicy,
@@ -25,6 +26,7 @@ from atari_music.instruments.planner import (
     build_catalog_summary_for_ai,
     coerce_program_changes,
     composition_musical_fingerprint,
+    default_percussion_instrument_id,
     detect_v2_vibrato_promotion_diagnostics,
     normalize_player_version,
     normalize_program_change_policy,
@@ -86,6 +88,7 @@ __all__ = [
     "ClockMode",
     "CompatibilityStatus",
     "DEFAULT_CATALOG_PATH",
+    "DEFAULT_V2_PERCUSSION_INSTRUMENT_ID",
     "DividerMode",
     "EnvelopeSpec",
     "HardwareConstraints",
@@ -125,6 +128,7 @@ __all__ = [
     "build_catalog_summary_for_ai",
     "coerce_program_changes",
     "composition_musical_fingerprint",
+    "default_percussion_instrument_id",
     "detect_v2_vibrato_promotion_diagnostics",
     "load_instrument_catalog",
     "normalize_player_version",

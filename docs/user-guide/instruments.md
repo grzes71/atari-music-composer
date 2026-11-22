@@ -11,12 +11,12 @@ Instruments are defined in
 [`data/instruments/catalog.json`](https://github.com/grzes71/atari-music-composer/blob/main/data/instruments/catalog.json)
 (schema `atari-music/instrument-catalog/1`, catalog version `0.1.0`), validated by
 [`src/atari_music/instruments/catalog.py`](https://github.com/grzes71/atari-music-composer/blob/main/src/atari_music/instruments/catalog.py).
-It currently holds **16 curated instrument profiles** and **10 behaviors**:
+It currently holds **17 curated instrument profiles** and **11 behaviors**:
 
 | Tier | Meaning | Instruments |
 | --- | --- | --- |
 | `core_v1` | Static ADSR or `octave_pulse` modulation — `[OK]` on `xex_v1`, `xex_v2`, and `wav` | `lead_pure_sustain`, `lead_pure_pluck`, `lead_c1_octave_pulse`, `lead_buzz_steady`, `bass_16bit_pure`, `bass_15khz_pure`, `bass_16bit_poly5_growl`, `harmony_soft_square` |
-| `core_v2_iter1` | Multi-step 50 Hz transient macros and pitch envelopes — `[OK]` on `xex_v2` and `wav` (WAV via v2 frame simulation) | `lead_attack_bite`, `bass_poly4_punch`, `perc_kick_tight`, `perc_snare_crisp`, `perc_hihat_closed`, `perc_tom_pitched` |
+| `core_v2_iter1` | Multi-step 50 Hz transient macros and pitch envelopes — `[OK]` on `xex_v2` and `wav` (WAV via v2 frame simulation) | `lead_attack_bite`, `bass_poly4_punch`, `perc_kick_tight`, `perc_snare_crisp`, `perc_hihat_closed`, `rhytmizer_closed_hihat`, `perc_tom_pitched` |
 | `experimental_deferred` | Explicitly blocked (`[DEFERRED_FEATURE]`) on all export targets | `lead_hpf_pwm` (HPF XOR PWM), `ornament_bell_arp` (arpeggio ornament) |
 
 Every profile declares a `family` (`lead`, `bass`, `pad`, `harmony`, `percussion`, `fx`), intended
@@ -24,6 +24,17 @@ roles, a base distortion, an ADSR `envelope`, a `waveform_family`, hard
 `hardware_constraints` (divider mode, required/forbidden `AUDCTL` bits, MIDI range, allowed channels),
 a `behavior_id`, and provenance (source profile/bank, fingerprint, validation status). The JSON
 structure is documented in [Adding New Instruments](../development/adding-instruments.md).
+
+!!! note "Rhytmizer Closed Hi-Hat (`rhytmizer_closed_hihat`)"
+    `rhytmizer_closed_hihat` is a 50 Hz PAL VBI single-channel adaptation of the Closed Hi-Hat from
+    *Rhytmizer* (MUNSIE, 1986), not a bit-exact reproduction of the original 140 Hz two-channel routine.
+    It is the **default percussion instrument for new format v2 compositions** across Composer v4,
+    AI generation, and CLI (resolved from the SSOT catalog unless explicitly overridden; format v1 and
+    existing saved compositions keep their static/original percussion defaults). It **requires player
+    format v2** (`SONG_FORMAT_VERSION = 2` / `xex_v2`), uses a fixed transient macro volume of `4`
+    (`F0`: `AUDF=$00`, `AUDC=$84` poly17 noise; `F1+`: volume `0`), can be assigned to any single
+    channel `CH1..CH4`, and is **incompatible with the 15 kHz base clock** (`AUDCTL=$01`,
+    `forbidden_audctl_bits = $01`).
 
 ## CLI tools for the catalog
 

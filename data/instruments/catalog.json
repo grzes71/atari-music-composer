@@ -127,6 +127,32 @@
       "allow_per_note_switch": true
     },
     {
+      "behavior_id": "beh_rhytmizer_closed_hihat_v2",
+      "version": 1,
+      "required_runtime_tier": "core_v2_iter1",
+      "transient_macro": {
+        "loop": false,
+        "steps": [
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 128,
+            "audf_offset": 0,
+            "fixed_audf": 0,
+            "volume": 4
+          },
+          {
+            "duration_frames": 1,
+            "distortion_nibble": 128,
+            "audf_offset": 0,
+            "fixed_audf": 0,
+            "volume": 0
+          }
+        ]
+      },
+      "modulation_mode": "none",
+      "allow_per_note_switch": true
+    },
+    {
       "behavior_id": "beh_arp_deferred",
       "version": 1,
       "required_runtime_tier": "experimental_deferred",
@@ -631,6 +657,37 @@
       "provenance": {
         "source_kind": "sound_design_demo",
         "notes": "Pitched tom with downward pitch sweep on CH4."
+      }
+    },
+    {
+      "instrument_id": "rhytmizer_closed_hihat",
+      "display_name": "Rhytmizer Closed Hi-Hat (V2 Macro)",
+      "version": "1.0",
+      "family": "percussion",
+      "intended_roles": ["percussion", "rhythm"],
+      "base_distortion": 128,
+      "envelope": {
+        "attack_frames": 0,
+        "decay_frames": 0,
+        "sustain_vol": 0,
+        "release_frames": 0,
+        "peak_vol": 4
+      },
+      "waveform_family": "poly17_noise",
+      "hardware_constraints": {
+        "divider_mode": "8bit",
+        "preferred_clock_hz": "64khz",
+        "required_audctl_bits": 0,
+        "forbidden_audctl_bits": 1,
+        "poly4_safe_tuning": false,
+        "midi_range": [24, 96],
+        "channels_allowed": [1, 2, 3, 4]
+      },
+      "behavior_id": "beh_rhytmizer_closed_hihat_v2",
+      "provenance": {
+        "source_kind": "curated_preset",
+        "validation_status": "PLAYABLE",
+        "notes": "50 Hz PAL VBI single-channel adaptation of Rhytmizer (MUNSIE, 1986) Closed Hi-Hat via v2 transient macro (F0: AUDF=$00, AUDC=$84 [poly17 vol 4]; F1+: vol=0). Requires format v2; fixed transient volume 4; incompatible with AUDCTL 15 kHz ($01)."
       }
     }
   ]

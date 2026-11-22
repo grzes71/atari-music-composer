@@ -25,6 +25,7 @@ class CompositionRequest:
     channel_instruments: Optional[Dict[int, str]] = None
     enable_catalog_instruments: bool = False
     instrument_catalog_path: Optional[str] = None
+    player_version: str = "auto"  # "auto", "v1", or "v2"
     prompt_profile: str = "classic"  # "classic" or "rich"
     temperature: Optional[float] = None  # None uses provider default (0.7)
     plan_first: bool = False  # Phase 4: generate a MusicalBrief before notes

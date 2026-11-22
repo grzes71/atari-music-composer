@@ -365,12 +365,16 @@ def _execute_composer_v4(config: ComposerV4Config) -> ComposerV4Result:
         )
 
         # 9. COMPILE TO POKEY IR
+        extra_profiles: List[Dict[str, Any]] = []
         pokey_song = _compile_v4_to_pokey_ir(
             music_song=music_song,
             profile=prof,
             uses_16bit=effective_16bit,
             rng=rng,
             instrument_plan=instrument_plan,
+            player_version=ver_choice,
+            catalog_path=config.instrument_catalog_path,
+            extra_sound_profiles=extra_profiles,
         )
 
         # 10. CONSTRAINT CHECK & MEMORY DEDUPLICATION (< 2048 B)
@@ -396,13 +400,15 @@ def _execute_composer_v4(config: ComposerV4Config) -> ComposerV4Result:
                 novelty=actual_novelty,
                 format_version=export_ver,
             )
+            combined_profiles = list(instrument_plan.sound_profiles_metadata) if instrument_plan else []
+            combined_profiles.extend(extra_profiles)
             return ComposerV4Result(
                 music_ir=music_song,
                 pokey_ir=pokey_song,
                 profile_name=prof.name,
                 arrangement=arrangement,
                 quality_report=quality,
-                sound_profiles=list(instrument_plan.sound_profiles_metadata) if instrument_plan else [],
+                sound_profiles=combined_profiles,
             )
 
         rng.seed(config.seed + attempt * 31)
@@ -458,12 +464,28 @@ def _construct_v4_sequence(
     return sequence
 
 
+def _build_profile_meta(ir_id: int, prof: Any, beh: Any) -> Dict[str, Any]:
+    return {
+        "ir_instrument_id": ir_id,
+        "instrument_id": prof.instrument_id,
+        "display_name": prof.display_name,
+        "family": prof.family,
+        "behavior_id": prof.behavior_id,
+        "required_runtime_tier": beh.required_runtime_tier if beh else "core_v1",
+        "profile_fingerprint": prof.provenance.profile_fingerprint,
+    }
+
+
 def _compile_v4_to_pokey_ir(
     music_song: MusicSong,
     profile: MusicProfile,
     uses_16bit: bool,
     rng: random.Random,
     instrument_plan: Optional[Any] = None,
+    *,
+    player_version: str = "auto",
+    catalog_path: Optional[Path] = None,
+    extra_sound_profiles: Optional[List[Dict[str, Any]]] = None,
 ) -> IRSong:
     """Compile MusicSong into IRSong with authentic POKEY timbres (legacy or v2 catalog)."""
     # Profile-tuned lead timbre
@@ -488,6 +510,25 @@ def _compile_v4_to_pokey_ir(
     bass_dist = DISTORTION_PURE_TONE if uses_16bit else DISTORTION_4BIT_POLY
 
     if instrument_plan is None:
+        default_perc_inst: Optional[IRInstrument] = None
+        has_perc_notes = any(
+            tr.role == ChannelRole.PERCUSSION
+            for sp in music_song.patterns
+            for tr in sp.tracks.values()
+        )
+        if player_version == "v2" and has_perc_notes:
+            from atari_music.instruments.catalog import load_instrument_catalog
+            from atari_music.instruments.planner import default_percussion_instrument_id
+
+            cat = load_instrument_catalog(catalog_path)
+            perc_cid = default_percussion_instrument_id(cat, player_version="v2", channel=4)
+            if perc_cid is not None:
+                p_prof, p_beh = cat.resolve_profile_behavior(perc_cid)
+                default_perc_inst = IRInstrument.from_catalog_profile(3, p_prof, p_beh)
+                if extra_sound_profiles is not None:
+                    extra_sound_profiles.append(_build_profile_meta(3, p_prof, p_beh))
+
+        use_v2_default_perc = default_perc_inst is not None
         instruments = [
             # Inst 0: Lead
             IRInstrument(
@@ -496,8 +537,8 @@ def _compile_v4_to_pokey_ir(
                 distortion=lead_dist,
                 role="melody",
                 envelope=lead_env,
-                vibrato_depth=vibrato_d,
-                vibrato_speed=vibrato_s,
+                vibrato_depth=0 if use_v2_default_perc else vibrato_d,
+                vibrato_speed=0 if use_v2_default_perc else vibrato_s,
                 is_16bit=False,
             ),
             # Inst 1: Bass
@@ -518,8 +559,10 @@ def _compile_v4_to_pokey_ir(
                 envelope=IREnvelope(attack_frames=1, decay_frames=3, sustain_vol=9, release_frames=2),
                 is_16bit=False,
             ),
-            # Inst 3: Percussion Voice
-            IRInstrument(
+            # Inst 3: Percussion Voice (rhytmizer_closed_hihat in v2 mode, static ADSR in v1)
+            default_perc_inst
+            if default_perc_inst is not None
+            else IRInstrument(
                 id=3,
                 name="Percussion Voice",
                 distortion=DISTORTION_WHITE_NOISE,
@@ -572,12 +615,33 @@ def _compile_v4_to_pokey_ir(
                     )
                 ir_tracks[ch] = ir_notes
             pokey_patterns.append(IRPattern(id=sp.id, name=sp.name, rows=sp.rows, tracks=ir_tracks))
-        initial_ch_map: Optional[Dict[int, int]] = None
+        initial_ch_map: Optional[Dict[int, int]] = (
+            {1: 1, 2: 2, 3: 0, 4: 3} if use_v2_default_perc else None
+        )
     else:
-        from atari_music.instruments.planner import InstrumentPlanError
+        from atari_music.instruments.planner import InstrumentPlanError, default_percussion_instrument_id
 
         instruments = list(instrument_plan.ir_instruments)
-        needs_v2_bank = bool(instrument_plan.requires_v2)
+        ch4_has_perc = any(
+            tr.role == ChannelRole.PERCUSSION
+            for sp in music_song.patterns
+            for c, tr in sp.tracks.items()
+            if c == 4
+        )
+        default_ch4_cid: Optional[str] = None
+        if (
+            4 not in instrument_plan.initial_channel_profiles
+            and ch4_has_perc
+            and (player_version == "v2" or instrument_plan.requires_v2)
+        ):
+            default_ch4_cid = default_percussion_instrument_id(
+                instrument_plan.catalog,
+                player_version="v2",
+                channel=4,
+                required_audctl_bits=instrument_plan.effective_audctl,
+            )
+
+        needs_v2_bank = bool(instrument_plan.requires_v2) or (default_ch4_cid is not None)
 
         def _ensure_fallback(role_name: str, name: str, dist: int, env: IREnvelope, is16: bool = False) -> int:
             for existing in instruments:
@@ -618,6 +682,13 @@ def _compile_v4_to_pokey_ir(
                 init_ch_resolved[ch] = _ensure_fallback(
                     "melody", f"{profile.name.capitalize()} Lead", lead_dist, lead_env,
                 )
+            elif default_ch4_cid is not None:
+                p4_prof, p4_beh = instrument_plan.catalog.resolve_profile_behavior(default_ch4_cid)
+                new_id = len(instruments)
+                instruments.append(IRInstrument.from_catalog_profile(new_id, p4_prof, p4_beh))
+                init_ch_resolved[ch] = new_id
+                if extra_sound_profiles is not None:
+                    extra_sound_profiles.append(_build_profile_meta(new_id, p4_prof, p4_beh))
             else:
                 init_ch_resolved[ch] = _ensure_fallback(
                     "percussion", "Percussion Voice", DISTORTION_WHITE_NOISE,

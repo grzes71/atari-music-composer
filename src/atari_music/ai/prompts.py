@@ -140,11 +140,20 @@ DOCUMENT SCHEMA & STRUCTURE:
 def build_catalog_prompt_section(request: CompositionRequest) -> str:
     """Build prompt guidance exposing CORE-compatible SSOT catalog instruments."""
     from pathlib import Path
-    from atari_music.instruments import build_catalog_summary_for_ai, load_instrument_catalog
+    from atari_music.instruments import (
+        DEFAULT_V2_PERCUSSION_INSTRUMENT_ID,
+        TARGET_V1_XEX,
+        TARGET_V2_ITER1_XEX,
+        build_catalog_summary_for_ai,
+        load_instrument_catalog,
+        normalize_player_version,
+    )
 
     cat_path = Path(request.instrument_catalog_path) if getattr(request, "instrument_catalog_path", None) else None
     catalog = load_instrument_catalog(cat_path)
-    entries = build_catalog_summary_for_ai(catalog)
+    ver_choice = normalize_player_version(getattr(request, "player_version", "auto"))
+    target = TARGET_V1_XEX if ver_choice == "v1" else TARGET_V2_ITER1_XEX
+    entries = build_catalog_summary_for_ai(catalog, target=target)
 
     lines = [
         "- Production Instrument Catalog (SSOT data/instruments/catalog.json):",
@@ -161,6 +170,10 @@ def build_catalog_prompt_section(request: CompositionRequest) -> str:
         lines.append("  Requested channel assignments (POKEY channels 1..4 -> JSON keys '0'..'3'):")
         for ch in sorted(ch_map):
             lines.append(f"  * POKEY CH{ch} (JSON key '{ch - 1}'): {ch_map[ch]}")
+    if ver_choice != "v1" and catalog.has_profile(DEFAULT_V2_PERCUSSION_INSTRUMENT_ID):
+        lines.append(
+            f"  * Default v2 percussion instrument (unless overridden): {DEFAULT_V2_PERCUSSION_INSTRUMENT_ID}"
+        )
     lines.extend([
         "  Musical PROGRAM_CHANGE guidelines (v2):",
         "  * Switch instrument within a channel ONLY when musically justified (e.g., contrasting section transition or Kick/Snare/HiHat hits on POKEY CH4 percussion).",
@@ -190,7 +203,13 @@ def build_user_prompt(request: CompositionRequest) -> str:
         lines.append(f"- Form Structure: {request.structure}")
     if request.notes:
         lines.append(f"- Compositional Notes: {request.notes}")
-    if getattr(request, "enable_catalog_instruments", False) or getattr(request, "channel_instruments", None):
+    from atari_music.instruments import normalize_player_version
+    ver_choice = normalize_player_version(getattr(request, "player_version", "auto"))
+    if (
+        getattr(request, "enable_catalog_instruments", False)
+        or getattr(request, "channel_instruments", None)
+        or ver_choice == "v2"
+    ):
         lines.append(build_catalog_prompt_section(request))
 
     if request.duration_seconds:
@@ -322,7 +341,13 @@ def build_dsl_user_prompt(request: CompositionRequest) -> str:
         lines.append(f"- Form Structure: {request.structure}")
     if request.notes:
         lines.append(f"- Compositional Notes: {request.notes}")
-    if getattr(request, "enable_catalog_instruments", False) or getattr(request, "channel_instruments", None):
+    from atari_music.instruments import normalize_player_version
+    ver_choice = normalize_player_version(getattr(request, "player_version", "auto"))
+    if (
+        getattr(request, "enable_catalog_instruments", False)
+        or getattr(request, "channel_instruments", None)
+        or ver_choice == "v2"
+    ):
         lines.append(build_catalog_prompt_section(request))
 
     if request.duration_seconds:

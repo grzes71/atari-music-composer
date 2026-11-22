@@ -1802,6 +1802,7 @@ def ai_compose_cmd(
     from atari_music.instruments import (
         CatalogError,
         InstrumentPlanError,
+        normalize_player_version,
         parse_channel_instrument_specs,
         resolve_channel_instrument_plan,
         resolve_export_format_version,
@@ -1810,13 +1811,14 @@ def ai_compose_cmd(
 
     ch_map = None
     try:
+        ver_choice = normalize_player_version(player_version)
         if channel_instruments_raw:
             ch_map = parse_channel_instrument_specs(channel_instruments_raw)
             resolve_channel_instrument_plan(
                 ch_map,
                 catalog_path=instrument_catalog,
                 uses_16bit_bass=use_16bit_bass,
-                player_version=player_version,
+                player_version=ver_choice,
             )
     except (InstrumentPlanError, CatalogError, ValueError) as err:
         raise click.ClickException(str(err)) from err
@@ -1842,8 +1844,9 @@ def ai_compose_cmd(
         structure=structure,
         format=composition_format.lower(),
         channel_instruments=ch_map,
-        enable_catalog_instruments=bool(use_instrument_catalog or ch_map),
+        enable_catalog_instruments=bool(use_instrument_catalog or ch_map or ver_choice == "v2"),
         instrument_catalog_path=str(instrument_catalog) if instrument_catalog else None,
+        player_version=ver_choice,
         prompt_profile=prompt_profile.lower(),
         temperature=temperature,
         tempo_grid=tempo_grid.lower(),
