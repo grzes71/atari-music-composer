@@ -235,8 +235,8 @@ def test_default_catalog_loads_from_any_cwd_with_verified_provenance(tmp_path: P
     monkeypatch.chdir(tmp_path)
     catalog = load_instrument_catalog(bank_dir=BANK_DIR)
     assert catalog.schema_id == CATALOG_SCHEMA_ID
-    assert 14 <= len(catalog.instruments) <= 18
-    assert len(catalog.instruments) == 17
+    assert 14 <= len(catalog.instruments) <= 22
+    assert len(catalog.instruments) == 20
     assert len(catalog.behaviors) >= 8
 
     # Deterministic JSON serialization round-trip
@@ -246,7 +246,7 @@ def test_default_catalog_loads_from_any_cwd_with_verified_provenance(tmp_path: P
 
     # Query helpers
     perc = catalog.list_profiles(family="percussion")
-    assert len(perc) == 5
+    assert len(perc) == 8
     kick, kick_beh = catalog.resolve_profile_behavior("perc_kick_tight")
     assert kick.hardware_constraints.channels_allowed == (4,)
     assert kick_beh is not None and kick_beh.allow_per_note_switch is True
