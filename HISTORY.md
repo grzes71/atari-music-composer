@@ -2,6 +2,12 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-23] - Studio Window Title Path & Render Preview Placement
+
+- Updated `MainWindow.load_composition_file` in [src/atari_music/studio/ui/main_window.py](src/atari_music/studio/ui/main_window.py) to append the full resolved file path of the opened `.json`/`.dsl` composition to `_BASE_WINDOW_TITLE` (`Atari Music Composer Studio — Instrument Explorer - <path>`).
+- Moved the `Render Preview` button (`_render_btn`, exposed via `render_button` property) from the top action bar in [src/atari_music/studio/ui/main_window.py](src/atari_music/studio/ui/main_window.py) into `TransportBar` in [src/atari_music/studio/ui/transport_bar.py](src/atari_music/studio/ui/transport_bar.py) immediately to the left of `Play`, wired via `TransportBar.render_requested`.
+- Added `test_ui_window_title_shows_opened_file_and_render_btn_left_of_play` in [tests/test_studio_ui.py](tests/test_studio_ui.py); verified `tests/test_studio_ui.py` and `tests/test_studio_ab_ui.py` (`19 passed`).
+
 ## [2026-11-22] - Production Integration of `cmc_tom_ltom` (CMC+ Low Tom #45)
 
 Integrated Chaos Music Composer Plus (1993) preset **#45 `l_tom`** as `cmc_tom_ltom` (`beh_cmc_tom_ltom_v2`) in the production SSOT catalog, leaving `rhytmizer_closed_hihat` (default v2 percussion), `cmc_hihat_open`, `cmc_kick_stopa`, and [src/atari_music/asm/player.asm](src/atari_music/asm/player.asm) (`1,785 / 2,048` B) unchanged.
