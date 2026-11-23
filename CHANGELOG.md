@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.20.0 (2026-11-23)
+
+### Features
+
+- **studio**: Display file path in window title and move render preview left of play
+  ([`eac1fb2`](https://github.com/grzes71/atari-music-composer/commit/eac1fb28562545af6a421fdb72965849f93958c4))
+
+
 ## v0.19.0 (2026-11-22)
 
 ### Features
