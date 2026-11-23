@@ -90,6 +90,8 @@ class _RenderJob:
 class MainWindow(QMainWindow):
     """Instrument Explorer main window (explicit Render Preview, zero auto-render)."""
 
+    _BASE_WINDOW_TITLE = "Atari Music Composer Studio — Instrument Explorer"
+
     xex_export_succeeded = Signal(object)  # XexExportResult
     xex_export_failed = Signal(str)  # error_message
 
@@ -103,7 +105,7 @@ class MainWindow(QMainWindow):
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Atari Music Composer Studio — Instrument Explorer")
+        self.setWindowTitle(self._BASE_WINDOW_TITLE)
         self.setMinimumSize(840, 580)
         self.resize(1120, 760)
 
@@ -208,12 +210,6 @@ class MainWindow(QMainWindow):
         self._revert_btn.clicked.connect(self.revert_to_original)
         top_bar.addWidget(self._revert_btn)
 
-        self._render_btn = QPushButton("Render Preview")
-        self._render_btn.setEnabled(False)
-        self._render_btn.setToolTip("Load a composition first.")
-        self._render_btn.clicked.connect(self.render_current_preview)
-        top_bar.addWidget(self._render_btn)
-
         self._export_xex_btn = QPushButton("Export XEX...")
         self._export_xex_btn.setEnabled(False)
         self._export_xex_btn.setToolTip("Load a composition first.")
@@ -254,7 +250,9 @@ class MainWindow(QMainWindow):
 
         # D. Bottom audio preview & transport (always visible across tabs)
         self._transport = TransportBar(audio_backend=self._audio_backend)
+        self._transport.render_requested.connect(self.render_current_preview)
         self._transport.playback_error.connect(self._show_error_banner)
+        self._render_btn = self._transport.render_button
         root.addWidget(self._transport)
 
         self._refresh_channel_selection_highlight()
@@ -421,6 +419,8 @@ class MainWindow(QMainWindow):
         self._transport.set_rendering(False, "Composition loaded. Click 'Render Preview' to synthesize WAV.")
 
         self._state = state
+        resolved_path = state.source_path if state.source_path is not None else Path(path).expanduser().resolve()
+        self.setWindowTitle(f"{self._BASE_WINDOW_TITLE} - {resolved_path}")
         self._working_config = state.baseline_config
         self._last_rendered_entry = None
         self._active_listen_entry = None

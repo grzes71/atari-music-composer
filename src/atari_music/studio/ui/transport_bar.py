@@ -35,7 +35,7 @@ def format_time_ms(ms: int) -> str:
 class TransportBar(QFrame):
     """PCM audio transport controls (Play/Pause/Stop/Seek) and render progress/sync indicator."""
 
-    render_requested = Signal()  # Legacy compatibility signal; Render Preview lives in Global Action Bar.
+    render_requested = Signal()  # Emitted when the user clicks Render Preview.
     playback_error = Signal(str)
     playback_state_changed = Signal(str)
     position_changed = Signal(int)
@@ -73,6 +73,12 @@ class TransportBar(QFrame):
         root.setSpacing(6)
 
         controls_row = QHBoxLayout()
+        self._render_btn = QPushButton("Render Preview")
+        self._render_btn.setEnabled(False)
+        self._render_btn.setToolTip("Load a composition first.")
+        self._render_btn.clicked.connect(self.render_requested.emit)
+        controls_row.addWidget(self._render_btn)
+
         self._play_btn = QPushButton("Play")
         self._play_btn.setEnabled(False)
         self._play_btn.clicked.connect(self.play)
@@ -129,6 +135,10 @@ class TransportBar(QFrame):
     @property
     def audio_player(self) -> StudioAudioPlayer:
         return self._player
+
+    @property
+    def render_button(self) -> QPushButton:
+        return self._render_btn
 
     def set_rendering(self, busy: bool, status_text: Optional[str] = None) -> None:
         if busy:

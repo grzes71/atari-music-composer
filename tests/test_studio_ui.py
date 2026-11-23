@@ -1307,3 +1307,33 @@ def test_main_window_xex_v2_hides_stale_stage_a_warning_and_keeps_genuine_warnin
         assert win._diag_banner.isHidden() is True
     finally:
         win.close()
+
+
+def test_ui_window_title_shows_opened_file_and_render_btn_left_of_play(
+    qapp: QApplication,
+    tmp_path: Path,
+) -> None:
+    win = MainWindow(audio_backend=_FakeUiAudioBackend())
+    try:
+        assert win.windowTitle() == "Atari Music Composer Studio — Instrument Explorer"
+
+        # Render Preview button lives in TransportBar immediately to the left of Play
+        assert win._render_btn is win._transport.render_button
+        assert win._render_btn.parent() is win._transport
+        win.show()
+        qapp.processEvents()
+        assert win._render_btn.x() < win._transport._play_btn.x()
+
+        # Opening a .dsl file appends its full resolved path to the window title
+        dsl_path = (REPO_ROOT / "examples" / "songs" / "wybierak-2.dsl").resolve()
+        win.load_composition_file(dsl_path)
+        qapp.processEvents()
+        assert win.windowTitle() == f"Atari Music Composer Studio — Instrument Explorer - {dsl_path}"
+
+        # Opening a .json file updates the window title with its full resolved path
+        json_path = (REPO_ROOT / "examples" / "ai" / "action_fast.json").resolve()
+        win.load_composition_file(json_path)
+        qapp.processEvents()
+        assert win.windowTitle() == f"Atari Music Composer Studio — Instrument Explorer - {json_path}"
+    finally:
+        win.close()
