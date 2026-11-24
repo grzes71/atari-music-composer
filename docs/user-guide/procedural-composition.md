@@ -32,7 +32,7 @@ python -m atari_music compose [OPTIONS]
 | `-v, --variation FLOAT` | Motivic variation level (0.0–1.0) |
 | `--channel-instrument CH=ID` | Assign SSOT catalog instruments (see [Instruments](instruments.md)) |
 | `--program-change CH@TARGET[:NOTE]=ID` | Schedule mid-song instrument switches |
-| `--instrument-catalog FILE` | SSOT catalog path (default `data/instruments/catalog.json`) |
+| `--instrument-catalog FILE` | SSOT catalog path (default `src/atari_music/instruments/catalog.json`) |
 | `--player-version [auto\|v1\|v2]` | Target player format for MADS export & validation |
 | `--output-json PATH` | POKEY IR JSON output |
 | `--output-wav PATH` | 44.1 kHz WAV output |

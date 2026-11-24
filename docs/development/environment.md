@@ -32,7 +32,6 @@ atari-music-composer/
 ├── generate_arrangements.py    # Adaptive batch arrangement runner
 ├── player.asm, hardware.asm    # Root copies of the 6502 sources used by legacy builds
 ├── data/
-│   ├── instruments/catalog.json # SSOT instrument catalog (schema atari-music/instrument-catalog/1)
 │   └── instrument_libraries/   # Legacy Lead Library v0.1
 ├── examples/
 │   ├── ai/                     # AI-generated example compositions (JSON)

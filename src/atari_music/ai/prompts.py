@@ -156,7 +156,7 @@ def build_catalog_prompt_section(request: CompositionRequest) -> str:
     entries = build_catalog_summary_for_ai(catalog, target=target)
 
     lines = [
-        "- Production Instrument Catalog (SSOT data/instruments/catalog.json):",
+        "- Production Instrument Catalog (SSOT src/atari_music/instruments/catalog.json):",
         "  When choosing sounds, prefer referencing `catalog_id` on instruments from this verified list:",
     ]
     for row in entries:

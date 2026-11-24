@@ -20,7 +20,7 @@ python -m atari_music arrange [OPTIONS] INPUT_COMPOSITION
 | `INPUT_COMPOSITION` (argument) | `AICompositionDoc` JSON or POKEY IR (`IRSong`) JSON. Not `.dsl` — convert first (see below) |
 | `--channel-instrument CH=ID` | Repeatable channel (1–4) or role-alias assignment; unassigned channels keep their current realization |
 | `--program-change-policy [preserve\|replace\|remove]` | Handling of existing `PROGRAM_CHANGE` events on overridden channels (default `preserve`) |
-| `--instrument-catalog FILE` | Catalog path (default `data/instruments/catalog.json`) |
+| `--instrument-catalog FILE` | Catalog path (default `src/atari_music/instruments/catalog.json`) |
 | `--player-version [auto\|v1\|v2]` | Target format for MADS/XEX output (default `auto`) |
 | `--output-json` / `--output-ir PATH` | Output arranged POKEY IR JSON |
 | `--output-wav PATH` | Render 44.1 kHz WAV |

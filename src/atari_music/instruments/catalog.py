@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from importlib import resources
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
@@ -18,7 +19,9 @@ from atari_music.instruments.models import (
 from atari_music.sound_profiles.bank import SoundProfileError, load_sound_profile_bank
 
 CATALOG_SCHEMA_ID = "atari-music/instrument-catalog/1"
-DEFAULT_CATALOG_PATH = Path("data/instruments/catalog.json")
+DEFAULT_CATALOG_PATH = Path("src/atari_music/instruments/catalog.json")
+_PACKAGED_CATALOG_PACKAGE = "atari_music.instruments"
+_PACKAGED_CATALOG_RESOURCE = "catalog.json"
 
 CATALOG_NOT_FOUND = "CATALOG_NOT_FOUND"
 CATALOG_JSON_INVALID = "CATALOG_JSON_INVALID"
@@ -256,36 +259,68 @@ def _verify_bank_provenance(
     return warnings
 
 
+def _parse_catalog_json_text(text: str, source_label: str) -> Mapping[str, Any]:
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise CatalogError(
+            f"instrument catalog is not valid JSON: {source_label} ({exc})",
+            code=CATALOG_JSON_INVALID,
+        ) from exc
+    if not isinstance(data, Mapping):
+        raise CatalogError(
+            f"catalog root must be a JSON object: {source_label}",
+            code=CATALOG_SCHEMA_UNSUPPORTED,
+        )
+    return data
+
+
 def _read_catalog_json(path: Path) -> Mapping[str, Any]:
     if not path.is_file():
         raise CatalogError(
             f"instrument catalog file not found: {path}",
             code=CATALOG_NOT_FOUND,
         )
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+    return _parse_catalog_json_text(path.read_text(encoding="utf-8"), str(path))
+
+
+def _read_packaged_catalog_json() -> Mapping[str, Any]:
+    resource = resources.files(_PACKAGED_CATALOG_PACKAGE).joinpath(
+        _PACKAGED_CATALOG_RESOURCE
+    )
+    if not resource.is_file():
         raise CatalogError(
-            f"instrument catalog is not valid JSON: {path} ({exc})",
-            code=CATALOG_JSON_INVALID,
-        ) from exc
-    if not isinstance(data, Mapping):
-        raise CatalogError(
-            f"catalog root must be a JSON object: {path}",
-            code=CATALOG_SCHEMA_UNSUPPORTED,
+            f"packaged instrument catalog not found: {_PACKAGED_CATALOG_PACKAGE}/{_PACKAGED_CATALOG_RESOURCE}",
+            code=CATALOG_NOT_FOUND,
         )
-    return data
+    return _parse_catalog_json_text(
+        resource.read_text(encoding="utf-8"),
+        f"package://{_PACKAGED_CATALOG_PACKAGE}/{_PACKAGED_CATALOG_RESOURCE}",
+    )
+
+
+def _load_catalog_mapping(path: Optional[Union[Path, str]]) -> Mapping[str, Any]:
+    is_default = path is None or Path(path) == DEFAULT_CATALOG_PATH
+    resolved = _resolve_catalog_path(None if path is None else Path(path))
+    if resolved.is_file():
+        return _read_catalog_json(resolved)
+    if is_default:
+        return _read_packaged_catalog_json()
+    raise CatalogError(
+        f"instrument catalog file not found: {resolved}",
+        code=CATALOG_NOT_FOUND,
+    )
 
 
 def validate_instrument_catalog(
-    raw_or_path: Union[Path, str, Mapping[str, Any]],
+    raw_or_path: Optional[Union[Path, str, Mapping[str, Any]]] = None,
     *,
     bank_dir: Optional[Path] = None,
 ) -> List[str]:
     """Validate a raw catalog mapping or JSON file path; optionally verify bank provenance."""
     raw_data = (
-        _read_catalog_json(_resolve_catalog_path(Path(raw_or_path)))
-        if isinstance(raw_or_path, (Path, str))
+        _load_catalog_mapping(raw_or_path)
+        if raw_or_path is None or isinstance(raw_or_path, (Path, str))
         else raw_or_path
     )
     doc = _parse_and_validate_document(raw_data)
@@ -300,7 +335,7 @@ def load_instrument_catalog(
     bank_dir: Optional[Path] = None,
 ) -> InstrumentCatalog:
     """Load, validate, and optionally provenance-check an SSOT instrument catalog."""
-    raw_data = _read_catalog_json(_resolve_catalog_path(path))
+    raw_data = _load_catalog_mapping(path)
     doc = _parse_and_validate_document(raw_data)
     if bank_dir is not None:
         _verify_bank_provenance(doc, Path(bank_dir))

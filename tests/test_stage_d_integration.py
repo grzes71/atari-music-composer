@@ -177,7 +177,7 @@ def test_ai_generator_default_legacy_v1_preserved() -> None:
     """AI composition without catalog options stays strictly in legacy v1 style."""
     req = CompositionRequest(style="action", duration_seconds=12, bpm=140, channels=4)
     prompt = build_user_prompt(req)
-    assert "data/instruments/catalog.json" not in prompt
+    assert "src/atari_music/instruments/catalog.json" not in prompt
 
     doc = request_ai_composition(req, provider_name="mock")
     assert all(inst.catalog_id is None for inst in doc.instruments)
@@ -200,7 +200,7 @@ def test_ai_generator_uses_ssot_catalog_channels_and_musical_program_change(tmp_
         enable_catalog_instruments=True,
     )
     prompt = build_user_prompt(req)
-    assert "data/instruments/catalog.json" in prompt
+    assert "src/atari_music/instruments/catalog.json" in prompt
     assert "lead_attack_bite" in prompt
     assert "bass_poly4_punch" in prompt
     assert "Never randomly cycle instruments note-to-note" in prompt

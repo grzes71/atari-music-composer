@@ -62,7 +62,7 @@ Atari Music Composer targets the 4-channel monophonic **POKEY** chip (`AUDF1..AU
 
 * **Procedural Composition (`Composer v4`)**: Generates deterministic 4-channel pieces across 6 canonical profiles (`title`, `exploration`, `action`, `funny`, `dungeon`, `ending`) with bass lines, counterpoint, percussion/ornamentation, and optional `CH1+CH2` 16-bit bass coupling.
 * **AI-Assisted Composition (`ai-compose`)**: Uses `OpenAICompositionProvider` (supporting OpenAI, DeepSeek, or compatible endpoints) or a local deterministic `mock` provider to output canonical `AICompositionDoc` JSON or compact **Music DSL**, backed by a 3-tier validator (schema, musical grammar, POKEY hardware rules) and an automatic repair loop.
-* **SSOT Instrument Catalog & `POKEYRuntime`**: Curated instrument definitions and time-varying behaviors stored in [data/instruments/catalog.json](data/instruments/catalog.json) with stateless hardware/channel conflict checking.
+* **SSOT Instrument Catalog & `POKEYRuntime`**: Curated instrument definitions and time-varying behaviors stored in [src/atari_music/instruments/catalog.json](src/atari_music/instruments/catalog.json) with stateless hardware/channel conflict checking.
 * **Decoupled Arrangement (`arrange`)**: Re-assigns POKEY channel instruments on existing JSON compositions (`AICompositionDoc` or `IRSong`) and exports WAV, MADS ASM, and Atari XEX outputs without modifying musical content or calling AI again.
 * **Atari Music Composer Studio (`atari-music-studio`)**: Optional PySide6 desktop application ([src/atari_music/studio/](src/atari_music/studio/__init__.py)) for opening `.json` and `.dsl` compositions, inspecting/reassigning SSOT catalog instruments per channel, rendering on-demand WAV previews, reverting edits, and exporting validated Atari `.xex` (and optional `.asm`) builds.
 * **Hardware-Accurate Audio Preview & 6502 Playback**: Frame-accurate Python WAV renderer and a relocatable pure MOS 6502 player (`src/atari_music/asm/player.asm` / `player.asm`) supporting both legacy v1 and macro-enabled v2 song formats.
@@ -187,7 +187,7 @@ Generate procedural 4-channel POKEY music via the public Music Generation API (`
   * `--intensity FLOAT`, `-v, --variation FLOAT`: Musical expression controls (`0.0..1.0`).
   * `--channel-instrument CH=INSTRUMENT_ID`: Repeatable opt-in SSOT catalog override per channel (`1..4` or role alias).
   * `--program-change CH@TARGET[:NOTE]=INSTRUMENT_ID`: Schedule mid-song instrument switch (e.g., `3@B=lead_attack_bite` or `4@1:2=perc_snare_crisp`).
-  * `--instrument-catalog FILE`: Custom catalog JSON path (default `data/instruments/catalog.json`).
+  * `--instrument-catalog FILE`: Custom catalog JSON path (default `src/atari_music/instruments/catalog.json`).
   * `--player-version [auto|v1|v2]`: Target MADS export version (`auto` preserves v1 unless v2 features are used).
   * `--output-json PATH`, `--output-wav PATH`, `--output-asm PATH`: Output artifacts.
 * **Inputs / Outputs:** Procedural parameters -> POKEY IR JSON, 44.1 kHz WAV, and/or MADS `.asm`.
@@ -259,7 +259,7 @@ Re-arrange an existing **JSON** composition (`AICompositionDoc` or POKEY IR `IRS
 * **Options:**
   * `--channel-instrument CH=INSTRUMENT_ID`: Repeatable channel or role assignment (`1..4` or alias; unassigned channels keep their existing realization).
   * `--program-change-policy [preserve|replace|remove]`: Controls existing `PROGRAM_CHANGE` events on overridden channels (default `preserve`).
-  * `--instrument-catalog FILE`: Custom SSOT catalog JSON path (default `data/instruments/catalog.json`).
+  * `--instrument-catalog FILE`: Custom SSOT catalog JSON path (default `src/atari_music/instruments/catalog.json`).
   * `--player-version [auto|v1|v2]`: Format target for MADS/XEX output (default `auto`).
   * `--output-json`, `--output-ir PATH`: Save arranged POKEY IR JSON (`IRSong`).
   * `--output-wav PATH`: Render 44.1 kHz WAV audio.
@@ -282,10 +282,10 @@ python -m atari_music arrange examples/ai/dungeon_dark.json \
 
 ### `list-instruments`
 
-List curated instruments defined in the SSOT catalog (`data/instruments/catalog.json`) along with compatibility for a chosen target backend.
+List curated instruments defined in the SSOT catalog (`src/atari_music/instruments/catalog.json`) along with compatibility for a chosen target backend.
 
 * **Options:**
-  * `--instrument-catalog, --catalog FILE`: Catalog path (default `data/instruments/catalog.json`).
+  * `--instrument-catalog, --catalog FILE`: Catalog path (default `src/atari_music/instruments/catalog.json`).
   * `--family [lead|bass|pad|harmony|percussion|fx]`: Filter by family.
   * `--role [melody|bass|harmony|rhythm|percussion]`: Filter by intended role.
   * `--target [xex_v2|xex_v1|wav]`: Report compatibility against backend (`xex_v2` default).
@@ -436,7 +436,7 @@ When `BASS 16BIT` is active, POKEY joins `CH1` (master) and `CH2` (slave divider
 
 Stages A–E introduced an opt-in, hardware-validated instrument architecture layered cleanly alongside legacy rendering.
 
-### SSOT Catalog (`data/instruments/catalog.json`)
+### SSOT Catalog (`src/atari_music/instruments/catalog.json`)
 
 Validated by [src/atari_music/instruments/catalog.py](src/atari_music/instruments/catalog.py) (`atari-music/instrument-catalog/1`, catalog `0.1.0`), the SSOT catalog currently holds **16 curated instrument profiles** and **10 behaviors**:
 
@@ -586,7 +586,7 @@ pip install -e ".[studio]"
 # Launch the desktop Studio (optionally opening a .json or .dsl composition)
 atari-music-studio examples/songs/Vaults-of-Nhyrmeth.dsl
 # or:
-python -m atari_music.studio.ui.app examples/songs/Vaults-of-Nhyrmeth.dsl --catalog data/instruments/catalog.json
+python -m atari_music.studio.ui.app examples/songs/Vaults-of-Nhyrmeth.dsl --catalog src/atari_music/instruments/catalog.json
 ```
 
 * **Tab-Based Studio Workspace (`1120×760` default, fits `900×680` and `1366×768`):** Separates persistent global actions (**Open Composition**, **Revert Original**, **Render Preview**, **Export XEX...**) at the top, the global **Preset Bar** directly below, four workspace tabs (**Instruments** [default], **A/B Comparison**, **Arrangement**, **Diagnostics**) with independent scroll areas, and the persistent **TransportBar** at the bottom so playback and rendering controls remain visible regardless of active tab or window height.
@@ -656,7 +656,8 @@ src/atari_music/
 ├── asm/player.asm           # Relocatable MOS 6502 player (v1 + v2 macro & pitch engines)
 ├── instruments/             # Stage A-E SSOT instrument architecture
 │   ├── models.py            # Pydantic v2 InstrumentProfile, InstrumentBehavior, HardwareConstraints
-│   ├── catalog.py           # InstrumentCatalog loader & integrity validator (data/instruments/catalog.json)
+│   ├── catalog.py           # InstrumentCatalog loader & integrity validator
+│   ├── catalog.json         # Bundled SSOT instrument catalog
 │   ├── runtime.py           # Stateless POKEYRuntime capability & AUDCTL conflict checker
 │   └── planner.py           # Channel assignment, PROGRAM_CHANGE policy, v1/v2 resolution, arrange_ir_song
 ├── studio/                  # Atari Music Composer Studio (headless services + optional PySide6 UI)

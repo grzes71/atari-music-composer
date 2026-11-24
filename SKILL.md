@@ -509,7 +509,7 @@ atari-music list-instruments --target xex_v2 --json
 # Inspect full hardware constraints, envelope, transient macro & per-target diagnostics:
 atari-music inspect-instrument perc_kick_tight --json
 
-# Verify data/instruments/catalog.json integrity:
+# Verify src/atari_music/instruments/catalog.json integrity:
 atari-music validate-instruments
 ```
 

@@ -2,6 +2,14 @@
 
 <!-- AGENT INSTRUCTIONS: Prepend new entries directly below this comment. Use format ## [YYYY-MM-DD] - [Brief Title] followed by a bulleted list of technical changes with relative paths. -->
 
+## [2026-11-24] - Embed Instrument Catalog and Player ASM in Package
+
+- Moved the SSOT instrument catalog from `data/instruments/catalog.json` to [src/atari_music/instruments/catalog.json](src/atari_music/instruments/catalog.json) and configured `[tool.setuptools.package-data]` in [pyproject.toml](pyproject.toml) (`"atari_music" = ["asm/*.asm"]`, `"atari_music.instruments" = ["catalog.json"]`).
+- Updated [src/atari_music/instruments/catalog.py](src/atari_music/instruments/catalog.py) (`DEFAULT_CATALOG_PATH`, `_parse_catalog_json_text`, `_read_packaged_catalog_json`, `_load_catalog_mapping`, `validate_instrument_catalog`, `load_instrument_catalog`) to fall back to `importlib.resources` (`atari_music.instruments/catalog.json`) when no filesystem override/repo file is present.
+- Fixed packaged `player.asm` fallback path in `build_xex_from_result` inside [src/atari_music/ai/client.py](src/atari_music/ai/client.py) to resolve `asm/player.asm` relative to the installed `atari_music` package.
+- Updated catalog path references in [src/atari_music/ai/prompts.py](src/atari_music/ai/prompts.py), [src/atari_music/ai/schema.py](src/atari_music/ai/schema.py), [src/atari_music/cli.py](src/atari_music/cli.py), [tests/test_stage_d_integration.py](tests/test_stage_d_integration.py), [tests/test_studio_xex_export.py](tests/test_studio_xex_export.py), [README.md](README.md), [SKILL.md](SKILL.md), and `docs/`.
+- Added `test_catalog_importlib_resources_fallback_without_repo_root` and `test_packaged_asm_player_accessible_via_importlib_resources` in [tests/test_instrument_catalog.py](tests/test_instrument_catalog.py); verified wheel & sdist contents (`atari_music/instruments/catalog.json` and `atari_music/asm/player.asm`), `scripts/verify_test_classification.py` (`PASS`), and `pytest -m "core and not live and not emulator" -q` (`818 passed, 1831 deselected`).
+
 ## [2026-11-23] - Studio Window Title Path & Render Preview Placement
 
 - Updated `MainWindow.load_composition_file` in [src/atari_music/studio/ui/main_window.py](src/atari_music/studio/ui/main_window.py) to append the full resolved file path of the opened `.json`/`.dsl` composition to `_BASE_WINDOW_TITLE` (`Atari Music Composer Studio — Instrument Explorer - <path>`).

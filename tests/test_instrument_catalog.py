@@ -5,11 +5,14 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from importlib import resources
 from pathlib import Path
 from typing import Any, Dict
 
 import pytest
 from pydantic import ValidationError
+
+import atari_music.instruments.catalog as catalog_mod
 
 from atari_music.instruments import (
     CATALOG_INTEGRITY_ERROR,
@@ -311,3 +314,28 @@ def test_catalog_integrity_and_provenance_error_cases(tmp_path: Path) -> None:
     with pytest.raises(CatalogError) as exc_prov:
         validate_instrument_catalog(bad_prov_path, bank_dir=BANK_DIR)
     assert exc_prov.value.code == CATALOG_INTEGRITY_ERROR
+
+
+def test_catalog_importlib_resources_fallback_without_repo_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(catalog_mod, "_REPO_ROOT", tmp_path / "no_repo")
+
+    assert validate_instrument_catalog() == []
+    assert validate_instrument_catalog(DEFAULT_CATALOG_PATH) == []
+
+    cat_none = load_instrument_catalog()
+    cat_default = load_instrument_catalog(DEFAULT_CATALOG_PATH)
+    assert cat_none.to_deterministic_json() == cat_default.to_deterministic_json()
+    assert len(cat_none.instruments) == 20
+
+    with pytest.raises(CatalogError) as exc_missing:
+        load_instrument_catalog(tmp_path / "missing.json")
+    assert exc_missing.value.code == CATALOG_NOT_FOUND
+
+
+def test_packaged_asm_player_accessible_via_importlib_resources() -> None:
+    player_res = resources.files("atari_music").joinpath("asm", "player.asm")
+    assert player_res.is_file()
+    assert player_res.read_bytes() == (REPO_ROOT / "player.asm").read_bytes()

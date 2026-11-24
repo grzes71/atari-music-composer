@@ -33,7 +33,7 @@ flowchart TB
     IR["POKEY IR<br/>ir.py: IRSong"]
     PLANNER["Instrument planner<br/>instruments/planner.py"]
     RUNTIME["POKEYRuntime capability checks<br/>instruments/runtime.py"]
-    CATALOG["SSOT catalog<br/>instruments/catalog.py + data/instruments/catalog.json"]
+    CATALOG["SSOT catalog<br/>instruments/catalog.py + catalog.json"]
     SIM["Frame simulator (v1/v2 oracle)<br/>frame_simulator.py"]
     SYNTH["WAV renderer<br/>pokey_synth.py + pokey_hw.py"]
     EXP["MADS exporter (SoA, v1/v2)<br/>mads_exporter.py"]

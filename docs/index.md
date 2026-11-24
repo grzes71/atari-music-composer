@@ -26,7 +26,7 @@ Core capabilities:
   deterministic mock) emit a canonical composition document in JSON or a compact Music DSL, validated by
   a 3-tier validator (schema, musical grammar, POKEY hardware rules) with an automatic repair loop.
 * **SSOT instrument catalog** — curated, hardware-validated POKEY instrument definitions
-  ([`data/instruments/catalog.json`](https://github.com/grzes71/atari-music-composer/blob/main/data/instruments/catalog.json))
+  ([`src/atari_music/instruments/catalog.json`](https://github.com/grzes71/atari-music-composer/blob/main/src/atari_music/instruments/catalog.json))
   with stateless channel/clock-conflict checking.
 * **Decoupled arrangement (`arrange`)** — re-assign POKEY channel instruments on existing JSON
   compositions and export WAV, MADS ASM, and Atari XEX without touching notes.

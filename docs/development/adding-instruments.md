@@ -1,7 +1,7 @@
 # Adding New Instruments
 
 Instruments live in exactly one place —
-[`data/instruments/catalog.json`](https://github.com/grzes71/atari-music-composer/blob/main/data/instruments/catalog.json)
+[`src/atari_music/instruments/catalog.json`](https://github.com/grzes71/atari-music-composer/blob/main/src/atari_music/instruments/catalog.json)
 (schema `atari-music/instrument-catalog/1`) — so adding one is a data change plus validation, not a
 code change. This page is the practical checklist.
 
