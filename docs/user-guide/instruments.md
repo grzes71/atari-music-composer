@@ -8,7 +8,7 @@ improvisation. All instrument knowledge therefore lives in one curated place: th
 ## The SSOT catalog
 
 Instruments are defined in
-[`data/instruments/catalog.json`](https://github.com/grzes71/atari-music-composer/blob/main/data/instruments/catalog.json)
+[`src/atari_music/instruments/catalog.json`](https://github.com/grzes71/atari-music-composer/blob/main/src/atari_music/instruments/catalog.json)
 (schema `atari-music/instrument-catalog/1`, catalog version `0.1.0`), validated by
 [`src/atari_music/instruments/catalog.py`](https://github.com/grzes71/atari-music-composer/blob/main/src/atari_music/instruments/catalog.py).
 It currently holds **20 curated instrument profiles** and **14 behaviors**:

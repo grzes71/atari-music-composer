@@ -75,7 +75,9 @@ def _create_fake_mads(tmp_path: Path) -> Path:
 
 
 def _write_wav_only_catalog(tmp_path: Path) -> Path:
-    base_cat = json.loads((REPO_ROOT / "data" / "instruments" / "catalog.json").read_text("utf-8"))
+    base_cat = json.loads(
+        (REPO_ROOT / "src" / "atari_music" / "instruments" / "catalog.json").read_text("utf-8")
+    )
     base_cat["behaviors"].append(
         {
             "behavior_id": "beh_wav_only_contour_test",

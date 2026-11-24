@@ -17,7 +17,7 @@ time.
 
 ```mermaid
 flowchart LR
-    JSON["data/instruments/catalog.json<br/>(schema atari-music/instrument-catalog/1)"]
+    JSON["src/atari_music/instruments/catalog.json<br/>(schema atari-music/instrument-catalog/1)"]
     MODELS["instruments/models.py<br/>InstrumentProfile - EnvelopeSpec -<br/>HardwareConstraints - InstrumentBehavior"]
     LOADER["instruments/catalog.py<br/>InstrumentCatalog loader & integrity validator"]
     RUNTIME["instruments/runtime.py<br/>POKEYRuntime: stateless capability &<br/>AUDCTL conflict checking, target tiers"]

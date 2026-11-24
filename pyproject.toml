@@ -40,6 +40,10 @@ docs = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"atari_music" = ["asm/*.asm"]
+"atari_music.instruments" = ["catalog.json"]
+
 [tool.pytest.ini_options]
 pythonpath = [".", "src"]
 testpaths = ["tests"]

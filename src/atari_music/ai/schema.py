@@ -273,7 +273,7 @@ class AIInstrumentDef(BaseModel):
     )
     catalog_id: Optional[str] = Field(
         default=None,
-        description="Optional SSOT catalog instrument_id from data/instruments/catalog.json",
+        description="Optional SSOT catalog instrument_id from src/atari_music/instruments/catalog.json",
     )
     attack_frames: Optional[int] = Field(default=None, ge=0, le=15, description="Optional ADSR attack frames (0..15)")
     decay_frames: Optional[int] = Field(default=None, ge=0, le=15, description="Optional ADSR decay frames (0..15)")

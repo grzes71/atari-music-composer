@@ -739,7 +739,7 @@ def build_xex_from_result(
         cwd_player = Path.cwd() / "player.asm"
         root = Path(__file__).resolve().parent.parent.parent.parent
         root_player = root / "player.asm"
-        pkg_player = root / "src" / "atari_music" / "asm" / "player.asm"
+        pkg_player = Path(__file__).resolve().parents[1] / "asm" / "player.asm"
 
         if cwd_player.exists():
             player_asm_path = cwd_player

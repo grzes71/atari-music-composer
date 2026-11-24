@@ -1190,7 +1190,7 @@ def stage7_1_report_cmd(test_dir: Path, output_report: Path) -> None:
     "--instrument-catalog",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
-    help="Optional SSOT instrument catalog JSON path (default: data/instruments/catalog.json).",
+    help="Optional SSOT instrument catalog JSON path (default: src/atari_music/instruments/catalog.json).",
 )
 @click.option(
     "--player-version",
@@ -1733,7 +1733,7 @@ def build_xex_cmd(
     "--instrument-catalog",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
-    help="Optional SSOT instrument catalog JSON path (default: data/instruments/catalog.json).",
+    help="Optional SSOT instrument catalog JSON path (default: src/atari_music/instruments/catalog.json).",
 )
 @click.option(
     "--player-version",
@@ -1908,7 +1908,7 @@ def ai_compose_cmd(
     "catalog_path",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
-    help="SSOT instrument catalog JSON path (default: data/instruments/catalog.json)",
+    help="SSOT instrument catalog JSON path (default: src/atari_music/instruments/catalog.json)",
 )
 @click.option(
     "--family",
@@ -1936,7 +1936,7 @@ def list_instruments_cmd(
     target: str,
     as_json: bool,
 ) -> None:
-    """List curated instruments in the SSOT catalog (data/instruments/catalog.json)."""
+    """List curated instruments in the SSOT catalog (src/atari_music/instruments/catalog.json)."""
     from atari_music.instruments import (
         TARGET_V1_XEX,
         TARGET_V2_ITER1_XEX,
@@ -2016,7 +2016,7 @@ def list_instruments_cmd(
     "catalog_path",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
-    help="SSOT instrument catalog JSON path (default: data/instruments/catalog.json)",
+    help="SSOT instrument catalog JSON path (default: src/atari_music/instruments/catalog.json)",
 )
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit instrument specification as JSON")
 def inspect_instrument_cmd(
@@ -2120,15 +2120,14 @@ def inspect_instrument_cmd(
     "catalog_path",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
-    help="SSOT instrument catalog JSON path (default: data/instruments/catalog.json)",
+    help="SSOT instrument catalog JSON path (default: src/atari_music/instruments/catalog.json)",
 )
 def validate_instruments_cmd(catalog_path: Optional[Path]) -> None:
     """Validate integrity, schema, and provenance of the SSOT instrument catalog."""
-    from atari_music.instruments import DEFAULT_CATALOG_PATH, CatalogError, load_instrument_catalog, validate_instrument_catalog
+    from atari_music.instruments import CatalogError, load_instrument_catalog, validate_instrument_catalog
 
     try:
-        target_path = DEFAULT_CATALOG_PATH if catalog_path is None else catalog_path
-        validate_instrument_catalog(target_path)
+        validate_instrument_catalog(catalog_path)
         catalog = load_instrument_catalog(catalog_path)
     except CatalogError as err:
         raise click.ClickException(str(err)) from err
@@ -2157,7 +2156,7 @@ def validate_instruments_cmd(catalog_path: Optional[Path]) -> None:
     "--instrument-catalog",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
-    help="Optional SSOT instrument catalog JSON path (default: data/instruments/catalog.json).",
+    help="Optional SSOT instrument catalog JSON path (default: src/atari_music/instruments/catalog.json).",
 )
 @click.option(
     "--player-version",

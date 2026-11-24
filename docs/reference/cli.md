@@ -32,7 +32,7 @@ Generate procedural 4-channel POKEY music via the public Music Generation API (C
 | `-v, --variation FLOAT` | Motivic variation level (0.0–1.0) |
 | `--channel-instrument CH=ID` | Assign SSOT catalog instrument to channel or role (repeatable) |
 | `--program-change CH@TARGET[:NOTE]=ID` | Schedule mid-song `PROGRAM_CHANGE` |
-| `--instrument-catalog FILE` | Catalog path (default `data/instruments/catalog.json`) |
+| `--instrument-catalog FILE` | Catalog path (default `src/atari_music/instruments/catalog.json`) |
 | `--player-version [auto\|v1\|v2]` | Target player format version (default `auto`) |
 | `--output-json PATH` | POKEY IR JSON output |
 | `--output-wav PATH` | 44.1 kHz WAV output |
@@ -94,7 +94,7 @@ List curated SSOT catalog instruments along with compatibility for a chosen targ
 
 | Option | Meaning |
 | --- | --- |
-| `--instrument-catalog`, `--catalog FILE` | Catalog path (default `data/instruments/catalog.json`) |
+| `--instrument-catalog`, `--catalog FILE` | Catalog path (default `src/atari_music/instruments/catalog.json`) |
 | `--family [lead\|bass\|pad\|harmony\|percussion\|fx]` | Filter by family |
 | `--role [melody\|bass\|harmony\|rhythm\|percussion]` | Filter by intended role |
 | `--target [xex_v2\|xex_v1\|wav]` | Target compatibility report (default `xex_v2`) |

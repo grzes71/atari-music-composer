@@ -42,7 +42,7 @@ Hardware, format, and project terms used across the documentation.
 | **Music IR / `MusicSong`** | Symbolic intermediate representation (`music_ir.py`) before hardware decisions |
 | **POKEY IR / `IRSong`** | Hardware-compiled IR (`ir.py`): divider parameters, resolved instruments, program changes; the pivot artifact both renderers derive from |
 | **SSOT** | Single Source of Truth — a deliberate redundancy-avoidance stance: one validity source for hardware semantics (`pokey_hw.py`), one for instruments (`catalog.json`), one for compositions (`AICompositionDoc`) |
-| **Instrument catalog** | `data/instruments/catalog.json` (schema `atari-music/instrument-catalog/1`): 16 curated profiles + behaviors with hard hardware constraints |
+| **Instrument catalog** | `src/atari_music/instruments/catalog.json` (schema `atari-music/instrument-catalog/1`): curated profiles + behaviors with hard hardware constraints |
 | **`POKEYRuntime`** | The stateless checker that validates instrument *sets* (channel locks, clock compatibility, 16-bit pairing, target tiers) |
 | **Runtime tier** | Capability class of an instrument: `core_v1`, `core_v2_iter1`, `core_v2_iter2` (deferred), `experimental_deferred`, `wav_only` |
 | **Behavior** | Time-varying aspect of an instrument: static v1, `octave_pulse` modulation, transient macros, and/or pitch envelopes |
