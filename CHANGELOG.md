@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.21.0 (2026-11-24)
+
+### Features
+
+- **package**: Embed instrument catalog and player asm with importlib fallback
+  ([`4523a46`](https://github.com/grzes71/atari-music-composer/commit/4523a463e7b4e103f1061d34826ab554462d2ef8))
+
+
 ## v0.20.0 (2026-11-23)
 
 ### Features
